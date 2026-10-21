@@ -1,8 +1,8 @@
 # PEP 848 GC simulator
 
 An interactive, in-browser explainer for the generational incremental cycle
-collector proposed in PEP 848. Readers change workload parameters and
-collector settings and watch how the collector behaves next to the legacy one.
+collector that PEP 848 proposes. Readers change workload parameters and
+collector settings and watch the collector work beside the legacy one.
 Everything below is vocabulary.
 
 ## Language
@@ -12,7 +12,7 @@ Everything below is vocabulary.
 **Simulator**:
 A Python model of both cycle collectors, the incremental one after the PEP's
 pseudocode and the legacy one after the reference branch, running over
-synthetic objects, never over CPython's own heap.
+synthetic objects.
 _Avoid_: emulator, GC (bare), runtime
 
 **Workload**:
@@ -21,10 +21,11 @@ it allocates, how it links objects, and when it lets go of them.
 _Avoid_: benchmark, program, test case
 
 **Preset**:
-A named workload with every parameter chosen, modelled by hand on the code of
-a pyperformance benchmark. Every preset is one: there are no made-up
-workloads. Each carries its own seed and a run length chosen by hand, aiming
-at about three sweeps but stopping sooner when sweeps run long.
+A named workload with every workload parameter chosen by hand to model the
+code of a pyperformance benchmark. Every preset has a benchmark behind it:
+there are no made-up workloads. Each carries its own seed and a run length
+chosen by hand, which aims at about three sweeps and stops sooner when sweeps
+run long.
 _Avoid_: benchmark (that is the real program it is modelled on), scenario,
 example, template
 
@@ -44,7 +45,8 @@ config
 **Collector constant**:
 A number fixed inside a collector that no Python API changes: the initial
 work budget and the freed-credit multiplier of the incremental collector, the
-25% long-lived ratio of the legacy collector. Unlocked in the playground only.
+25% long-lived ratio of the legacy collector. The playground is the one page
+that unlocks them.
 _Avoid_: setting (that is what Python can change), magic number, tunable
 
 ### Scale and time
@@ -56,13 +58,13 @@ _Avoid_: chunk, block, cell, node (that is how one is drawn)
 
 **Real object**:
 A CPython object of a type the cycle collector supports, such as a list, a
-dict, a tuple or an instance, assumed to be 64 B on average, so one simulated
-object stands for 16 of them. Strings, numbers and the other objects the
-collector never sees are not real objects here: they enter no space and do
-not move the allocation clock. Counts the PEP or the C implementation give in
-real objects shrink by the same 16 inside the simulator. The 64 B is an
-assumption, not a collector constant, and the playground lets a reader change
-it.
+dict, a tuple or an instance. The simulator assumes 64 B for one on average,
+so one simulated object stands for 16 of them. Strings, numbers and the other
+objects the collector never sees fall outside the term: they enter no space
+and leave the allocation clock where it is. The simulator divides by the same
+16 any count the PEP or the C implementation gives in real objects. The 64 B
+is an assumption, outside the collector constants, and the playground lets a
+reader change it.
 _Avoid_: object (bare, when the two could be confused), PyObject, tracked
 object (a real object can be untracked after it is allocated, as a
 collection does to a tuple that holds only numbers)
@@ -81,18 +83,18 @@ fate: transient, or one of a small cycle that becomes cyclic garbage.
 _Avoid_: noise, filler, temporaries
 
 **Fate**:
-What becomes of an object: transient, cyclic garbage, or long-lived. Churn
-draws one per object at allocation; a structure's objects share the one its
-shape and lifetime imply. Never changes.
+An object's outcome: transient, cyclic garbage, or long-lived. Churn draws
+one per object at allocation; a structure's objects share the one its shape
+and lifetime imply. An object keeps its fate from allocation on.
 _Avoid_: type, kind, class (all three are Python's words for something else)
 
 **Transient object**:
-An object refcounting frees once its lifetime ends. Never garbage the
-collector has to find.
+An object that refcounting frees once its lifetime ends, leaving the
+collector nothing to find.
 _Avoid_: short-lived (cyclic garbage can be short-lived too), temporary
 
 **Cyclic garbage**:
-Objects in a cycle that the workload has let go of. Only the collector can
+Objects in a cycle that the workload has let go of. The collector alone can
 free them.
 _Avoid_: leak, garbage (bare), dead objects
 
@@ -103,35 +105,35 @@ permanent, static
 
 **Structure**:
 Objects a workload builds in one shape, hangs off one root, and drops together
-when its lifetime ends. A repeating structure is rebuilt at a fixed interval,
-the way a benchmark rebuilds its data each iteration. Dropped, a structure
-whose shape has cycles becomes cyclic garbage; one without is freed by
-refcounting on the spot.
+when its lifetime ends. The workload rebuilds a repeating structure at a
+fixed interval, the way a benchmark rebuilds its data each iteration.
+Dropped, a structure whose shape has cycles becomes cyclic garbage, and
+refcounting frees one without on the spot.
 _Avoid_: data structure (fine in prose), object graph (that is the whole
 heap), cluster
 
 **Build**:
-The stretch of the allocation clock in which one structure is allocated. Each
-built object is followed by a fixed number of churn allocations, the build's
-churn, so a build is spread over more kB than the structure holds. Builds of
-a repeating structure never overlap.
+The stretch of the allocation clock in which the workload allocates one
+structure. The workload follows each built object with a fixed number of
+churn allocations, the build's churn, so a build spreads over more kB than
+the structure holds. Builds of a repeating structure never overlap.
 _Avoid_: construction, setup, phase, iteration (that is the benchmark's word
 for a build plus everything until the next one)
 
 **Long-lived structure**:
-A structure that is never dropped.
+A structure the workload never drops.
 _Avoid_: live set (that includes transient objects still in use), data,
 cache
 
 **Shape**:
-A named pattern a structure is built in, such as a list of records
+A named pattern the workload builds a structure in, such as a list of records
 or a tree: which references its objects hold, and the order a Python program
 would allocate them in.
 _Avoid_: topology, layout, kind, type
 
 **Root**:
-Something outside the heap that keeps objects reachable. Either a module root
-or a frame root.
+Something outside the heap that keeps objects reachable: a module root or a
+frame root.
 _Avoid_: anchor, owner, GC root (bare; the two kinds behave differently)
 
 **Module root**:
@@ -140,21 +142,21 @@ reaches, so objects hung off it never join an increment.
 _Avoid_: global root, static root
 
 **Frame root**:
-A reference held by a running frame, such as a local in `main()`. Marking
-never starts from one, so objects hung only off a frame root reach the
-collector through increments.
+A reference a running frame holds, such as a local in `main()`. Old
+collections never mark from one, so objects hung off frame roots alone reach
+the collector through increments.
 _Avoid_: stack root, local root, C root
 
 **Lifetime**:
-How long, on the allocation clock, an object or a structure stays reachable
-after it is allocated. Long-lived structures outlast the run.
+The span of the allocation clock that an object or a structure stays
+reachable after its allocation. Long-lived structures outlast the run.
 _Avoid_: age (that is how long it has existed, reachable or not), TTL
 
 ### What readers see
 
 **Widget**:
-One embedding of the simulator on a page: a preset, the controls a reader is
-allowed to change, and the charts of the runs it makes.
+One embedding of the simulator on a page: a preset, the controls a reader may
+change, and the charts of the runs it makes.
 _Avoid_: demo, applet, visualization, simulator (that is what it runs)
 
 **Guide**:
@@ -175,9 +177,10 @@ which allocate the same objects in the same order.
 _Avoid_: simulation (bare), trial, execution, benchmark
 
 **Uncollected garbage**:
-Objects already unreachable that no collection has freed yet: the gap
-between the heap and its reachable part. Only a simulator can draw it, since
-a real collector learns what is garbage only by collecting it.
+Unreachable objects that no collection has freed: the gap between the heap
+and its reachable part. A simulator can draw it. A real collector learns
+which objects are cyclic garbage as it collects them, too late to draw the
+gap.
 _Avoid_: floating garbage (the literature's word for garbage that dies during
 a collection), leak, dead objects
 
@@ -194,29 +197,29 @@ _Avoid_: overhead, GC share, CPU percentage
 ### Collectors
 
 **Incremental collector**:
-The collector PEP 848 proposes: alternates young collections with increments
-of the old generation.
+The collector PEP 848 proposes. It alternates young collections with
+increments of the old generation.
 _Avoid_: new GC, incgc, inc GC
 
 **Legacy collector**:
 The three-generation collector as the reference branch keeps it behind
-`-X gc=legacy`: triggered by gross kB allocated, like the incremental
-collector, rather than by the net object count 3.15 uses.
+`-X gc=legacy`. Gross kB allocated trigger it, as they trigger the
+incremental collector; 3.15 triggers it on the net object count.
 _Avoid_: old GC (collides with the old generation), classic, generational GC
 (both collectors are generational), current GC, 3.15 GC (3.15's triggers
 differently)
 
 **Gen 0, gen 1, gen 2 collection**:
 The legacy collector's three collections, named for the oldest generation
-each takes: the nursery; the nursery and aging; the whole heap. Used for the
-legacy collector only.
+each takes: the nursery; the nursery and aging; the whole heap. The terms
+belong to the legacy collector alone.
 _Avoid_: young, minor, major (and any genN word for the incremental
 collector)
 
 ### The heap
 
 **Nursery**:
-The generation newly allocated objects enter. A single space.
+The generation new objects enter: a single space.
 _Avoid_: gen0, young space, eden
 
 **Half-space**:
@@ -236,19 +239,19 @@ is the oldest and a young collection takes it.
 _Avoid_: half-space (that is half of one), bucket, slot
 
 **Old generation**:
-Where objects that survive the young generation live. Split into a pending
-space and a visited space by the incremental collector.
+The generation objects reach once they survive the young generation. The
+incremental collector splits it into a pending space and a visited space.
 _Avoid_: gen2, tenured
 
 **Pending space**:
-The part of the old generation the current sweep has not yet marked or
-examined.
+The part of the old generation the current sweep has left to mark or
+examine.
 _Avoid_: unscanned, to-do
 
 **Visited space**:
-The part of the old generation the current sweep has already marked or
-examined, plus whatever young collections promoted during it. Pending and
-visited swap roles when pending runs empty.
+The part of the old generation the current sweep has marked or examined,
+plus the survivors of the young collections during it. Pending and visited
+swap roles when pending runs empty.
 _Avoid_: scanned, done
 
 ### Collections
@@ -261,32 +264,33 @@ is a young collection, not a collection of generation 0)
 
 **Increment**:
 The transitive closure of pending objects reachable from the least recently
-scanned pending object, collected as one unit. Always contains whole cycles.
+scanned pending object, which an old collection collects as one unit. It
+contains each cycle it touches in full.
 _Avoid_: chunk, slice, batch, step
 
 **Old collection**:
 One turn of the incremental collector on the old generation: zero or more
-increments, collected while the work budget stays positive.
+increments, which it collects while the work budget stays positive.
 _Avoid_: gen1, generation 1 (the stats slot the C implementation files it
 under, which reads as the aging generation), major GC, full collection (that
 is `gc.collect()`, the whole heap)
 
 **Sweep**:
 One pass of the incremental collector over the whole old generation, from one
-swap of pending and visited to the next, in which every object that was old
-at the swap is marked or examined once. Only the work budget moves it along,
-so it runs long when few objects survive and short when garbage is plentiful.
-Cyclic garbage wholly in the old generation when a sweep starts is freed by
-the time it ends. The legacy collector has none; a gen 2 collection does the
-same ground in one go.
+swap of pending and visited to the next, in which the collector marks or
+examines once each object that was old at the swap. The work budget alone
+paces it, so it runs long when few objects survive and short when cyclic
+garbage is plentiful. Cyclic garbage wholly in the old generation when a
+sweep starts is freed by the time it ends. The legacy collector has no
+sweeps; a gen 2 collection covers the same ground in one go.
 _Avoid_: cycle, GC cycle (both collide with reference cycles), pass, epoch,
 full collection (that is `gc.collect()`)
 
 ### What a collection did
 
 **Work**:
-What a collection cost: every simulated object it marked or examined, so
-marked + survived + freed. The simulator's stand-in for pause time.
+The count of simulated objects a collection marked or examined: marked +
+survived + freed. The simulator's stand-in for pause time.
 _Avoid_: pause, duration, time, cost (all promise a clock the simulator does
 not have)
 
@@ -296,7 +300,8 @@ reachable, without examining them for cycles.
 _Avoid_: scanned (every kind of work scans), visited (that is the space)
 
 **Survived**:
-Objects a collection examined for cycles and moved on, to the visited space.
+Objects a collection examined for cycles and moved on: to the visited space
+in the incremental collector, to an older generation in the legacy one.
 _Avoid_: promoted, kept, live
 
 **Freed**:
@@ -305,9 +310,9 @@ _Avoid_: collected (reads as the act, not the count), reclaimed, swept
 
 **Yield**:
 Freed over freed + survived: the share of the objects a collection examined
-that turned out to be garbage. Marked objects are left out, since they were
-never examined. Independent of scale, so a preset's yield can be held against
-`collected / candidates` from a real run of its benchmark.
+that were cyclic garbage. It leaves marked objects out, since the collection
+never examined them. Scale drops out of it, so you can hold a preset's yield
+against `collected / candidates` from a real run of its benchmark.
 _Avoid_: efficiency, hit rate, garbage ratio
 
 **Idle collection**:
@@ -321,10 +326,11 @@ wasted)
 ### The work budget
 
 **Work budget**:
-How much old-generation scanning the incremental collector owes, as the PEP's
-pseudocode keeps it. Young collections credit it with their survivors; each
-increment debits it with what it examined and credits it with twice what it
-freed, straight away, so a garbage-rich increment lengthens the old collection
-it is part of. Spelled `work_to_do` when quoting the PEP.
+The old-generation scanning the incremental collector owes, as the PEP's
+pseudocode keeps it. Young collections credit it with their survivors, and
+old collections debit it with what they mark. Each increment debits it with
+what it examined and credits it with twice what it freed, straight away, so
+a garbage-rich increment lengthens the old collection it is part of. Quoting
+the PEP, spell it `work_to_do`.
 _Avoid_: old_work (the C implementation's counterpart, which is settled once
 per old collection and so traces a different curve), debt, credit
