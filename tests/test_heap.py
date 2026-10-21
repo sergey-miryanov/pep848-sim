@@ -65,3 +65,22 @@ def test_an_objects_count_is_how_often_the_heap_references_it(
     assert {x: heap.reference_count(x) for x in objects} == {
         x: held[x] for x in objects
     }
+
+
+def test_a_new_heaps_clock_reads_zero() -> None:
+    assert Heap().clock == 0
+
+
+@given(st.lists(st.booleans(), max_size=60))
+def test_the_clock_reads_the_kb_allocated_with_an_object_or_without(
+    makes_object: list[bool],
+) -> None:
+    heap = Heap()
+
+    for make in makes_object:
+        if make:
+            heap.allocate()
+        else:
+            heap.allocate_unseen()
+
+    assert heap.clock == len(makes_object)
