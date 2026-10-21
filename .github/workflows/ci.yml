@@ -8,8 +8,10 @@ on:
   push:
     branches: [main]
 
+# A new push to a pull request cancels its older run. Each push to main runs
+# in a group of its own, so every commit there uploads its coverage.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 permissions:
