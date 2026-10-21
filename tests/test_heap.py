@@ -5,12 +5,17 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from pep848_sim.collector import Collector
 from pep848_sim.heap import Heap
+
+
+def new_heap() -> Heap:
+    return Heap(Collector())
 
 
 @dataclass
 class Built:
-    heap: Heap = field(default_factory=Heap)
+    heap: Heap = field(default_factory=new_heap)
     objects: list[int] = field(default_factory=list)
     # The test's own record of the frame roots, in the order taken.
     frame_roots: dict[int, int] = field(default_factory=dict)
@@ -43,7 +48,7 @@ def built_heaps(draw: st.DrawFn) -> Built:
 
 
 def test_a_new_object_holds_no_references_and_has_none_into_it() -> None:
-    heap = Heap()
+    heap = new_heap()
 
     x = heap.allocate()
 
@@ -52,13 +57,13 @@ def test_a_new_object_holds_no_references_and_has_none_into_it() -> None:
 
 
 def test_each_allocation_is_a_different_object() -> None:
-    heap = Heap()
+    heap = new_heap()
 
     assert heap.allocate() != heap.allocate()
 
 
 def test_each_link_raises_the_count_of_its_target_a_repeat_included() -> None:
-    heap = Heap()
+    heap = new_heap()
     x, y = heap.allocate(), heap.allocate()
 
     heap.link(x, y)
@@ -68,7 +73,7 @@ def test_each_link_raises_the_count_of_its_target_a_repeat_included() -> None:
 
 
 def test_an_object_lists_its_references_in_the_order_they_were_made() -> None:
-    heap = Heap()
+    heap = new_heap()
     a, b, c = heap.allocate(), heap.allocate(), heap.allocate()
 
     heap.link(a, c)
@@ -96,14 +101,14 @@ def test_the_heap_records_its_frame_roots_in_the_order_taken(built: Built) -> No
 
 
 def test_a_new_heaps_clock_reads_zero() -> None:
-    assert Heap().clock == 0
+    assert new_heap().clock == 0
 
 
 @given(st.lists(st.booleans(), max_size=60))
 def test_the_clock_reads_the_kb_allocated_with_an_object_or_without(
     makes_object: list[bool],
 ) -> None:
-    heap = Heap()
+    heap = new_heap()
 
     for make in makes_object:
         if make:
@@ -115,14 +120,14 @@ def test_the_clock_reads_the_kb_allocated_with_an_object_or_without(
 
 
 def test_a_new_heap_has_the_module_root_held_by_the_interpreter() -> None:
-    heap = Heap()
+    heap = new_heap()
 
     assert heap.reference_count(heap.module_root) == 1
     assert heap.frame_roots() == {}
 
 
 def test_frame_roots_count_in_the_reference_count_while_frames_hold_them() -> None:
-    heap = Heap()
+    heap = new_heap()
     x = heap.allocate()
 
     heap.take_frame_root(x)
@@ -134,7 +139,7 @@ def test_frame_roots_count_in_the_reference_count_while_frames_hold_them() -> No
 
 
 def test_the_heap_refuses_to_let_go_of_a_frame_root_an_object_lacks() -> None:
-    heap = Heap()
+    heap = new_heap()
     x, y = heap.allocate(), heap.allocate()
     heap.link(y, x)
 

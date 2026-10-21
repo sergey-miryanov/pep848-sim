@@ -2,17 +2,22 @@
 roots that keep them reachable, and the allocation clock.
 
 A simulated object is an int indexing the heap's lists, so the simulator makes no
-reference cycles of its own for the host's collector to chase.
+reference cycles of its own for the host's collector to chase. The heap hands each
+new object to its collector, which owns the spaces.
 """
+
+from pep848_sim.collector import Collector
 
 
 class Heap:
-    def __init__(self) -> None:
+    def __init__(self, collector: Collector) -> None:
+        self._collector = collector
         # sys exists before the run begins, so making it moves no clock, and the
         # interpreter holds it for good.
         self._references: list[list[int]] = [[]]
         self._reference_counts: list[int] = [1]
         self._module_root = 0
+        collector.add(self._module_root)
         self._frame_roots: dict[int, int] = {}
         self._clock = 0
 
@@ -45,6 +50,7 @@ class Heap:
         x = len(self._references)
         self._references.append([])
         self._reference_counts.append(0)
+        self._collector.add(x)
         self._clock += 1
         return x
 
