@@ -43,6 +43,9 @@ lists them.
 | `site` | assembles `_site/`: copies `site/`, zips `src/pep848_sim` into `_site/sim.zip` |
 | `serve` | runs `site`, then serves `_site/` on `http://localhost:8000` |
 
+`test` passes its arguments to pytest. To run one test file, leave the
+coverage gate out: `poetry run just test tests/test_smoke.py --no-cov`.
+
 ## Checks
 
 - ruff checks and formats the Python.
@@ -52,8 +55,15 @@ lists them.
   budget moves by exactly what the counters say, and cyclic garbage wholly in
   the old generation when a sweep starts is freed by its end.
 - Coverage below 99% fails the run.
-- pre-commit runs ruff, `typos` and `codespell`, `actionlint` and `zizmor`
-  over the workflows, and the whitespace hooks. The tree is LF-only.
+- pre-commit runs ruff, `typos` and `codespell`; `check-jsonschema`,
+  `actionlint` and `zizmor` over the workflows; the whitespace hooks; and
+  checks for broken YAML, TOML and XML, merge conflict markers, symlinks, and
+  file names Windows cannot check out. The tree is LF-only.
+- Hook revisions are pinned by commit SHA, the tag in a `# frozen:` comment.
+  `poetry run pre-commit autoupdate --freeze` moves them, but pins an
+  annotated tag's own SHA rather than its commit: take the commit from
+  `git ls-remote <repo> 'refs/tags/<tag>^{}'`. Keep ruff's at the version in
+  `poetry.lock`.
 
 The JavaScript (the widget and the worker) has no tooling in CI. Every file
 starts with `// @ts-check` so an editor type checks it; keep it small.
