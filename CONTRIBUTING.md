@@ -58,10 +58,13 @@ coverage gate out: `poetry run just test tests/test_smoke.py --no-cov`.
 - pre-commit runs ruff, `typos` and `codespell`; `check-jsonschema`,
   `actionlint` and `zizmor` over the workflows; the whitespace hooks; and
   checks for broken YAML, TOML and XML, merge conflict markers, symlinks, and
-  file names Windows cannot check out. The tree is LF-only.
+  file names Windows cannot check out. The tree is LF-only. pre-commit.ci
+  runs the same hooks on every pull request.
 - Hook revisions are pinned by commit SHA, the tag in a `# frozen:` comment.
-  `poetry run pre-commit autoupdate --freeze` moves them, but pins an
-  annotated tag's own SHA rather than its commit: take the commit from
+  Dependabot moves them, the Python packages and the actions daily, once a
+  release is a week old. pre-commit.ci's own update runs only quarterly, and
+  it and `poetry run pre-commit autoupdate --freeze` both pin an annotated
+  tag's own SHA rather than its commit: take the commit from
   `git ls-remote <repo> 'refs/tags/<tag>^{}'`. Keep ruff's at the version in
   `poetry.lock`.
 
@@ -123,4 +126,5 @@ poetry run just check
 ```
 
 Then say what you changed and how you checked it. CI runs the same `check`,
-and merging deploys.
+and merging deploys. pre-commit.ci runs the hooks on the pull request and
+pushes a commit with whatever they fix, so pull before you push again.
