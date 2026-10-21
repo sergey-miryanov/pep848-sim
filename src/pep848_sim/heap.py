@@ -16,6 +16,7 @@ class Heap:
         # interpreter holds it for good.
         self._references: list[list[int]] = [[]]
         self._reference_counts: list[int] = [1]
+        self._freed: list[bool] = [False]
         self._module_root = 0
         collector.add(self._module_root)
         self._frame_roots: dict[int, int] = {}
@@ -45,11 +46,33 @@ class Heap:
         else:
             self._frame_roots[x] = roots - 1
         self._reference_counts[x] -= 1
+        if not self._reference_counts[x]:
+            self._free(x)
+
+    def is_freed(self, x: int) -> bool:
+        return self._freed[x]
+
+    def _free(self, x: int) -> None:
+        """Free x by refcounting, and whatever that leaves at zero in turn."""
+        counts = self._reference_counts
+        stack = [x]
+        while stack:
+            y = stack.pop()
+            self._collector.remove(y)
+            self._freed[y] = True
+            for target in self._references[y]:
+                counts[target] -= 1
+                if not counts[target]:
+                    stack.append(target)
+            self._references[y] = []
 
     def allocate(self) -> int:
+        """A new object, which its allocating frame holds, as in CPython."""
         x = len(self._references)
         self._references.append([])
-        self._reference_counts.append(0)
+        self._reference_counts.append(1)
+        self._frame_roots[x] = 1
+        self._freed.append(False)
         self._collector.add(x)
         self._clock += 1
         return x

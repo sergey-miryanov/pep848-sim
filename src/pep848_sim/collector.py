@@ -31,3 +31,6 @@ class Collector:
         del self._spaces[x]._objects[x]
         space._objects[x] = None
         self._spaces[x] = space
+
+    def remove(self, x: int) -> None:
+        del self._spaces.pop(x)._objects[x]

@@ -152,6 +152,13 @@ The span of the allocation clock that an object or a structure stays
 reachable after its allocation. Long-lived structures outlast the run.
 _Avoid_: age (that is how long it has existed, reachable or not), TTL
 
+**Alive**:
+An object the heap has allocated and not yet freed, reachable or not. The
+heap tells alive from freed; a collector tells reachable, unreachable and
+freed apart. Its allocating frame holds a new object, as in CPython, until the
+workload lets go of that frame root.
+_Avoid_: existing, allocated (that is the act of making it)
+
 ### What readers see
 
 **Widget**:
