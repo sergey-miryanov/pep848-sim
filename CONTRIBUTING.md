@@ -99,6 +99,14 @@ nothing.
 - [`docs/adr/`](docs/adr/) records decisions and why. If a change overturns
   one, amend the record in the same pull request.
 
+## Prose
+
+Run prose through the [stop-slop](https://github.com/hardikpandya/stop-slop)
+skill before it lands: the Markdown in the repo, the ADRs and the glossary
+included, the guide's pages, issues, pull requests and commit messages. If
+its rules clash with a term from `CONTEXT.md` or with wording the repo keeps
+exact, such as the invariants under _Checks_, keep the term and the wording.
+
 ## Tracking progress
 
 The work is planned in GitHub issues, and `gh issue list` shows what is open.
