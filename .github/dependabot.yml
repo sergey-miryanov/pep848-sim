@@ -10,7 +10,8 @@ updates:
     default-days: 7
 
 - package-ecosystem: github-actions
-  directory: "/"
+  # "/" covers .github/workflows only; the setup action lives elsewhere.
+  directories: ["/", "/.github/actions/*"]
   schedule:
     interval: daily
     time: "02:00"
