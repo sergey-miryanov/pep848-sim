@@ -21,13 +21,23 @@ class Collector:
     def __init__(self) -> None:
         self.nursery = Space()
         # Each object's space, as CPython's PyGC_Head links an object into a list.
+        # Only _place changes it, together with the spaces themselves.
         self._spaces: dict[int, Space] = {}
 
     def add(self, x: int) -> None:
-        self.nursery._objects[x] = None
-        self._spaces[x] = self.nursery
+        self._place(x, self.nursery)
 
     def move(self, x: int, space: Space) -> None:
-        del self._spaces[x]._objects[x]
-        space._objects[x] = None
-        self._spaces[x] = space
+        self._place(x, space)
+
+    def remove(self, x: int) -> None:
+        self._place(x, None)
+
+    def _place(self, x: int, space: Space | None) -> None:
+        """Take x out of its space, if it has one, and put it last in `space`."""
+        old = self._spaces.pop(x, None)
+        if old is not None:
+            del old._objects[x]
+        if space is not None:
+            space._objects[x] = None
+            self._spaces[x] = space
