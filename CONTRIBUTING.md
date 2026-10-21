@@ -83,6 +83,17 @@ nothing.
 - [`docs/adr/`](docs/adr/) records decisions and why. If a change overturns
   one, amend the record in the same pull request.
 
+## Tracking progress
+
+The work is planned in GitHub issues, and `gh issue list` shows what is open.
+
+- Every pull request closes or references an issue: `Closes #n` in its
+  description when it finishes the issue, `#n` alone when it does not.
+- Every issue belongs to a milestone.
+- Labels are `simulator`, `site`, `preset` and `process`.
+- A milestone's issues are opened when the milestone starts, not up front, so
+  each is written knowing what the milestones before it found.
+
 ## Opening a pull request
 
 Every change reaches `main` through a pull request, because `main` deploys to
