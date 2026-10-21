@@ -7,8 +7,8 @@ _default:
 check: lint typecheck test
 
 # pytest, Hypothesis invariants included, with the coverage gate
-test:
-    pytest
+test *args:
+    pytest {{args}}
 
 # ruff's checker and formatter
 lint:
