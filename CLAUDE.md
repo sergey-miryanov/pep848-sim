@@ -2,6 +2,8 @@
 
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) is the process: Python version, setup,
   `just` recipes, checks, the site, publishing, pull requests. Follow it.
+- Work from `gh issue list`. Link each pull request to its issue with
+  `Closes #n`, or with `#n` alone when it does not finish the issue.
 - [`CONTEXT.md`](CONTEXT.md) is the glossary. Use its terms and avoid the
   words it lists under _Avoid_. When a term settles or changes, update it in
   the same change. It holds vocabulary only, never implementation.
