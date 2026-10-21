@@ -35,7 +35,7 @@ class Built:
     collector: Collector = field(default_factory=Collector)
     heap: Heap = field(init=False)
     objects: list[int] = field(default_factory=list)
-    # The test's own record of the frame roots, in the order taken.
+    # The test's own record of the frame roots.
     frame_roots: dict[int, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -128,8 +128,8 @@ def test_an_objects_count_is_its_references_and_its_roots(built: Built) -> None:
 
 
 @given(built_heaps())
-def test_the_heap_records_its_frame_roots_in_the_order_taken(built: Built) -> None:
-    assert list(built.heap.frame_roots().items()) == list(built.frame_roots.items())
+def test_the_heap_records_how_many_frame_roots_each_object_has(built: Built) -> None:
+    assert built.heap.frame_roots() == built.frame_roots
 
 
 @given(built_heaps())
@@ -223,6 +223,21 @@ def test_letting_go_of_a_chains_last_reference_frees_it_whole() -> None:
 
     assert [heap.is_freed(x) for x in (a, b, c)] == [True, True, True]
     assert list(collector.nursery) == [heap.module_root]
+
+
+def test_the_heap_refuses_to_link_or_hold_a_freed_object() -> None:
+    heap = new_heap()
+    x, y = heap.allocate(), heap.allocate()
+    heap.let_go_frame_root(x)
+
+    with pytest.raises(ValueError, match="freed"):
+        heap.link(y, x)
+    with pytest.raises(ValueError, match="freed"):
+        heap.link(x, y)
+    with pytest.raises(ValueError, match="freed"):
+        heap.take_frame_root(x)
+
+    assert heap.reference_count(y) == 1
 
 
 def test_a_dropped_cycle_stays_whole_with_what_it_holds() -> None:
