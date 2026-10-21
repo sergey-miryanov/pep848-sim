@@ -22,8 +22,11 @@ poetry install
 poetry run pre-commit install
 ```
 
+The environment lives in `.venv` inside the repo: `poetry.toml` sets
+`virtualenvs.in-project`, so editors and tools find it without asking Poetry.
 If Poetry cannot find 3.14 by version, give `poetry env use` the full path to
-the interpreter.
+the interpreter. If a `.venv` on another Python is already there, delete it
+first: Poetry reuses an in-project `.venv` whatever its version.
 
 ## Commands
 
