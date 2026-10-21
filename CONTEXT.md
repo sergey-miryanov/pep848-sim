@@ -55,14 +55,21 @@ real objects, so the collector settings keep the PEP's units and defaults.
 _Avoid_: chunk, block, cell, node (that is how one is drawn)
 
 **Real object**:
-A CPython object, assumed to be 64 B on average, so one simulated object
-stands for 16 of them. Counts the PEP or the C implementation give in real
-objects shrink by the same 16 inside the simulator. The 64 B is an assumption,
-not a collector constant, and the playground lets a reader change it.
-_Avoid_: object (bare, when the two could be confused), PyObject
+A CPython object of a type the cycle collector supports, such as a list, a
+dict, a tuple or an instance, assumed to be 64 B on average, so one simulated
+object stands for 16 of them. Strings, numbers and the other objects the
+collector never sees are not real objects here: they enter no space and do
+not move the allocation clock. Counts the PEP or the C implementation give in
+real objects shrink by the same 16 inside the simulator. The 64 B is an
+assumption, not a collector constant, and the playground lets a reader change
+it.
+_Avoid_: object (bare, when the two could be confused), PyObject, tracked
+object (a real object can be untracked after it is allocated, as a
+collection does to a tuple that holds only numbers)
 
 **Allocation clock**:
-The simulator's only notion of time: kB allocated since the run began.
+The simulator's only notion of time: kB of real objects allocated since the
+run began, counted as the collectors' trigger counts them, at allocation.
 Lifetimes, collection triggers and every chart's x-axis read it.
 _Avoid_: time (bare), wall time, steps, ticks
 
