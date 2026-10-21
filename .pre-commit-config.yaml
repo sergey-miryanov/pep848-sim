@@ -10,6 +10,9 @@ repos:
     rev: 914e7df21a07ef503a81201c76d2b11c789d3fca  # frozen: v1.7.12
     hooks:
       - id: actionlint
+        # actionlint has no support for GitHub's `$/` self-repository syntax
+        # yet; see rhysd/actionlint#711.
+        args: ["-ignore", 'specifying action "\$/']
 
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
     rev: c92afdf2c6ca336aaa8f39e2bd8d48f62dbd8e1f  # frozen: v1.31.1
