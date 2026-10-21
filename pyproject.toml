@@ -51,11 +51,12 @@ search-path = ["src", "tools"]
 strict = true
 testpaths = ["tests"]
 pythonpath = ["tools"]
-addopts = ["--cov=pep848_sim"]
+addopts = ["--cov=pep848_sim", "--cov-report=term", "--cov-report=xml"]
 
 [tool.coverage.run]
 branch = true
 
 [tool.coverage.report]
 fail_under = 99
+precision = 2
 show_missing = true
