@@ -106,6 +106,7 @@ skill before it lands: the Markdown in the repo, the ADRs and the glossary
 included, the guide's pages, issues, pull requests and commit messages. If
 its rules clash with a term from `CONTEXT.md` or with wording the repo keeps
 exact, such as the invariants under _Checks_, keep the term and the wording.
+Install the skill in your own skills folder, as its README says.
 
 ## Tracking progress
 
