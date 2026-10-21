@@ -27,3 +27,8 @@ updates:
   open-pull-requests-limit: 10
   cooldown:
     default-days: 7
+  ignore:
+    # crate-ci/typos also tags its other crates (varcon-core-v5.0.7, ...),
+    # and Dependabot reads those as typos releases. typos itself is at 1.x.
+    - dependency-name: "https://github.com/crate-ci/typos"
+      versions: [">= 2"]
