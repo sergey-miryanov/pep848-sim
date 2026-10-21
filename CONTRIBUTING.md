@@ -12,7 +12,8 @@ The simulator's only real host is Pyodide, so **our Python is Pyodide's
 Python**. Today that is 3.14 (Pyodide 314.0.7 runs 3.14.2): develop, type
 check and test on 3.14, never on a newer one. When Pyodide moves to a new
 Python, move `requires-python`, the ruff, mypy and pyrefly targets, the CI
-interpreter and the Pyodide pin together, in one pull request.
+interpreter (in `.github/actions/setup`, which both workflows use) and the
+Pyodide pin together, in one pull request.
 
 ## Getting set up
 
