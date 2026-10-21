@@ -1,5 +1,5 @@
-"""The heap both collectors run over: simulated objects, their references, and the
-allocation clock.
+"""The heap both collectors run over: simulated objects, their references, the
+roots that keep them reachable, and the allocation clock.
 
 A simulated object is an int indexing the heap's lists, so the simulator makes no
 reference cycles of its own for the host's collector to chase.
@@ -8,13 +8,38 @@ reference cycles of its own for the host's collector to chase.
 
 class Heap:
     def __init__(self) -> None:
-        self._references: list[list[int]] = []
-        self._reference_counts: list[int] = []
+        # sys exists before the run begins, so making it moves no clock, and the
+        # interpreter holds it for good.
+        self._references: list[list[int]] = [[]]
+        self._reference_counts: list[int] = [1]
+        self._module_root = 0
+        self._frame_roots: dict[int, int] = {}
         self._clock = 0
 
     @property
     def clock(self) -> int:
         return self._clock
+
+    @property
+    def module_root(self) -> int:
+        return self._module_root
+
+    def frame_roots(self) -> dict[int, int]:
+        return dict(self._frame_roots)
+
+    def take_frame_root(self, x: int) -> None:
+        self._frame_roots[x] = self._frame_roots.get(x, 0) + 1
+        self._reference_counts[x] += 1
+
+    def let_go_frame_root(self, x: int) -> None:
+        roots = self._frame_roots.get(x, 0)
+        if not roots:
+            raise ValueError(f"no frame root on object {x}")
+        if roots == 1:
+            del self._frame_roots[x]
+        else:
+            self._frame_roots[x] = roots - 1
+        self._reference_counts[x] -= 1
 
     def allocate(self) -> int:
         x = len(self._references)
