@@ -13,7 +13,9 @@ number of collection intervals, stacked as marked, survived and freed; and
 the work budget, a step line with a bold zero line and the negative stretch
 shaded, which the legacy column replaces with a line saying it keeps none.
 The layout is for the desktop; the phone layout waits for the Guide
-milestone.
+milestone. It is a starting point, chosen on records from a rough simulator:
+once the real simulator's presets draw it, the layout is open to change, and
+this record is amended when it does.
 
 Work is binned because a bar per collection does not survive a long run: at
 500 collections a bar is about a pixel wide, at 2000 a hairline, and its
