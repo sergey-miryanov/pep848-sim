@@ -60,6 +60,7 @@ class Heap:
             raise ValueError(f"no frame root on object {x}")
         record.frame_roots -= 1
         record.reference_count -= 1
+        assert record.reference_count >= 0, f"object {x}'s count < 0"
         if not record.reference_count:
             self._free(x)
 
@@ -107,5 +108,6 @@ class Heap:
             for target in record.references:
                 held = self._alive(target)
                 held.reference_count -= 1
+                assert held.reference_count >= 0, f"object {target}'s count < 0"
                 if not held.reference_count:
                     stack.append(target)
