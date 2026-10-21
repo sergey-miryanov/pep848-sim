@@ -43,6 +43,9 @@ lists them.
 | `site` | assembles `_site/`: copies `site/`, zips `src/pep848_sim` into `_site/sim.zip` |
 | `serve` | runs `site`, then serves `_site/` on `http://localhost:8000` |
 
+To run one test file, leave the coverage gate out:
+`poetry run pytest tests/test_smoke.py --no-cov`.
+
 ## Checks
 
 - ruff checks and formats the Python.
