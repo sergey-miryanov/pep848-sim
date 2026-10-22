@@ -11,9 +11,16 @@
  */
 
 /**
- * What a widget hears about its runs.
+ * A run's figures so far, as pep848_sim.figures.Figures.row holds them: peak
+ * work, peak uncollected garbage, work per MB, yield (undefined until the run has
+ * examined an object), collections, sweeps and gen 2 collections.
+ * @typedef {[number, number, number, number | undefined, number, number, number]} Figures
+ */
+
+/**
+ * What a widget hears about its runs: each part of one, with its figures so far.
  * @typedef {{
- *   records: (collector: "legacy" | "incremental", records: Record[]) => void,
+ *   records: (collector: "legacy" | "incremental", records: Record[], figures: Figures) => void,
  *   done: () => void,
  *   error: (message: string) => void,
  * }} Listener
@@ -31,7 +38,7 @@ let nextId = 0;
 worker.onmessage = (/** @type {MessageEvent} */ { data }) => {
   const listener = listeners.get(data.id);
   if (!listener) return;
-  if (data.kind === "records") listener.records(data.collector, data.records);
+  if (data.kind === "records") listener.records(data.collector, data.records, data.figures);
   else {
     listeners.delete(data.id);
     if (data.kind === "done") listener.done();
