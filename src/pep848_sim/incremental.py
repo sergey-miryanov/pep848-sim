@@ -49,7 +49,7 @@ class IncrementalCollector(Collector):
     @override
     def space_sizes(self) -> tuple[int, ...]:
         return (
-            len(self.nursery),
+            *super().space_sizes(),
             sum(len(space) for space in self.aging),
             len(self.pending_space),
             len(self.visited_space) + len(self.reachable),
@@ -65,8 +65,9 @@ class IncrementalCollector(Collector):
 
     @override
     def collect(self) -> None:
-        self.young_collection() if self.young_next else self.old_collection()
-        self.young_next = not self.young_next
+        with self.recording():
+            self.young_collection() if self.young_next else self.old_collection()
+            self.young_next = not self.young_next
 
     def young_collection(self) -> None:
         oldest = self.aging.pop()

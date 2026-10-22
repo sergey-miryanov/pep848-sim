@@ -41,7 +41,7 @@ class LegacyCollector(Collector):
 
     @override
     def space_sizes(self) -> tuple[int, ...]:
-        return (len(self.nursery), len(self.aging), len(self.old))
+        return (*super().space_sizes(), len(self.aging), len(self.old))
 
     @override
     def collect(self) -> None:
@@ -52,7 +52,8 @@ class LegacyCollector(Collector):
             self.collect_generation1,
             self.collect_generation2,
         )
-        collections[self.select_generation()]()
+        with self.recording():
+            collections[self.select_generation()]()
 
     def select_generation(self) -> int:
         """gc_select_generation, as the legacy collector reads it: the oldest

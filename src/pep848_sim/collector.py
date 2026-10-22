@@ -8,6 +8,7 @@ collection at each multiple of threshold0.
 """
 
 from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Literal, NamedTuple
 
@@ -117,16 +118,18 @@ class Collector:
         """Take the heap to collect, which hands itself over as it starts."""
         self._heap = heap
 
-    def collect_at_boundary(self) -> None:
-        """Run one collection, as the heap asks at each multiple of threshold0, and
-        record it with the heap before and after it."""
+    def collect(self) -> None:
+        """Run one collection, as the heap asks at each multiple of threshold0. The
+        base collects nothing; each collector says how it collects, and records the
+        collection with `recording()`."""
+
+    @contextmanager
+    def recording(self) -> Iterator[None]:
+        """Record the collection run inside, with the heap before and after it."""
         heap = self._heap
-        counted = len(self.counts)
         spaces_before = self.space_sizes()
         reachable_before = len(heap) - heap.uncollected_garbage
-        self.collect()
-        if len(self.counts) == counted:
-            return  # the base collects nothing, so it has nothing to record
+        yield
         counts = self.counts[-1]
         self.records.append(
             Record(
@@ -144,12 +147,9 @@ class Collector:
             )
         )
 
-    def collect(self) -> None:
-        """Run one collection. The base collects nothing; each collector says how
-        it collects."""
-
     def space_sizes(self) -> tuple[int, ...]:
-        """The objects in each space SPACES names."""
+        """The objects in each space SPACES names. The base reports the nursery, and
+        each collector adds the spaces it makes."""
         return (len(self.nursery),)
 
     def budget(self) -> int:
