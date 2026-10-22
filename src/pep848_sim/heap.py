@@ -124,6 +124,18 @@ class Heap:
         self._alive(source).references.append(target)
         held.reference_count += 1
 
+    def unlink(self, source: int, target: int, leaves_unreachable: int = 0) -> None:
+        """Take away source's first reference to target, as a program does when it
+        rebinds a global or removes an item from a container. The cut leaves
+        `leaves_unreachable` objects unreachable, as the workload knows from building
+        them."""
+        references = self._alive(source).references
+        if target not in references:
+            raise ValueError(f"object {source} holds no reference to object {target}")
+        references.remove(target)
+        self._let_go([target])
+        self._count_garbage(leaves_unreachable)
+
     def references(self, x: int) -> tuple[int, ...]:
         record = self._objects.get(x)
         return () if record is None else tuple(record.references)

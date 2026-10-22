@@ -50,7 +50,9 @@ def built_heaps(draw: st.DrawFn) -> Built:
     heap = built.heap
     built.objects.append(heap.module_root)
     for _ in range(draw(st.integers(min_value=0, max_value=60))):
-        action = draw(st.sampled_from(["allocate", "grow", "link", "take", "let go"]))
+        action = draw(
+            st.sampled_from(["allocate", "grow", "link", "cut", "take", "let go"])
+        )
         alive = st.sampled_from([x for x in built.objects if not heap.is_freed(x)])
         if action == "allocate":
             x = heap.allocate()
@@ -65,6 +67,11 @@ def built_heaps(draw: st.DrawFn) -> Built:
             heap.let_go_frame_root(x)
         elif action == "link":
             heap.link(draw(alive), draw(alive))
+        elif action == "cut":
+            holders = [x for x in built.objects if heap.references(x)]
+            if holders:
+                x = draw(st.sampled_from(holders))
+                heap.unlink(x, draw(st.sampled_from(heap.references(x))))
         elif action == "take":
             x = draw(alive)
             heap.take_frame_root(x)
@@ -233,6 +240,50 @@ def test_letting_go_of_a_chains_last_reference_frees_it_whole() -> None:
     assert list(collector.nursery) == [heap.module_root]
 
 
+def test_cutting_a_chains_last_reference_frees_it_whole() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    holder, a, b, c = heap.allocate(), heap.allocate(), heap.allocate(), heap.allocate()
+    heap.link(holder, a)
+    heap.link(a, b)
+    heap.link(b, c)
+    for x in (a, b, c):
+        heap.let_go_frame_root(x)
+
+    heap.unlink(holder, a)
+
+    assert [heap.is_freed(x) for x in (a, b, c)] == [True, True, True]
+    assert heap.references(holder) == ()
+    assert list(collector.nursery) == [heap.module_root, holder]
+
+
+def test_cutting_one_of_two_references_leaves_the_target_held_by_the_other() -> None:
+    heap = new_heap()
+    a, b, c = heap.allocate(), heap.allocate(), heap.allocate()
+    heap.link(a, b)
+    heap.link(a, c)
+    heap.link(a, b)
+    heap.let_go_frame_root(b)
+    heap.let_go_frame_root(c)
+
+    heap.unlink(a, b)
+
+    assert heap.references(a) == (c, b)
+    assert heap.reference_count(b) == 1
+
+
+def test_the_heap_refuses_to_cut_a_reference_the_source_lacks() -> None:
+    heap = new_heap()
+    a, b, c = heap.allocate(), heap.allocate(), heap.allocate()
+    heap.link(a, b)
+
+    with pytest.raises(ValueError, match="no reference"):
+        heap.unlink(a, c)
+
+    assert heap.references(a) == (b,)
+    assert heap.reference_count(c) == 1
+
+
 def test_the_heap_refuses_to_link_or_hold_a_freed_object() -> None:
     heap = new_heap()
     x, y = heap.allocate(), heap.allocate()
@@ -343,17 +394,19 @@ def test_freeing_a_group_that_something_outside_holds_fails_an_assertion(
 class Workload(RuleBasedStateMachine):
     """A heap that random steps build as a workload would. Links among its loose
     objects run from older to newer only, so they never close a cycle, and
-    refcounting frees whatever they leave unreachable. Its cycles stand apart, and
-    the machine knows the size of each from building it, never from the walk."""
+    refcounting frees whatever they leave unreachable. Its cycles stand apart, held
+    by a frame root or by sys, and the machine knows the size of each from building
+    it, never from the walk."""
 
     def __init__(self) -> None:
         super().__init__()
         self.heap = new_heap()
         self.objects = [self.heap.module_root]
         self.loose = [self.heap.module_root]
-        # Each held cycle by the member whose frame root holds it: its members, and
-        # every object built with it, all of which letting go of it leaves unreachable.
-        self.held: dict[int, tuple[list[int], list[int]]] = {}
+        # Each held cycle by its first member, which a frame root or sys holds: its
+        # members, every object built with it, all of which dropping it leaves
+        # unreachable, and whether sys holds it.
+        self.held: dict[int, tuple[list[int], list[int], bool]] = {}
         self.dropped: list[tuple[list[int], list[int]]] = []
 
     def alive_loose(self) -> st.SearchStrategy[int]:
@@ -386,6 +439,18 @@ class Workload(RuleBasedStateMachine):
             self.heap.link(min(x, y), max(x, y))
 
     @rule(data=st.data())
+    def cut(self, data: st.DataObject) -> None:
+        loose = set(self.loose)
+        cuts = [
+            (x, target)
+            for x in self.loose
+            for target in self.heap.references(x)
+            if target in loose
+        ]
+        if cuts:
+            self.heap.unlink(*data.draw(st.sampled_from(cuts)))
+
+    @rule(data=st.data())
     def take(self, data: st.DataObject) -> None:
         self.heap.take_frame_root(data.draw(self.alive_loose()))
 
@@ -399,9 +464,14 @@ class Workload(RuleBasedStateMachine):
         size=st.integers(min_value=1, max_value=4),
         extra_links=st.lists(st.tuples(st.integers(), st.integers()), max_size=4),
         holds_another=st.booleans(),
+        on_sys=st.booleans(),
     )
     def build_cycle(
-        self, size: int, extra_links: list[tuple[int, int]], holds_another: bool
+        self,
+        size: int,
+        extra_links: list[tuple[int, int]],
+        holds_another: bool,
+        on_sys: bool,
     ) -> None:
         members = [self.new_object() for _ in range(size)]
         for x, y in zip(members, members[1:] + members[:1], strict=True):
@@ -416,14 +486,21 @@ class Workload(RuleBasedStateMachine):
             self.heap.link(members[-1], x)
             self.heap.let_go_frame_root(x)
             built.append(x)
-        self.held[members[0]] = (members, built)
+        if on_sys:
+            self.heap.link(self.heap.module_root, members[0])
+            self.heap.let_go_frame_root(members[0])
+        self.held[members[0]] = (members, built, on_sys)
 
     @precondition(lambda self: bool(self.held))
     @rule(data=st.data())
     def drop_cycle(self, data: st.DataObject) -> None:
+        heap = self.heap
         holder = data.draw(st.sampled_from(list(self.held)))
-        members, built = self.held.pop(holder)
-        self.heap.let_go_frame_root(holder, leaves_unreachable=len(built))
+        members, built, on_sys = self.held.pop(holder)
+        if on_sys:
+            heap.unlink(heap.module_root, holder, leaves_unreachable=len(built))
+        else:
+            heap.let_go_frame_root(holder, leaves_unreachable=len(built))
         self.dropped.append((members, built))
 
     @precondition(lambda self: bool(self.dropped))
