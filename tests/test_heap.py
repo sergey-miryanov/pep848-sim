@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
+from hypothesis.stateful import RuleBasedStateMachine, invariant, precondition, rule
 
 from pep848_sim.collector import Collector
 from pep848_sim.heap import Heap
@@ -152,6 +153,13 @@ def test_what_refcounting_leaves_unreachable_hangs_off_a_cycle(built: Built) -> 
 
 
 @given(built_heaps())
+def test_the_heaps_size_is_its_alive_objects(built: Built) -> None:
+    heap = built.heap
+
+    assert len(heap) == len([x for x in built.objects if not heap.is_freed(x)])
+
+
+@given(built_heaps())
 def test_the_nursery_holds_each_alive_object_and_no_freed_one(built: Built) -> None:
     heap = built.heap
 
@@ -255,3 +263,163 @@ def test_a_dropped_cycle_stays_whole_with_what_it_holds() -> None:
     assert [heap.is_freed(x) for x in (a, b, c)] == [False, False, False]
     assert [heap.reference_count(x) for x in (a, b, c)] == [1, 1, 1]
     assert list(collector.nursery) == [heap.module_root, a, b, c]
+
+
+def test_letting_go_of_a_cycle_counts_it_as_uncollected_garbage() -> None:
+    heap = new_heap()
+    a, b, c = heap.allocate(), heap.allocate(), heap.allocate()
+    heap.link(a, b)
+    heap.link(b, c)
+    heap.link(c, a)
+    heap.let_go_frame_root(b)
+    heap.let_go_frame_root(c)
+
+    heap.let_go_frame_root(a, leaves_unreachable=3)
+
+    assert heap.uncollected_garbage == 3
+
+
+def test_freeing_a_group_of_cyclic_garbage_frees_what_only_the_group_held() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    outside = heap.allocate()  # its allocating frame holds it
+    a, b, c = heap.allocate(), heap.allocate(), heap.allocate()
+    heap.link(a, b)
+    heap.link(b, a)
+    heap.link(b, c)
+    heap.link(a, outside)
+    heap.let_go_frame_root(b)
+    heap.let_go_frame_root(c)
+    heap.let_go_frame_root(a, leaves_unreachable=3)
+
+    heap.free_cyclic_garbage([a, b])
+
+    assert [heap.is_freed(x) for x in (a, b, c)] == [True, True, True]
+    assert heap.reference_count(outside) == 1
+    assert list(collector.nursery) == [heap.module_root, outside]
+    assert heap.uncollected_garbage == 0
+
+
+@pytest.mark.parametrize("times", [1, 2], ids=["each member once", "a member twice"])
+def test_the_heap_refuses_to_free_a_group_that_something_outside_holds(
+    times: int,
+) -> None:
+    heap = new_heap()
+    holder, a, b = heap.allocate(), heap.allocate(), heap.allocate()
+    heap.link(a, b)
+    heap.link(b, a)
+    heap.link(holder, b)
+    heap.let_go_frame_root(a)
+    heap.let_go_frame_root(b)
+
+    with pytest.raises(ValueError, match="outside"):
+        heap.free_cyclic_garbage([a] * times + [b])
+
+    assert [heap.reference_count(x) for x in (a, b)] == [1, 2]
+    assert heap.references(a) == (b,)
+
+
+class Workload(RuleBasedStateMachine):
+    """A heap that random steps build as a workload would. Links among its loose
+    objects run from older to newer only, so they never close a cycle, and
+    refcounting frees whatever they leave unreachable. Its cycles stand apart, and
+    the machine knows the size of each from building it, never from the walk."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.heap = new_heap()
+        self.objects = [self.heap.module_root]
+        self.loose = [self.heap.module_root]
+        # Each held cycle by the member whose frame root holds it: its members, and
+        # how many objects letting go of it leaves unreachable.
+        self.held: dict[int, tuple[list[int], int]] = {}
+        self.dropped: list[list[int]] = []
+
+    def alive_loose(self) -> st.SearchStrategy[int]:
+        return st.sampled_from([x for x in self.loose if not self.heap.is_freed(x)])
+
+    def loose_frame_roots(self) -> list[int]:
+        return [x for x in self.heap.frame_roots() if x not in self.held]
+
+    def new_object(self) -> int:
+        x = self.heap.allocate()
+        self.objects.append(x)
+        return x
+
+    @rule()
+    def allocate(self) -> None:
+        self.loose.append(self.new_object())
+
+    @rule(data=st.data())
+    def grow(self, data: st.DataObject) -> None:
+        parent = data.draw(self.alive_loose())
+        x = self.new_object()
+        self.heap.link(parent, x)
+        self.heap.let_go_frame_root(x)
+        self.loose.append(x)
+
+    @rule(data=st.data())
+    def link(self, data: st.DataObject) -> None:
+        x, y = data.draw(self.alive_loose()), data.draw(self.alive_loose())
+        if x != y:
+            self.heap.link(min(x, y), max(x, y))
+
+    @rule(data=st.data())
+    def take(self, data: st.DataObject) -> None:
+        self.heap.take_frame_root(data.draw(self.alive_loose()))
+
+    @precondition(lambda self: bool(self.loose_frame_roots()))
+    @rule(data=st.data())
+    def let_go(self, data: st.DataObject) -> None:
+        x = data.draw(st.sampled_from(self.loose_frame_roots()))
+        self.heap.let_go_frame_root(x)
+
+    @rule(
+        size=st.integers(min_value=1, max_value=4),
+        extra_links=st.lists(st.tuples(st.integers(), st.integers()), max_size=4),
+        holds_another=st.booleans(),
+    )
+    def build_cycle(
+        self, size: int, extra_links: list[tuple[int, int]], holds_another: bool
+    ) -> None:
+        members = [self.new_object() for _ in range(size)]
+        for x, y in zip(members, members[1:] + members[:1], strict=True):
+            self.heap.link(x, y)
+        for i, j in extra_links:
+            self.heap.link(members[i % size], members[j % size])
+        for x in members[1:]:
+            self.heap.let_go_frame_root(x)
+        if holds_another:
+            x = self.new_object()
+            self.heap.link(members[-1], x)
+            self.heap.let_go_frame_root(x)
+        self.held[members[0]] = (members, size + holds_another)
+
+    @precondition(lambda self: bool(self.held))
+    @rule(data=st.data())
+    def drop_cycle(self, data: st.DataObject) -> None:
+        holder = data.draw(st.sampled_from(list(self.held)))
+        members, unreachable = self.held.pop(holder)
+        self.heap.let_go_frame_root(holder, leaves_unreachable=unreachable)
+        self.dropped.append(members)
+
+    @precondition(lambda self: bool(self.dropped))
+    @rule(data=st.data())
+    def free_cycle(self, data: st.DataObject) -> None:
+        i = data.draw(st.integers(min_value=0, max_value=len(self.dropped) - 1))
+        group = self.dropped.pop(i)
+
+        self.heap.free_cyclic_garbage(group)
+
+        assert [x for x in group if not self.heap.is_freed(x)] == []
+
+    @invariant()
+    def the_count_is_the_alive_objects_the_walk_does_not_reach(self) -> None:
+        heap = self.heap
+        alive = {x for x in self.objects if not heap.is_freed(x)}
+
+        assert heap.uncollected_garbage == len(alive - reachable(heap))
+        assert len(heap) == len(alive)
+
+
+TestUncollectedGarbageCount = Workload.TestCase
