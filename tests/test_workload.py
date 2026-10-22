@@ -1,4 +1,5 @@
 from fractions import Fraction
+from itertools import pairwise
 from random import Random
 
 from hypothesis import given
@@ -6,18 +7,30 @@ from hypothesis import strategies as st
 
 from pep848_sim.collector import Collector
 from pep848_sim.heap import Heap
+from pep848_sim.structures import Chains, Root, StructureParameters, Tree
 from pep848_sim.workload import (
     Churn,
     ChurnLifetimes,
     ChurnParameters,
+    Workload,
+    WorkloadParameters,
     geometric_thresholds,
 )
-from test_heap import reachable
+from test_heap import reachable, reached_from
 
 LIFETIMES = ChurnLifetimes(
     mean=16, long_share=Fraction(1, 500), long_lifetimes=(30_000, 300_000)
 )
 DRAWS = 200_000
+# Churn that makes no object while boundaries stay far apart: each transient ends in
+# the kB after its own.
+QUIET = ChurnParameters(
+    cycle_share=Fraction(0),
+    cycle_size=1,
+    lifetime_mean=1,
+    long_share=Fraction(0),
+    long_lifetimes=(1, 1),
+)
 CHURN = ChurnParameters(
     cycle_share=Fraction(3, 100),
     cycle_size=3,
@@ -37,6 +50,29 @@ def churn_parameters(draw: st.DrawFn) -> ChurnParameters:
         lifetime_mean=draw(st.integers(min_value=1, max_value=20)),
         long_share=Fraction(draw(st.integers(min_value=0, max_value=4)), 20),
         long_lifetimes=(long_from, long_from + draw(st.integers(0, 100))),
+    )
+
+
+ROOTS: tuple[Root, ...] = ("module", "frame")
+
+
+@st.composite
+def structure_parameters(draw: st.DrawFn) -> StructureParameters:
+    """A small structure of either shape and root: long-lived, built once and
+    dropped, or repeating."""
+    size = draw(st.integers(min_value=1, max_value=6))
+    build_churn = draw(st.integers(min_value=0, max_value=2))
+    build = size * (1 + build_churn)
+    kind = draw(st.sampled_from(["long-lived", "once", "repeating"]))
+    return StructureParameters(
+        shape=draw(st.one_of(st.builds(Chains, st.integers(1, 4)), st.just(Tree()))),
+        size=size,
+        root=draw(st.sampled_from(ROOTS)),
+        lifetime=None if kind == "long-lived" else draw(st.integers(1, 60)),
+        rebuild_interval=(
+            draw(st.integers(build, build + 40)) if kind == "repeating" else None
+        ),
+        build_churn=build_churn,
     )
 
 
@@ -170,3 +206,157 @@ def test_at_every_boundary_the_heap_matches_a_run_that_makes_every_transient(
         eager_churn.run_to(boundary)
 
         assert renamed(lazy, lazy_collector) == renamed(eager, eager_collector)
+
+
+def test_a_repeating_structure_builds_where_its_rebuild_interval_puts_it() -> None:
+    heap = Heap(Collector())
+    tree = StructureParameters(
+        shape=Tree(),
+        size=5,
+        root="module",
+        lifetime=30,
+        rebuild_interval=50,
+        build_churn=0,
+    )
+    parameters = WorkloadParameters(churn=QUIET, structures=(tree,), seed=848)
+    workload = Workload(heap, parameters, threshold0=1_000)
+
+    starts: list[int] = []
+    drops: list[int] = []
+    roots: set[int] = set()
+    for kb in range(1, 201):
+        workload.run_to(kb)
+        now = set(heap.references(heap.module_root))
+        if now - roots:
+            starts.append(kb)
+        if roots - now:
+            drops.append(kb)
+        roots = now
+
+    assert starts == [1, 51, 101, 151]
+    # Each tree lives 30 kB from the end of its 5 kB build.
+    assert drops == [35, 85, 135, 185]
+
+
+def test_the_builds_churn_follows_each_built_object() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    # Churn that makes a cycle of one object with every allocation.
+    cycles = ChurnParameters(
+        cycle_share=Fraction(1),
+        cycle_size=1,
+        lifetime_mean=1,
+        long_share=Fraction(0),
+        long_lifetimes=(1, 1),
+    )
+    chain = StructureParameters(
+        shape=Chains(width=1),
+        size=3,
+        root="module",
+        lifetime=50,
+        rebuild_interval=100,
+        build_churn=2,
+    )
+    parameters = WorkloadParameters(churn=cycles, structures=(chain,), seed=848)
+
+    Workload(heap, parameters, threshold0=1_000).run_to(9)
+
+    structure = reached_from(heap, [heap.module_root])
+    built = [x in structure for x in collector.nursery]
+    assert built == [True, *[True, False, False] * 3]
+
+
+def test_structures_without_an_interval_build_first_and_the_others_wait() -> None:
+    heap = Heap(Collector())
+    long_lived = StructureParameters(
+        shape=Chains(width=1),
+        size=2,
+        root="module",
+        lifetime=None,
+        rebuild_interval=None,
+        build_churn=0,
+    )
+    repeating = StructureParameters(
+        shape=Tree(),
+        size=2,
+        root="frame",
+        lifetime=5,
+        rebuild_interval=20,
+        build_churn=0,
+    )
+    one_off = StructureParameters(
+        shape=Chains(width=1),
+        size=3,
+        root="frame",
+        lifetime=10,
+        rebuild_interval=None,
+        build_churn=0,
+    )
+    structures = (long_lived, repeating, one_off)
+    parameters = WorkloadParameters(churn=QUIET, structures=structures, seed=848)
+    workload = Workload(heap, parameters, threshold0=1_000)
+
+    workload.run_to(30)
+
+    # (structure, first kB, last kB): the repeating one falls due at 0 and at 20.
+    assert workload.builds == [(0, 1, 2), (2, 3, 5), (1, 6, 7), (1, 21, 22)]
+
+
+@given(
+    churn_parameters(),
+    st.lists(structure_parameters(), min_size=1, max_size=3),
+    st.integers(min_value=0, max_value=2**32),
+    st.integers(min_value=1, max_value=50),
+    st.lists(st.integers(min_value=0, max_value=400), max_size=4),
+)
+def test_a_workload_runs_to_any_point_and_its_builds_never_overlap(
+    churn: ChurnParameters,
+    structures: list[StructureParameters],
+    seed: int,
+    threshold0: int,
+    stops: list[int],
+) -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    parameters = WorkloadParameters(churn, tuple(structures), seed)
+    workload = Workload(heap, parameters, threshold0)
+
+    for stop in sorted(stops):
+        workload.run_to(stop)
+
+        assert heap.clock == stop
+        unreachable = set(collector.nursery) - reachable(heap)
+        assert heap.uncollected_garbage == len(unreachable)
+
+    builds = workload.builds
+    assert all(last < first for (_, _, last), (_, first, _) in pairwise(builds))
+    for i, first, last in builds:
+        structure = structures[i]
+        assert last - first + 1 == structure.size * (1 + structure.build_churn)
+    interval = structures[0].rebuild_interval
+    if len(structures) == 1 and interval is not None:
+        starts = [first for _, first, _ in builds]
+        assert starts == [k * interval + 1 for k in range(len(builds))]
+
+
+def test_a_structure_that_falls_due_again_while_waiting_skips_that_rebuild() -> None:
+    def repeating(size: int, interval: int) -> StructureParameters:
+        return StructureParameters(
+            shape=Chains(width=1),
+            size=size,
+            root="frame",
+            lifetime=1,
+            rebuild_interval=interval,
+            build_churn=0,
+        )
+
+    heap = Heap(Collector())
+    structures = (repeating(2, 10), repeating(50, 100))
+    parameters = WorkloadParameters(churn=QUIET, structures=structures, seed=848)
+    workload = Workload(heap, parameters, threshold0=1_000)
+
+    workload.run_to(70)
+
+    # The short one falls due at 10, 20, 30, 40 and 50 while the long one builds,
+    # and builds once after it.
+    assert workload.builds == [(0, 1, 2), (1, 3, 52), (0, 53, 54), (0, 61, 62)]
