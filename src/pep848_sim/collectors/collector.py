@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Literal, NamedTuple
 
 if TYPE_CHECKING:
-    from pep848_sim.heap import Heap
+    from pep848_sim.collectors.heap import Heap
 
 
 @dataclass(frozen=True)

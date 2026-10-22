@@ -5,16 +5,16 @@ from typing import Literal, override
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pep848_sim.collector import (
+from pep848_sim.collectors.collector import (
     Collector,
     CollectorSettings,
     Record,
     Space,
     find_unreachable,
 )
-from pep848_sim.heap import Heap
-from pep848_sim.incremental import IncrementalCollector
-from pep848_sim.legacy import LegacyCollector
+from pep848_sim.collectors.heap import Heap
+from pep848_sim.collectors.incremental import IncrementalCollector
+from pep848_sim.collectors.legacy import LegacyCollector
 from pep848_sim.structures import StructureParameters
 from pep848_sim.workload import ChurnParameters, Workload, WorkloadParameters
 from test_heap import Built, built_heaps, reachable, reached_from

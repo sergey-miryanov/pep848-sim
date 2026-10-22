@@ -8,7 +8,7 @@ objects; the root is object 0.
 from dataclasses import dataclass
 from typing import Literal
 
-from pep848_sim.heap import Heap
+from pep848_sim.collectors.heap import Heap
 
 type Root = Literal["module", "frame"]
 

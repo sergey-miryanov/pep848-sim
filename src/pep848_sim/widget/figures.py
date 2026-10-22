@@ -3,7 +3,7 @@
 from collections.abc import Iterable
 from typing import NamedTuple
 
-from pep848_sim.collector import Record
+from pep848_sim.collectors.collector import Record
 
 
 class Figures(NamedTuple):

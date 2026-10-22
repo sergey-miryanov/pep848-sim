@@ -15,7 +15,7 @@ Each name stands for a field of `struct _gc_runtime_state`:
 
 from typing import override
 
-from pep848_sim.collector import (
+from pep848_sim.collectors.collector import (
     CollectionCounts,
     Collector,
     CollectorSettings,
