@@ -114,9 +114,16 @@ is plain Python, which is what lets the tests run it under CPython.
 ## Publishing
 
 A GitHub Actions workflow runs on every push to `main`: `just check`, then
-`just site`, then deploys `_site/` to GitHub Pages at
-<https://sergey-miryanov.github.io/pep848-sim/>. A failing check deploys
-nothing.
+`just site`, then pushes `_site/` to the `gh-pages` branch, which GitHub
+Pages serves at <https://sergey-miryanov.github.io/pep848-sim/>. A failing
+check deploys nothing. `site/.nojekyll` stops Pages running Jekyll over the
+files.
+
+Each pull request gets a preview. Another workflow builds the pull request's
+site and pushes it to `pr-preview/pr-N/` on the same branch, and a comment on
+the pull request links it. Closing the pull request removes the preview, and
+a deploy from `main` leaves `pr-preview/` alone. A pull request from a fork
+gets no preview, since its token cannot push here.
 
 ## Where the design lives
 

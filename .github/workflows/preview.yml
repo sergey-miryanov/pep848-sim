@@ -1,0 +1,43 @@
+name: Preview
+
+# Each pull request's site, at pr-preview/pr-N/ under the published one, linked
+# from a comment on the pull request and removed when it closes.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+# A new push to a pull request cancels its older preview.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    # A fork's token cannot push here.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Pushes the preview to the gh-pages branch, and comments its link.
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - if: github.event.action != 'closed'
+        uses: $/.github/actions/setup
+
+      - if: github.event.action != 'closed'
+        name: Assemble the site
+        run: poetry run just site
+
+      - uses: rossjrw/pr-preview-action@ffa7509e91a3ec8dfc2e5536c4d5c1acdf7a6de9 # v1.8.1
+        with:
+          source-dir: _site
+          action: ${{ github.event.action == 'closed' && 'remove' || 'deploy' }}
+          qr-code: "false"
