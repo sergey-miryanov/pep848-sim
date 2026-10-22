@@ -100,6 +100,18 @@ def test_a_space_pops_from_either_end_and_removes_as_a_list_does() -> None:
     assert list(collector.nursery) == [heap.module_root]
 
 
+def test_extending_a_space_with_another_moves_all_of_it() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    a, b = heap.allocate(), heap.allocate()
+    old = Space(collector)
+
+    old.extend(collector.nursery)
+
+    assert list(old) == [heap.module_root, a, b]
+    assert list(collector.nursery) == []
+
+
 def test_new_objects_enter_the_nursery_the_collector_holds_now() -> None:
     collector = Collector()
     heap = Heap(collector)

@@ -64,7 +64,8 @@ class Space:
         self._collector._place(x, self)
 
     def extend(self, objects: Iterable[int]) -> None:
-        for x in objects:
+        # A copy first, so that another space can move here whole.
+        for x in list(objects):
             self.append(x)
 
     def pop(self, index: Literal[0, -1] = -1) -> int:
