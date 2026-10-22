@@ -85,6 +85,21 @@ Every JavaScript file starts with `// @ts-check`, so an editor checks it as
 `check-ts` does. tsc emits nothing, and the browser runs the files as written;
 keep them small.
 
+## The package
+
+`src/pep848_sim` has three parts. A module imports from its own part and the
+parts listed before it, never from one after:
+
+1. `pep848_sim.collectors`: the heap and the two collectors, which ADRs 0003
+   and 0004 govern.
+2. `pep848_sim` itself: the workload, its structures and a run.
+3. `pep848_sim.widget`: what the page's worker calls, the request and the
+   figures.
+
+`tests/test_parts.py` reads every module's imports and fails on one against
+that order. It also fails on a new package until its `PARTS` names it, so
+whoever adds one decides where it stands. The tests stay in one folder.
+
 ## The site
 
 There is no build step. `site/` holds hand-written HTML, the widget (one Web

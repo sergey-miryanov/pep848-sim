@@ -4,16 +4,16 @@
 // asks it for runs through `requestRuns`.
 
 /**
- * One collection, as pep848_sim.collector.Record holds it: clock, kind, marked,
- * survived, freed, work_to_do, sweep, spaces_before, spaces_after,
- * reachable_before, reachable_after.
+ * One collection, as pep848_sim.collectors.collector.Record holds it: clock,
+ * kind, marked, survived, freed, work_to_do, sweep, spaces_before,
+ * spaces_after, reachable_before, reachable_after.
  * @typedef {[number, string, number, number, number, number, number, number[], number[], number, number]} Record
  */
 
 /**
- * A run's figures so far, as pep848_sim.figures.Figures.row holds them: peak
- * work, peak uncollected garbage, work per MB, yield (undefined until the run has
- * examined an object), collections, sweeps and gen 2 collections.
+ * A run's figures so far, as pep848_sim.widget.figures.Figures.row holds them:
+ * peak work, peak uncollected garbage, work per MB, yield (undefined until the
+ * run has examined an object), collections, sweeps and gen 2 collections.
  * @typedef {[number, number, number, number | undefined, number, number, number]} Figures
  */
 
@@ -50,7 +50,7 @@ worker.onmessage = (/** @type {MessageEvent} */ { data }) => {
  * Ask for a widget's two runs, legacy and incremental, in place of any it asked
  * for before.
  * @param {string} widget names the widget, unique on the page
- * @param {object} request what pep848_sim.request.runs reads
+ * @param {object} request what pep848_sim.widget.request.runs reads
  * @param {Listener} listener
  */
 export function requestRuns(widget, request, listener) {

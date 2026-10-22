@@ -6,8 +6,8 @@ generator, none at module level (ADR 0007).
 
 from collections.abc import Callable, Iterator
 
-from pep848_sim.collector import Collector, CollectorSettings, Record
-from pep848_sim.heap import Heap
+from pep848_sim.collectors.collector import Collector, CollectorSettings, Record
+from pep848_sim.collectors.heap import Heap
 from pep848_sim.workload import Workload, WorkloadParameters
 
 

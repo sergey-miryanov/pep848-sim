@@ -8,8 +8,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, precondition, rule
 
-from pep848_sim.collector import Collector, CollectorSettings
-from pep848_sim.heap import Heap
+from pep848_sim.collectors.collector import Collector, CollectorSettings
+from pep848_sim.collectors.heap import Heap
 
 
 def new_heap() -> Heap:

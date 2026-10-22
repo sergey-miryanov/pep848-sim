@@ -5,8 +5,8 @@ from random import Random
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pep848_sim.collector import Collector, CollectorSettings
-from pep848_sim.heap import Heap
+from pep848_sim.collectors.collector import Collector, CollectorSettings
+from pep848_sim.collectors.heap import Heap
 from pep848_sim.structures import Chains, Root, StructureParameters, Tree
 from pep848_sim.workload import (
     Churn,

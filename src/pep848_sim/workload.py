@@ -11,7 +11,7 @@ from fractions import Fraction
 from functools import partial
 from random import Random
 
-from pep848_sim.heap import Heap
+from pep848_sim.collectors.heap import Heap
 from pep848_sim.structures import Build, StructureParameters
 
 # A draw is getrandbits(32), one word of the generator, and a threshold splits its

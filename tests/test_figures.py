@@ -3,9 +3,9 @@ from functools import reduce
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pep848_sim.collector import Collector, CollectorSettings, Record
-from pep848_sim.figures import Figures
+from pep848_sim.collectors.collector import Collector, CollectorSettings, Record
 from pep848_sim.run import run
+from pep848_sim.widget.figures import Figures
 from pep848_sim.workload import WorkloadParameters
 from test_run import COLLECTORS, collector_settings, records, workloads
 

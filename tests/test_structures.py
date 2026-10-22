@@ -4,8 +4,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pep848_sim.collector import Collector
-from pep848_sim.heap import Heap
+from pep848_sim.collectors.collector import Collector
+from pep848_sim.collectors.heap import Heap
 from pep848_sim.structures import (
     Build,
     Chains,

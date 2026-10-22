@@ -7,7 +7,7 @@
 // @ts-expect-error: an editor cannot fetch Pyodide's types from jsDelivr.
 import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.mjs";
 
-/** pep848_sim's request and figures modules, once Pyodide has started and imported them. */
+/** pep848_sim.widget's request and figures modules, once Pyodide has started and imported them. */
 const simulator = (async () => {
   const pyodide = await loadPyodide({
     indexURL: "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/",
@@ -15,7 +15,10 @@ const simulator = (async () => {
   const zip = await (await fetch("sim.zip")).arrayBuffer();
   pyodide.unpackArchive(zip, "zip", { extractDir: "/home/pyodide" });
   pyodide.runPython("import sys; sys.path.insert(0, '/home/pyodide')");
-  return { request: pyodide.pyimport("pep848_sim.request"), figures: pyodide.pyimport("pep848_sim.figures") };
+  return {
+    request: pyodide.pyimport("pep848_sim.widget.request"),
+    figures: pyodide.pyimport("pep848_sim.widget.figures"),
+  };
 })();
 
 /**

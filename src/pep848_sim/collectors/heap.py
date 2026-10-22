@@ -15,7 +15,7 @@ off.
 
 from collections.abc import Iterable
 
-from pep848_sim.collector import Collector
+from pep848_sim.collectors.collector import Collector
 
 
 class SimulatedObject:

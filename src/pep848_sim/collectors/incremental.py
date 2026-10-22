@@ -16,7 +16,7 @@ branch, sergey-miryanov/cpython@incremental-gc-update-2:
 
 from typing import override
 
-from pep848_sim.collector import (
+from pep848_sim.collectors.collector import (
     CollectionCounts,
     Collector,
     CollectorSettings,

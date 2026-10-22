@@ -1,6 +1,6 @@
 import pytest
 
-from pep848_sim.request import runs
+from pep848_sim.widget.request import runs
 from test_run import digest, records
 
 # test_run's FIXED workload and settings, as a widget sends them.

@@ -9,9 +9,9 @@ from dataclasses import fields
 from fractions import Fraction
 from typing import Any, get_args
 
-from pep848_sim.collector import CollectorSettings, Record
-from pep848_sim.incremental import IncrementalCollector
-from pep848_sim.legacy import LegacyCollector
+from pep848_sim.collectors.collector import CollectorSettings, Record
+from pep848_sim.collectors.incremental import IncrementalCollector
+from pep848_sim.collectors.legacy import LegacyCollector
 from pep848_sim.run import run
 from pep848_sim.structures import Chains, Root, Shape, StructureParameters, Tree
 from pep848_sim.workload import ChurnParameters, WorkloadParameters

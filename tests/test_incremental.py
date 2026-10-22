@@ -3,14 +3,14 @@ from typing import override
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pep848_sim.collector import (
+from pep848_sim.collectors.collector import (
     CollectionCounts,
     CollectorSettings,
     Record,
     find_unreachable,
 )
-from pep848_sim.heap import Heap
-from pep848_sim.incremental import IncrementalCollector
+from pep848_sim.collectors.heap import Heap
+from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.structures import StructureParameters
 from pep848_sim.workload import ChurnParameters, Workload, WorkloadParameters
 from test_heap import reachable
