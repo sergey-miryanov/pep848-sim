@@ -25,7 +25,7 @@ def geometric_thresholds(mean: int) -> list[int]:
     times P(lifetime <= l), rounded up. The last is 2**32, which folds the tail past
     it into its kB."""
     # (mean - 1)**l / mean**l of the lifetimes outlast l kB. Two ints keep the ratio
-    # exact without the gcd a Fraction takes at every step.
+    # exact without the gcd a Fraction computes on each multiplication.
     outlast, of = 1, 1
     thresholds: list[int] = []
     while not thresholds or thresholds[-1] < _OUTCOMES:
@@ -36,7 +36,7 @@ def geometric_thresholds(mean: int) -> list[int]:
 
 
 def chance(rng: Random, share: Fraction) -> bool:
-    """Whether a draw lands in `share` of the outcomes, exactly."""
+    """Whether a draw lands in `share` of the outcomes, with no rounding."""
     return rng.randrange(share.denominator) < share.numerator
 
 
@@ -51,8 +51,8 @@ class ChurnLifetimes:
         self._long_lifetimes = long_lifetimes
 
     def transient(self, rng: Random) -> int:
-        """A geometric lifetime, or for the long share one drawn evenly from the
-        long lifetimes."""
+        """A geometric lifetime, or for the long share one from the long lifetimes,
+        each kB in their range as likely as the next."""
         if chance(rng, self._long_share):
             return rng.randint(*self._long_lifetimes)
         return self._geometric(rng)
@@ -97,9 +97,10 @@ class Churn:
     """Background churn over a heap, one kB at a time: transients, and small cycles
     that become cyclic garbage when their lifetimes end.
 
-    It makes only the transients a collection can see (ADR 0005), unless told to
-    make every one, which draws the same lifetimes and lets the tests compare. A
-    workload hands it the schedule of let-gos it shares with its structures."""
+    It makes only the transients a collection can see (ADR 0005), unless the caller
+    asks for every one with `make_every_transient`. Both ways draw the same
+    lifetimes, so the tests can compare them. A workload hands it the schedule of
+    let-gos it shares with its structures."""
 
     def __init__(
         self,
@@ -141,7 +142,7 @@ class Churn:
 
     def _build_cycle(self) -> None:
         """Allocate the cycle's next member, linked from the one before. The first
-        member's allocating root holds the cycle until its lifetime ends."""
+        member's frame root holds the cycle until its lifetime ends."""
         heap = self._heap
         x = heap.allocate()
         if self._cycle:
@@ -158,8 +159,8 @@ class Churn:
         heap = self._heap
         made_in = heap.clock + 1
         ends = made_in + self._lifetimes.transient(self._rng)
-        # The first collection to come runs at the first boundary at or after the
-        # kB the transient is made in, after that kB's let-gos.
+        # The next collection runs at the first boundary at or after the transient's
+        # own kB, after that kB's let-gos.
         boundary = -(-made_in // self._threshold0) * self._threshold0
         if ends <= boundary and not self._make_every_transient:
             heap.allocate_unseen()
@@ -240,9 +241,10 @@ class Workload:
             self._let_gos.run(heap.clock)
 
     def _step(self) -> None:
-        """Make the kB's one allocation: for the build under way, or else one
-        waiting, the next built object or the churn that follows it; with no build,
-        a churn allocation."""
+        """Make the kB's one allocation. With no build under way, the first
+        structure waiting starts one. A build makes its next object, or churn makes
+        the allocations that follow each built object; with no build, churn makes
+        the allocation."""
         self._fall_due()
         if self._current is None and self._waiting:
             i = self._waiting.pop(0)
@@ -265,8 +267,8 @@ class Workload:
             self._finish(i, build, first_kb)
 
     def _fall_due(self) -> None:
-        """Queue each repeating structure that has fallen due, unless its last
-        build is still waiting or under way, which skips the rebuild."""
+        """Queue each repeating structure that has fallen due. If its last build is
+        still waiting or under way, skip this rebuild."""
         clock = self._heap.clock
         building = None if self._current is None else self._current[0]
         for i, interval in self._intervals.items():

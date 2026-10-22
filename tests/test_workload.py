@@ -145,7 +145,7 @@ def test_churn_stops_where_asked_and_counts_the_cycles_it_lets_go_of(
 
 
 def test_a_transient_let_go_by_the_next_boundary_moves_the_clock_alone() -> None:
-    # A mean of 1 kB: each transient ends in the kB after the one it was made in.
+    # A mean of 1 kB: each transient ends in the kB after its own.
     parameters = ChurnParameters(
         cycle_share=Fraction(0),
         cycle_size=1,
@@ -158,10 +158,10 @@ def test_a_transient_let_go_by_the_next_boundary_moves_the_clock_alone() -> None
     lazy_churn = Churn(lazy, Random(848), parameters)
     eager_churn = Churn(eager, Random(848), parameters, make_every_transient=True)
 
-    # sys, and the transient made in the kB, if the run made it. The one made in
-    # kB 9 ends at the boundary at 10, and the one made in kB 11 well before the
-    # boundary at 20, so the lazy run makes neither. The one made in kB 10 outlasts
-    # the boundary there, so both runs make it.
+    # sys, and the kB's transient, if the run made it. The transient of kB 9 ends
+    # at the boundary at 10, and that of kB 11 before the boundary at 20, so the
+    # lazy run makes neither. The transient of kB 10 outlasts the boundary there,
+    # so both runs make it.
     for clock, alive in [(9, (1, 2)), (10, (2, 2)), (11, (1, 2))]:
         lazy_churn.run_to(clock)
         eager_churn.run_to(clock)

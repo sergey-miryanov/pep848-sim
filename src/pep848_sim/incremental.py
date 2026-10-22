@@ -25,7 +25,7 @@ from pep848_sim.collector import (
 
 
 class IncrementalCollector(Collector):
-    # reachable, sys and the marking worklist, counts among the visited.
+    # reachable, sys and the marking worklist, counts in visited.
     SPACES = ("nursery", "aging", "pending", "visited")
 
     def __init__(self, settings: CollectorSettings | None = None) -> None:

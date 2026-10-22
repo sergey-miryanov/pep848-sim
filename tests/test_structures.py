@@ -96,7 +96,7 @@ def test_chains_put_each_new_object_on_the_next_chain_in_turn() -> None:
     assert heap.clock == 6
 
 
-def test_a_tree_links_each_node_and_its_parent_both_ways() -> None:
+def test_a_tree_links_each_object_and_its_parent_both_ways() -> None:
     collector = Collector()
     heap = Heap(collector)
 

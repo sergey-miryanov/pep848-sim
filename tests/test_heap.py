@@ -406,7 +406,7 @@ def test_clearing_an_object_something_holds_leaves_it_alive_holding_nothing() ->
 
 
 class Workload(RuleBasedStateMachine):
-    """A heap that random steps build as a workload would. Links among its loose
+    """A heap that random rules build as a workload would. Links among its loose
     objects run from older to newer only, so they never close a cycle, and
     refcounting frees whatever they leave unreachable. Its cycles stand apart, held
     by a frame root or by sys, and the machine knows the size of each from building
@@ -418,9 +418,9 @@ class Workload(RuleBasedStateMachine):
         self.heap = Heap(self.collector)
         self.objects = [self.heap.module_root]
         self.loose = [self.heap.module_root]
-        # Each held cycle by its first member, which a frame root or sys holds: its
-        # members, every object built with it, all of which dropping it leaves
-        # unreachable, and whether sys holds it.
+        # Each held cycle, under its first member, which a frame root or sys holds:
+        # its members; the objects built with it, members included, which dropping
+        # it leaves unreachable; and whether sys holds it.
         self.held: dict[int, tuple[list[int], list[int], bool]] = {}
         self.dropped: list[tuple[list[int], list[int]]] = []
 
