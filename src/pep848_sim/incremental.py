@@ -59,6 +59,64 @@ class IncrementalCollector(Collector):
             CollectionCounts("young", 0, survived, candidates - survived)
         )
 
+    def scan_reachable(self, limit: int) -> int:
+        """Move some reachable objects from pending to reachable and from
+        reachable to visited. They are reachable and cannot be garbage."""
+        moved_to_visited = 0
+        while self.reachable and moved_to_visited < limit:
+            root = self.reachable.pop()
+            self.visited_space.append(root)
+            moved_to_visited += 1
+            for obj in self._heap.references(root):
+                if obj in self.pending_space:
+                    self.pending_space.remove(obj)
+                    self.reachable.append(obj)
+        return moved_to_visited
+
     def old_collection(self) -> None:
-        """Collect an increment of the old generation: idle until #67."""
-        self.counts.append(CollectionCounts("old", 0, 0, 0))
+        """Collect an increment of the old generation."""
+        marked = survived = freed = 0
+        while self.work_to_do > 0:
+            if self.reachable:
+                moved = self.scan_reachable(self.work_to_do)
+                self.work_to_do -= moved
+                marked += moved
+                continue
+            if not self.pending_space:
+                self.pending_space, self.visited_space = (
+                    self.visited_space,
+                    self.pending_space,
+                )
+                # The pseudocode's visited.remove(sys): after the swap, sys sits in
+                # pending_space.
+                sys = self._heap.module_root
+                self.pending_space.remove(sys)
+                self.reachable.append(sys)
+                self.work_to_do = 0
+                break  # the pseudocode returns; the counts below come first
+            obj = self.pending_space.pop(0)
+            # form transitive closure starting at obj, taking objects from pending
+            increment = self.form_transitive_closure(obj)
+            candidates = len(increment)
+            self.work_to_do -= candidates
+            survivors = self.collect_cycles(increment)
+            collected = candidates - len(survivors)
+            self.visited_space.extend(survivors)
+            # If we are collecting lots of objects, that means there is a lot of
+            # cycle garbage and we should sweep the heap faster to keep the amount
+            # of garbage down
+            self.work_to_do += 2 * collected
+            survived += len(survivors)
+            freed += collected
+        self.counts.append(CollectionCounts("old", marked, survived, freed))
+
+    def form_transitive_closure(self, obj: int) -> list[int]:
+        """An increment: obj, and every pending object it reaches through pending
+        objects, each taken out of pending_space."""
+        increment = [obj]
+        for x in increment:
+            for target in self._heap.references(x):
+                if target in self.pending_space:
+                    self.pending_space.remove(target)
+                    increment.append(target)
+        return increment
