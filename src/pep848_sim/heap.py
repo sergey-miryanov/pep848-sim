@@ -83,21 +83,24 @@ class Heap:
         self._count_garbage(leaves_unreachable)
 
     def free_cyclic_garbage(self, group: Iterable[int]) -> None:
-        """Free a group of cyclic garbage that a collection found, as CPython's
-        collector does: each member lets go of its references, and refcounting frees
-        the group and whatever only the group held."""
-        members = set(group)  # a member listed twice holds its references once
-        held_inside = Counter(t for x in members for t in self._alive(x).references)
-        for x in members:
-            if self._alive(x).reference_count > held_inside[x]:
-                raise ValueError(f"something outside the group holds object {x}")
+        """Free a group of cyclic garbage that a collection found, then let go of its
+        references to objects outside it, which frees what only the group held."""
+        # Each member once, in the group's order (ADR 0007): a member listed twice
+        # would count its references twice.
+        members = {x: self._alive(x) for x in group}
+        held_inside = Counter(t for m in members.values() for t in m.references)
+        # A collection counts a reference from outside the objects it took as a
+        # root, so no group it finds has a holder outside it.
+        for x, record in members.items():
+            assert record.reference_count == held_inside[x], (
+                f"something outside the group holds object {x}"
+            )
         alive_before = self._alive_count
         for x in members:
-            record = self._objects[x]
-            if record is not None:
-                references = record.references
-                record.references = []
-                self._let_go(references)
+            self._release(x)
+        self._let_go(
+            t for m in members.values() for t in m.references if t not in members
+        )
         self._count_garbage(self._alive_count - alive_before)
 
     def is_freed(self, x: int) -> bool:
@@ -151,7 +154,10 @@ class Heap:
             record.reference_count -= 1
             assert record.reference_count >= 0, f"object {x}'s count < 0"
             if not record.reference_count:
-                self._objects[x] = None
-                self._alive_count -= 1
-                self._collector.remove(x)
+                self._release(x)
                 stack.extend(record.references)
+
+    def _release(self, x: int) -> None:
+        self._objects[x] = None
+        self._alive_count -= 1
+        self._collector.remove(x)
