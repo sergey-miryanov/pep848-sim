@@ -30,9 +30,9 @@ _Avoid_: benchmark (that is the real program it is modelled on), scenario,
 example, template
 
 **Workload parameter**:
-One knob that shapes a workload: the churn's fate mix and cycle size, a
-structure's shape, size, root, lifetime and rebuild interval, and the churn
-per built object.
+One knob that shapes a workload: the churn's fate mix, cycle size and
+lifetimes, a structure's shape, size, root, lifetime and rebuild interval, and
+the churn per built object.
 _Avoid_: parameter (bare), setting (that is the collector's side), option
 
 **Collector setting**:
@@ -151,6 +151,14 @@ _Avoid_: stack root, local root, C root
 The span of the allocation clock that an object or a structure stays
 reachable after its allocation. Long-lived structures outlast the run.
 _Avoid_: age (that is how long it has existed, reachable or not), TTL
+
+**Churn lifetime**:
+The lifetime that background churn draws for each transient and each cycle:
+geometric in whole kB, with a mean the workload sets. The long share of
+transients draw theirs from a range of kB past the young generation instead,
+each kB in it as likely as the next, so that some reach the old generation.
+_Avoid_: lifespan, half-life (a geometric lifetime has one, but the word
+promises decay)
 
 **Alive**:
 An object the heap has allocated and not yet freed, reachable or not. The
