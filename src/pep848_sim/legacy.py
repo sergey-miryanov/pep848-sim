@@ -24,6 +24,8 @@ from pep848_sim.collector import (
 
 
 class LegacyCollector(Collector):
+    SPACES = ("nursery", "aging", "old")
+
     def __init__(self, settings: CollectorSettings | None = None) -> None:
         super().__init__(settings)
         self.aging = Space(self)
@@ -36,6 +38,10 @@ class LegacyCollector(Collector):
         # the last gen 2 left.
         self.long_lived_pending = 0
         self.long_lived_total = 0
+
+    @override
+    def space_sizes(self) -> tuple[int, ...]:
+        return (len(self.nursery), len(self.aging), len(self.old))
 
     @override
     def collect(self) -> None:

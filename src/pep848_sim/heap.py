@@ -147,7 +147,7 @@ class Heap:
         Coming at the start of an allocation, the collection follows the let-gos of
         the kB that just ended (ADR 0005)."""
         if self._clock and not self._clock % self.threshold0:
-            self._collector.collect()
+            self._collector.collect_at_boundary()
 
     def _alive(self, x: int) -> SimulatedObject:
         record = self._objects.get(x)
