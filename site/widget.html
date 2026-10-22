@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Widget stand-in</title>
+<script type="module" src="stand-in.js"></script>
+</head>
+<body>
+<h1>Widget stand-in</h1>
+<p>The page's worker runs a stand-in workload with both collectors and streams
+the records here. The stand-in is no preset: it is the workload
+<code>tests/test_run.py</code> pins, so each digest should match the pinned
+one. It goes when the first preset arrives.</p>
+<p>The first request waits for Pyodide to start. <em>Run again</em> times the
+runs alone, and a click while they run drops them and starts both again.</p>
+<p><button id="again" type="button">Run again</button> <span id="status"></span></p>
+<table>
+<thead>
+<tr><th>Run</th><th>Records</th><th>Last clock (kB)</th><th>Digest</th><th>Pinned</th></tr>
+</thead>
+<tbody>
+<tr id="legacy"><th>legacy</th><td></td><td></td><td></td><td>8eb3fc9dd9e3d903</td></tr>
+<tr id="incremental"><th>incremental</th><td></td><td></td><td></td><td>c679a9492b62551a</td></tr>
+</tbody>
+</table>
+</body>
+</html>
