@@ -42,9 +42,9 @@ def _control(request: Request, path: str) -> Control:
             label = "Churn that starts a cycle"
             return Control(path, label, "share", share, 0, max(500, share), 1)
         case ["workload", "churn", "lifetime_mean"]:
-            # Up to half the PEP's threshold0, or the request's own. Longer lives
-            # mostly outlast the nursery, where the long share already draws them.
-            # Every kB, since the short lives matter most.
+            # Up to half the PEP's threshold0, or the request's own. Longer
+            # lifetimes mostly outlast the nursery, and the long share already
+            # draws those. In steps of 1 kB, since the short lifetimes matter most.
             mean = request.workload.churn.lifetime_mean
             label = "Churn lifetime mean"
             return Control(path, label, "kB", mean, 1, max(1000, mean), 1)

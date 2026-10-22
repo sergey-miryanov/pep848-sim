@@ -104,8 +104,8 @@ def test_thresholds_match_the_exact_build(mean: int) -> None:
 def test_thresholds_match_the_exact_build_on_few_guard_bits(
     mean: int, guard_bits: int
 ) -> None:
-    # So few bits leave many thresholds to the exact fallback, which is slow, so
-    # the means stay small.
+    # So few bits send many thresholds down the slow exact path, and small means
+    # keep it quick.
     assert geometric_thresholds(mean, guard_bits=guard_bits) == exact_thresholds(mean)
 
 
