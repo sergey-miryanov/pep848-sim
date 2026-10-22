@@ -1,15 +1,16 @@
 // @ts-check
 // <gc-widget>: one embedding of the simulator on a page. It reads its request
 // from the JSON script inside it, asks the page's worker for both runs, and draws
-// them as they stream in, as ADR 0008 lays them out: a column per collector, each
-// with the heap by space, work in bins and the work budget, on y-scales the two
-// columns share.
+// them as they stream in, as ADR 0008 lays them out: a row of figures, then a
+// column per collector, each with the heap by space, work in bins and the work
+// budget, on y-scales the two columns share.
 
 // @ts-expect-error: an editor cannot fetch Plot's types from jsDelivr.
 import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+esm";
 import { requestRuns } from "./runs.js";
 
 /** @typedef {import("./runs.js").Record} Record */
+/** @typedef {import("./runs.js").Figures} Figures */
 /** @typedef {"legacy" | "incremental"} Collector */
 
 /** @type {Collector[]} */
@@ -40,6 +41,37 @@ const MARGINS = { marginLeft: 48, marginRight: 72, marginTop: 16, marginBottom: 
 const BAR = 24, LABEL = 14;
 // Counts of objects on an axis: 0, 500, 1K, 20K.
 const compact = new Intl.NumberFormat("en", { notation: "compact" }).format;
+
+// A figure's values, one decimal where they have any.
+const whole = new Intl.NumberFormat("en", { maximumFractionDigits: 0 }).format;
+const tenths = new Intl.NumberFormat("en", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format;
+const percent = new Intl.NumberFormat("en", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 }).format;
+/**
+ * A count, whole below 10,000 and in thousands above, as 1,284 and 12.9K. Both
+ * runs' counts take the form the larger needs, so that 16.1K stands beside 4.0K
+ * rather than 4,000.
+ * @param {number} value
+ * @param {number[]} values
+ */
+const count = (value, values) => (values.some((n) => n >= 10_000) ? `${tenths(value / 1000)}K` : whole(value));
+
+// The row of figures (ADR 0008): how each reads a run's figures so far, and how
+// it shows a value beside the other run's.
+/**
+ * @type {{
+ *   label: string,
+ *   read: (figures: Figures, collector: Collector) => number | undefined,
+ *   show: (value: number, values: number[]) => string,
+ * }[]}
+ */
+const FIGURES = [
+  { label: "Peak work", read: (figures) => figures[0], show: count },
+  { label: "Peak uncollected garbage (MB)", read: (figures) => figures[1] / 1000, show: tenths },
+  { label: "Work per MB", read: (figures) => figures[2], show: count },
+  { label: "Yield", read: (figures) => figures[3], show: percent },
+  { label: "Collections", read: (figures) => figures[4], show: count },
+  { label: "Gen 2 collections / sweeps", read: (figures, collector) => figures[collector === "legacy" ? 6 : 5], show: count },
+];
 
 /** The y-scale's end for data that reaches `value`, with room above it. */
 function ceiling(/** @type {number} */ value) {
@@ -92,6 +124,11 @@ const TEMPLATE = `
       --freed: #e66767;
     }
   }
+  .figures { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px 16px; margin: 0 0 24px; }
+  .figure { display: grid; grid-row: span 2; grid-template-rows: subgrid; grid-template-columns: 1fr 1fr; column-gap: 8px; }
+  .figure dt { grid-column: 1 / -1; align-self: end; font-size: 13px; color: var(--text-secondary); }
+  .figure dd { margin: 0; display: flex; flex-direction: column; font-size: 12px; color: var(--text-secondary); }
+  .figure .value { font-size: 22px; font-weight: 600; line-height: 1.25; color: var(--text-primary); }
   .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
   h2 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
   figure { margin: 0 0 16px; }
@@ -103,6 +140,7 @@ const TEMPLATE = `
   .error { color: var(--text-primary); }
 </style>
 <p class="error" hidden></p>
+<dl class="figures"></dl>
 <div class="columns">
   <section data-collector="legacy">
     <h2>Legacy collector</h2>
@@ -134,6 +172,11 @@ let widgets = 0;
 class GcWidget extends HTMLElement {
   /** @type {{ legacy: Record[], incremental: Record[] }} */
   #records = { legacy: [], incremental: [] };
+  /** @type {{ legacy?: Figures, incremental?: Figures }} */
+  #figures = {};
+  /** Where each figure shows each run's value. */
+  /** @type {{ legacy: HTMLElement, incremental: HTMLElement }[]} */
+  #values = [];
   /** @type {any} */
   #request = null;
   #frame = 0;
@@ -150,6 +193,26 @@ class GcWidget extends HTMLElement {
     }
     const { run_length: runLength, settings: { threshold0 } } = this.#request;
     const binKb = Math.ceil(runLength / BINS / threshold0) * threshold0;
+    const row = /** @type {HTMLElement} */ (root.querySelector(".figures"));
+    this.#values = FIGURES.map(({ label }) => {
+      const figure = document.createElement("div");
+      figure.className = "figure";
+      const term = document.createElement("dt");
+      term.textContent = label;
+      figure.append(term);
+      // Legacy beside incremental, as the columns below stand.
+      const value = (/** @type {Collector} */ collector) => {
+        const description = document.createElement("dd");
+        const number = document.createElement("span");
+        number.className = "value";
+        number.textContent = "–";
+        description.append(number, collector);
+        figure.append(description);
+        return number;
+      };
+      row.append(figure);
+      return { legacy: value("legacy"), incremental: value("incremental") };
+    });
     for (const collector of COLLECTORS) {
       const column = this.#column(collector);
       /** @type {HTMLElement} */ (column.querySelector('[data-panel="heap"] .legend')).append(
@@ -165,8 +228,9 @@ class GcWidget extends HTMLElement {
     new ResizeObserver(() => this.#schedule()).observe(this);
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.#schedule());
     requestRuns(this.id || `gc-widget-${widgets++}`, this.#request, {
-      records: (collector, records) => {
+      records: (collector, records, figures) => {
         this.#records[collector].push(...records);
+        this.#figures[collector] = figures;
         this.#schedule();
       },
       done: () => {},
@@ -198,6 +262,18 @@ class GcWidget extends HTMLElement {
   }
 
   #draw() {
+    FIGURES.forEach(({ read, show }, i) => {
+      const values = COLLECTORS.map((collector) => {
+        const figures = this.#figures[collector];
+        return figures && read(figures, collector);
+      });
+      const known = values.filter((value) => value !== undefined);
+      COLLECTORS.forEach((collector, j) => {
+        const value = values[j];
+        this.#values[i][collector].textContent = value === undefined ? "–" : show(value, known);
+      });
+    });
+
     const { run_length: runLength, settings: { threshold0 } } = this.#request;
     const style = getComputedStyle(this);
     const token = (/** @type {string} */ name) => style.getPropertyValue(`--${name}`).trim();
