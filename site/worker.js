@@ -2,12 +2,13 @@
 // The page's worker. It starts Pyodide as soon as the page makes it (ADR 0009),
 // and makes every widget's runs, a part of one run at a time, in turn (ADR 0006).
 // Records reach the page as the runs yield them (ADR 0007), each part with the
-// run's figures so far.
+// run's figures so far, after the controls the widget asked for, with the ranges
+// its request allows.
 
 // @ts-expect-error: an editor cannot fetch Pyodide's types from jsDelivr.
 import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.mjs";
 
-/** pep848_sim.widget's request and figures modules, once Pyodide has started and imported them. */
+/** pep848_sim.widget's modules, once Pyodide has started and imported them. */
 const simulator = (async () => {
   const pyodide = await loadPyodide({
     indexURL: "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/",
@@ -18,6 +19,7 @@ const simulator = (async () => {
   return {
     request: pyodide.pyimport("pep848_sim.widget.request"),
     figures: pyodide.pyimport("pep848_sim.widget.figures"),
+    controls: pyodide.pyimport("pep848_sim.widget.controls"),
   };
 })();
 
@@ -53,18 +55,22 @@ function drop(widget) {
   turns = turns.filter((turn) => turn.widget !== widget);
 }
 
-self.onmessage = async ({ data: { id, widget, request } }) => {
-  let started, runs;
+self.onmessage = async ({ data: { id, widget, request, controls: paths } }) => {
+  let started, controls, runs;
   try {
     started = await simulator;
     // After the wait, so requests that arrive while Pyodide starts replace each
     // other in the order the widget sent them.
     drop(widget);
+    const ranged = started.controls.controls(request, paths);
+    controls = ranged.toJs({ depth: 2 });
+    ranged.destroy();
     runs = started.request.runs(request);
   } catch (error) {
     self.postMessage({ id, kind: "error", message: lastLine(error) });
     return;
   }
+  self.postMessage({ id, kind: "controls", controls });
   const [legacy, incremental] = runs.toJs({ depth: 1 });
   runs.destroy();
   turns.push(

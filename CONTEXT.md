@@ -174,6 +174,12 @@ One embedding of the simulator on a page: a preset, the controls a reader may
 change, and the charts of the runs it makes.
 _Avoid_: demo, applet, visualization, simulator (that is what it runs)
 
+**Control**:
+A slider on a widget for one workload parameter or collector setting, which
+the page names. Moving it reads out its value; releasing it starts the
+widget's two runs again. Its range keeps the workload valid.
+_Avoid_: knob (that is the parameter or setting it moves), input, option
+
 **Guide**:
 The long-form page that explains PEP 848 section by section, each section
 embedding a widget with its preset and one or two controls.
