@@ -154,3 +154,45 @@ def test_collecting_cycles_frees_the_garbage_and_returns_the_survivors() -> None
     assert survivors == [a, e, b]
     assert [heap.is_freed(x) for x in (c, d)] == [True, True]
     assert heap.uncollected_garbage == 0
+
+
+def test_collecting_a_group_frees_what_the_group_alone_held() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    outside = heap.allocate()  # its allocating frame holds it
+    a, b, c = heap.allocate(), heap.allocate(), heap.allocate()
+    heap.link(a, b)
+    heap.link(b, a)
+    heap.link(b, c)
+    heap.link(a, outside)
+    heap.let_go_frame_root(b)
+    heap.let_go_frame_root(c)
+    heap.let_go_frame_root(a, leaves_unreachable=3)
+
+    assert collector.collect_cycles([a, b]) == []
+
+    assert [heap.is_freed(x) for x in (a, b, c)] == [True, True, True]
+    assert heap.reference_count(outside) == 1
+    assert list(collector.nursery) == [heap.module_root, outside]
+    assert heap.uncollected_garbage == 0
+
+
+def test_collecting_a_group_leaves_a_cycle_it_held_alive_and_counted() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    a, b, c, d = heap.allocate(), heap.allocate(), heap.allocate(), heap.allocate()
+    heap.link(a, b)
+    heap.link(b, a)
+    heap.link(c, d)
+    heap.link(d, c)
+    heap.link(b, c)
+    for x in (b, c, d):
+        heap.let_go_frame_root(x)
+    heap.let_go_frame_root(a, leaves_unreachable=4)
+
+    assert collector.collect_cycles([a, b]) == []
+
+    assert [heap.is_freed(x) for x in (a, b, c, d)] == [True, True, False, False]
+    assert heap.reference_count(c) == 1
+    assert list(collector.nursery) == [heap.module_root, c, d]
+    assert heap.uncollected_garbage == 2

@@ -55,9 +55,14 @@ class Collector:
     def collect_cycles(self, objects: Iterable[int]) -> list[int]:
         """Free the cyclic garbage among `objects` and return the survivors in their
         order, as the pseudocode's collect_cycles does."""
+        heap = self._heap
         examined = list(objects)
-        garbage = find_unreachable(self._heap, examined)
-        self._heap.free_cyclic_garbage(garbage)
+        garbage = find_unreachable(heap, examined)
+        # As delete_garbage does: clear each object, and refcounting frees the rest.
+        # A clear can free objects later in the list, so skip those.
+        for x in garbage:
+            if not heap.is_freed(x):
+                heap.clear(x)
         freed = set(garbage)
         return [x for x in examined if x not in freed]
 

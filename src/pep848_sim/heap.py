@@ -9,10 +9,9 @@ its collector, which owns the spaces.
 
 A walk at every collection would take longer than most collections, so the heap
 keeps the count as it changes: the workload says how many objects each let-go
-leaves unreachable, and freeing a group that a collection found takes it off.
+leaves unreachable, and what a collection's clears free comes off.
 """
 
-from collections import Counter
 from collections.abc import Iterable
 
 from pep848_sim.collector import Collector
@@ -89,25 +88,16 @@ class Heap:
         self._let_go([x])
         self._count_garbage(leaves_unreachable)
 
-    def free_cyclic_garbage(self, group: Iterable[int]) -> None:
-        """Free a group of cyclic garbage that a collection found, then let go of its
-        references to objects outside it, which frees what only the group held."""
-        # Each member once, in the group's order (ADR 0007): a member listed twice
-        # would count its references twice.
-        members = {x: self._alive(x) for x in group}
-        held_inside = Counter(t for m in members.values() for t in m.references)
-        # A collection counts a reference from outside the objects it took as a
-        # root, so no group it finds has a holder outside it.
-        for x, record in members.items():
-            assert record.reference_count == held_inside[x], (
-                f"something outside the group holds object {x}"
-            )
+    def clear(self, x: int) -> None:
+        """Let go of every reference x holds, as CPython's tp_clear does, and free
+        by refcounting what that leaves at zero, x too once nothing holds it. Only a
+        collection clears, and only objects it found unreachable, so whatever a
+        clear frees comes off the uncollected garbage count."""
+        record = self._alive(x)
+        references = record.references
+        record.references = []
         alive_before = len(self._objects)
-        for x in members:
-            self._release(x)
-        self._let_go(
-            t for m in members.values() for t in m.references if t not in members
-        )
+        self._let_go(references)
         self._count_garbage(len(self._objects) - alive_before)
 
     def is_freed(self, x: int) -> bool:
@@ -182,9 +172,6 @@ class Heap:
             record.reference_count -= 1
             assert record.reference_count >= 0, f"object {x}'s count < 0"
             if not record.reference_count:
-                self._release(x)
+                del self._objects[x]
+                self._collector.remove(x)
                 stack.extend(record.references)
-
-    def _release(self, x: int) -> None:
-        del self._objects[x]
-        self._collector.remove(x)
