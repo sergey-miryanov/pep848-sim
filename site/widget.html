@@ -4,14 +4,40 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Widget stand-in</title>
+<script type="module" src="gc-widget.js"></script>
 <script type="module" src="stand-in.js"></script>
 </head>
 <body>
 <h1>Widget stand-in</h1>
-<p>The page's worker runs a stand-in workload with both collectors and streams
-the records here. The stand-in is no preset: it is the workload
-<code>tests/test_run.py</code> pins, so each digest should match the pinned
-one. It goes when the first preset arrives.</p>
+<p>A widget runs a stand-in workload, close to prototype #6's, with both
+collectors at the PEP's thresholds: 8 MB of module globals, a 20 MB tree
+rebuilt every 80 MB, and churn with 3% of its allocations in cycles. The
+stand-in is no preset, and it goes when the first preset arrives.</p>
+<gc-widget>
+<script type="application/json">
+{
+  "workload": {
+    "churn": {
+      "cycle_share": "3/100", "cycle_size": 3, "lifetime_mean": 5,
+      "long_share": "1/20", "long_lifetimes": [100, 1000]
+    },
+    "structures": [
+      {"shape": {"chains": 16}, "size": 8000, "root": "module",
+       "lifetime": null, "rebuild_interval": null, "build_churn": 0},
+      {"shape": "tree", "size": 20000, "root": "frame",
+       "lifetime": 40000, "rebuild_interval": 80000, "build_churn": 1}
+    ],
+    "seed": 848
+  },
+  "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+  "run_length": 150000,
+  "every": 5
+}
+</script>
+</gc-widget>
+<h2>Digests</h2>
+<p>The page's worker also runs the workload <code>tests/test_run.py</code>
+pins, so each digest should match the pinned one.</p>
 <p>The first request waits for Pyodide to start. <em>Run again</em> times the
 runs alone, and a click while they run drops them and starts both again.</p>
 <p><button id="again" type="button">Run again</button> <span id="status"></span></p>
