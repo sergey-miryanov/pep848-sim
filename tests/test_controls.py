@@ -9,8 +9,9 @@ from pep848_sim.collectors.collector import CollectorSettings
 from pep848_sim.structures import Tree
 from pep848_sim.widget.controls import Control, controls
 from pep848_sim.widget.request import runs
-from pep848_sim.workload import WorkloadParameters
+from pep848_sim.workload import WorkloadParameters, geometric_thresholds
 from test_run import collector_settings, workloads
+from test_workload import exact_thresholds
 
 # The stand-in widget's request: a 150 MB run at the PEP's thresholds, with 8 MB
 # of module globals and a 20 MB tree rebuilt every 80 MB, one churn allocation
@@ -55,6 +56,20 @@ def test_cycle_share_ranges_up_to_half_the_churn_in_thousandths() -> None:
             1,
         )
     ]
+
+
+def test_the_churn_lifetime_mean_ranges_up_to_1000_kb_by_the_kb() -> None:
+    assert controls(STAND_IN, ["workload.churn.lifetime_mean"]) == [
+        Control(
+            "workload.churn.lifetime_mean", "Churn lifetime mean", "kB", 5, 1, 1000, 1
+        )
+    ]
+
+
+def test_the_longest_churn_lifetime_mean_builds_the_exact_thresholds() -> None:
+    [control] = controls(STAND_IN, ["workload.churn.lifetime_mean"])
+
+    assert geometric_thresholds(control.max) == exact_thresholds(control.max)
 
 
 def test_a_repeating_structures_size_stops_where_its_build_fills_its_interval() -> None:
@@ -176,7 +191,11 @@ def request(
 
 def paths(parameters: WorkloadParameters) -> list[str]:
     """Every path a control can take in a request for this workload."""
-    found = ["settings.threshold0", "workload.churn.cycle_share"]
+    found = [
+        "settings.threshold0",
+        "workload.churn.cycle_share",
+        "workload.churn.lifetime_mean",
+    ]
     for i, structure in enumerate(parameters.structures):
         found.append(f"workload.structures.{i}.size")
         if structure.rebuild_interval is not None:

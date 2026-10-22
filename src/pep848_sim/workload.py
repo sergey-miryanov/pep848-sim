@@ -1,7 +1,8 @@
 """What a workload does to its heap.
 
 Every draw is exact (ADR 0007): integers from the run's own generator, and
-thresholds built from exact ratios of integers, with no C-library floating point.
+thresholds exact to the outcome, built from integers alone, with no C-library
+floating point.
 """
 
 from bisect import bisect_right
@@ -20,18 +21,24 @@ _BITS = 32
 _OUTCOMES = 1 << _BITS
 
 
-def geometric_thresholds(mean: int) -> list[int]:
+def geometric_thresholds(mean: int, *, guard_bits: int = 64) -> list[int]:
     """Thresholds for a geometric lifetime on 1, 2, 3 kB and up: the l-th is 2**32
     times P(lifetime <= l), rounded up. The last is 2**32, which folds the tail past
     it into its kB."""
-    # (mean - 1)**l / mean**l of the lifetimes outlast l kB. Two ints keep the ratio
-    # exact without the gcd a Fraction computes on each multiplication.
-    outlast, of = 1, 1
+    # (mean - 1)**l / mean**l of the lifetimes outlast l kB. `scaled` holds 2**32
+    # times that with `guard_bits` more bits, rounded down at each kB, so it falls
+    # short by less than `mean`. Where the shortfall could reach a whole outcome,
+    # the exact ratio of two ints settles it; those ints grow with l, and building
+    # every threshold from them took seconds for a mean of a few thousand kB.
+    scaled = _OUTCOMES << guard_bits
     thresholds: list[int] = []
     while not thresholds or thresholds[-1] < _OUTCOMES:
-        outlast *= mean - 1
-        of *= mean
-        thresholds.append(_OUTCOMES - _OUTCOMES * outlast // of)
+        scaled = scaled * (mean - 1) // mean
+        outlast = scaled >> guard_bits
+        if (scaled + mean) >> guard_bits != outlast:
+            kb = len(thresholds) + 1
+            outlast = _OUTCOMES * (mean - 1) ** kb // mean**kb
+        thresholds.append(_OUTCOMES - outlast)
     return thresholds
 
 

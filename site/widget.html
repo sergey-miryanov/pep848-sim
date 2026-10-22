@@ -16,7 +16,7 @@ stand-in is no preset, and it goes when the first preset arrives.</p>
 <p>Each widget shows a few controls. Moving one only reads out its value;
 releasing it starts that widget's runs again, and the other widget's runs go
 on.</p>
-<gc-widget id="stand-in-widget" controls="settings.threshold0 workload.churn.cycle_share workload.structures.1.size workload.structures.1.rebuild_interval">
+<gc-widget id="stand-in-widget" controls="settings.threshold0 workload.churn.cycle_share workload.churn.lifetime_mean workload.structures.1.size workload.structures.1.rebuild_interval">
 <script type="application/json">
 {
   "workload": {
@@ -41,7 +41,7 @@ on.</p>
 <p>The second widget runs the workload <code>tests/test_run.py</code> pins: a
 20 MB run with <code>threshold0</code> at 20 kB, 1 MB of module globals, and a
 100 kB tree rebuilt every megabyte.</p>
-<gc-widget id="fixed-widget" controls="settings.threshold0 workload.churn.cycle_share workload.structures.0.size">
+<gc-widget id="fixed-widget" controls="settings.threshold0 workload.churn.cycle_share workload.churn.lifetime_mean workload.structures.0.size">
 <script type="application/json">
 {
   "workload": {

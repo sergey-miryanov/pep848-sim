@@ -83,6 +83,32 @@ def test_thresholds_for_a_mean_of_4_kb_match_the_closed_form() -> None:
     assert geometric_thresholds(4)[:16] == expected
 
 
+def exact_thresholds(mean: int) -> list[int]:
+    """The thresholds as the first build made them, each from an exact ratio of
+    two growing ints: the reference a faster build must match."""
+    outlast, of = 1, 1
+    thresholds: list[int] = []
+    while not thresholds or thresholds[-1] < 2**32:
+        outlast *= mean - 1
+        of *= mean
+        thresholds.append(2**32 - 2**32 * outlast // of)
+    return thresholds
+
+
+@given(st.integers(min_value=1, max_value=300))
+def test_thresholds_match_the_exact_build(mean: int) -> None:
+    assert geometric_thresholds(mean) == exact_thresholds(mean)
+
+
+@given(st.integers(min_value=1, max_value=60), st.integers(min_value=1, max_value=8))
+def test_thresholds_match_the_exact_build_on_few_guard_bits(
+    mean: int, guard_bits: int
+) -> None:
+    # So few bits leave many thresholds to the exact fallback, which is slow, so
+    # the means stay small.
+    assert geometric_thresholds(mean, guard_bits=guard_bits) == exact_thresholds(mean)
+
+
 def test_a_long_draw_of_transient_lifetimes_keeps_the_mean_and_the_long_share() -> None:
     rng = Random(848)
 
