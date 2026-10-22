@@ -5,11 +5,14 @@ thresholds built from exact ratios of integers, with no C-library floating point
 """
 
 from bisect import bisect_right
+from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
+from functools import partial
 from random import Random
 
 from pep848_sim.heap import Heap
+from pep848_sim.structures import Build, StructureParameters
 
 # A draw is getrandbits(32), one word of the generator, and a threshold splits its
 # 2**32 outcomes.
@@ -62,6 +65,21 @@ class ChurnLifetimes:
         return 1 + bisect_right(self._thresholds, rng.getrandbits(_BITS))
 
 
+class LetGos:
+    """What a workload lets go of, by the clock value each lifetime ends at."""
+
+    def __init__(self) -> None:
+        self._at: dict[int, list[Callable[[], None]]] = {}
+
+    def at(self, clock: int, let_go: Callable[[], None]) -> None:
+        self._at.setdefault(clock, []).append(let_go)
+
+    def run(self, clock: int) -> None:
+        """Let go of each lifetime that ends at `clock`."""
+        for let_go in self._at.pop(clock, ()):
+            let_go()
+
+
 @dataclass(frozen=True)
 class ChurnParameters:
     """The workload parameters of background churn."""
@@ -80,7 +98,8 @@ class Churn:
     that become cyclic garbage when their lifetimes end.
 
     It makes only the transients a collection can see (ADR 0005), unless told to
-    make every one, which draws the same lifetimes and lets the tests compare."""
+    make every one, which draws the same lifetimes and lets the tests compare. A
+    workload hands it the schedule of let-gos it shares with its structures."""
 
     def __init__(
         self,
@@ -90,6 +109,7 @@ class Churn:
         threshold0: int,
         *,
         make_every_transient: bool = False,
+        let_gos: LetGos | None = None,
     ) -> None:
         self._heap = heap
         self._rng = rng
@@ -101,22 +121,23 @@ class Churn:
         self._make_every_transient = make_every_transient
         # The members of the cycle being built, one per kB.
         self._cycle: list[int] = []
-        # By the clock value a lifetime ends at: each frame root to let go of then,
-        # with how many objects letting go of it leaves unreachable.
-        self._ends: dict[int, list[tuple[int, int]]] = {}
+        self._let_gos = LetGos() if let_gos is None else let_gos
 
     def run_to(self, clock: int) -> None:
         """Churn until the allocation clock reads `clock`."""
         heap = self._heap
         while heap.clock < clock:
-            if self._cycle or chance(self._rng, self._parameters.cycle_share):
-                self._build_cycle()
-            else:
-                self._transient()
+            self.step()
             # Within each kB the clock moves, then the workload lets go of each
             # lifetime that ends there (ADR 0005).
-            for x, unreachable in self._ends.pop(heap.clock, ()):
-                heap.let_go_frame_root(x, leaves_unreachable=unreachable)
+            self._let_gos.run(heap.clock)
+
+    def step(self) -> None:
+        """Make one churn allocation, a transient or a cycle's next member: 1 kB."""
+        if self._cycle or chance(self._rng, self._parameters.cycle_share):
+            self._build_cycle()
+        else:
+            self._transient()
 
     def _build_cycle(self) -> None:
         """Allocate the cycle's next member, linked from the one before. The first
@@ -147,4 +168,119 @@ class Churn:
         self._end_at(ends, x, 0)
 
     def _end_at(self, clock: int, x: int, leaves_unreachable: int) -> None:
-        self._ends.setdefault(clock, []).append((x, leaves_unreachable))
+        heap = self._heap
+        let_go = partial(heap.let_go_frame_root, x, leaves_unreachable)
+        self._let_gos.at(clock, let_go)
+
+
+@dataclass(frozen=True)
+class WorkloadParameters:
+    """A workload: its background churn, its structures and its seed."""
+
+    churn: ChurnParameters
+    structures: tuple[StructureParameters, ...]
+    seed: int
+
+
+class Workload:
+    """A workload over a heap, one kB at a time: builds of its structures, and
+    background churn between them.
+
+    Structures without a rebuild interval build first, one after another, in the
+    order the parameters list them. A repeating structure falls due at each
+    multiple of its interval and waits for any build under way, so builds never
+    overlap."""
+
+    def __init__(
+        self,
+        heap: Heap,
+        parameters: WorkloadParameters,
+        threshold0: int,
+        *,
+        make_every_transient: bool = False,
+    ) -> None:
+        self._heap = heap
+        self._structures = parameters.structures
+        self._let_gos = LetGos()
+        self._churn = Churn(
+            heap,
+            Random(parameters.seed),
+            parameters.churn,
+            threshold0,
+            make_every_transient=make_every_transient,
+            let_gos=self._let_gos,
+        )
+        # Each repeating structure's rebuild interval, and when it next falls due.
+        self._intervals = {
+            i: s.rebuild_interval
+            for i, s in enumerate(self._structures)
+            if s.rebuild_interval is not None
+        }
+        self._due = dict.fromkeys(self._intervals, 0)
+        # The structures waiting to build, in the order they fell due.
+        self._waiting = [
+            i for i, s in enumerate(self._structures) if s.rebuild_interval is None
+        ]
+        # The build under way, with its structure's index and its first kB.
+        self._current: tuple[int, Build, int] | None = None
+        self._builds: list[tuple[int, int, int]] = []
+        # The churn allocations still to follow the last built object.
+        self._churn_left = 0
+
+    @property
+    def builds(self) -> list[tuple[int, int, int]]:
+        """Each finished build: its structure's index, its first kB and its last."""
+        return list(self._builds)
+
+    def run_to(self, clock: int) -> None:
+        """Run the workload until the allocation clock reads `clock`."""
+        heap = self._heap
+        while heap.clock < clock:
+            self._step()
+            # Within each kB the clock moves, then the workload lets go of each
+            # lifetime that ends there (ADR 0005).
+            self._let_gos.run(heap.clock)
+
+    def _step(self) -> None:
+        """Make the kB's one allocation: for the build under way, or else one
+        waiting, the next built object or the churn that follows it; with no build,
+        a churn allocation."""
+        self._fall_due()
+        if self._current is None and self._waiting:
+            i = self._waiting.pop(0)
+            self._current = (
+                i,
+                Build(self._heap, self._structures[i]),
+                self._heap.clock + 1,
+            )
+        if self._current is None:
+            self._churn.step()
+            return
+        i, build, first_kb = self._current
+        if self._churn_left:
+            self._churn.step()
+            self._churn_left -= 1
+        else:
+            build.add()
+            self._churn_left = self._structures[i].build_churn
+        if build.done and not self._churn_left:
+            self._finish(i, build, first_kb)
+
+    def _fall_due(self) -> None:
+        """Queue each repeating structure that has fallen due, unless its last
+        build is still waiting or under way, which skips the rebuild."""
+        clock = self._heap.clock
+        building = None if self._current is None else self._current[0]
+        for i, interval in self._intervals.items():
+            if self._due[i] <= clock:
+                if i != building and i not in self._waiting:
+                    self._waiting.append(i)
+                self._due[i] = (clock // interval + 1) * interval
+
+    def _finish(self, i: int, build: Build, first_kb: int) -> None:
+        clock = self._heap.clock
+        self._builds.append((i, first_kb, clock))
+        lifetime = self._structures[i].lifetime
+        if lifetime is not None:
+            self._let_gos.at(clock + lifetime, build.drop)
+        self._current = None
