@@ -3,7 +3,9 @@
 // from the JSON script inside it, asks the page's worker for both runs, and draws
 // them as they stream in, as ADR 0008 lays them out: a row of figures, then a
 // column per collector, each with the heap by space, work in bins and the work
-// budget, on y-scales the two columns share.
+// budget, on y-scales the two columns share. Above the figures it shows the
+// controls its `controls` attribute names, and releasing one asks for both runs
+// again.
 
 // @ts-expect-error: an editor cannot fetch Plot's types from jsDelivr.
 import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+esm";
@@ -43,7 +45,8 @@ const BAR = 24, LABEL = 14;
 // Counts of objects on an axis: 0, 500, 1K, 20K.
 const compact = new Intl.NumberFormat("en", { notation: "compact" }).format;
 
-// A figure's values, one decimal where they have any.
+// A figure's values. One with a fraction keeps one decimal, a 0 included, so
+// that 6.0% stands beside 5.3%.
 const whole = new Intl.NumberFormat("en", { maximumFractionDigits: 0 }).format;
 const tenths = new Intl.NumberFormat("en", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format;
 const percent = new Intl.NumberFormat("en", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 }).format;
@@ -74,7 +77,7 @@ const FIGURES = [
   { label: "Gen 2 collections / sweeps", read: (figures, collector) => figures[collector === "legacy" ? 6 : 5], show: count },
 ];
 
-/** A control's value as the reader reads it: kB, or a share as a percentage. */
+/** A control's value as the reader sees it: kB, or a share as a percentage. */
 const reading = (/** @type {Control[2]} */ unit, /** @type {number} */ value) =>
   unit === "share" ? percent(value / 1000) : `${whole(value)} kB`;
 
@@ -202,7 +205,7 @@ class GcWidget extends HTMLElement {
   /** The request as the controls have set it. */
   /** @type {any} */
   #request = null;
-  /** The request the drawn records answer, until the next one's first records. */
+  /** The request whose records the charts show, until a newer one's first records arrive. */
   /** @type {any} */
   #drawn = null;
   #name = "";
@@ -315,7 +318,8 @@ class GcWidget extends HTMLElement {
             input.setAttribute("aria-valuetext", output.textContent);
           },
         };
-        // Moving a slider only reads out its value; releasing it runs again.
+        // Moving a slider changes only the value it shows; releasing it asks for
+        // both runs again.
         input.addEventListener("input", () => {
           made.moving = true;
           made.read(Number(input.value));
@@ -328,7 +332,8 @@ class GcWidget extends HTMLElement {
         slider = made;
         this.#sliders.set(path, slider);
       }
-      // A range a release elsewhere moved; the value, unless the reader holds it.
+      // A release of another control can move this one's range. The value follows
+      // the request, unless the reader is holding this slider.
       Object.assign(slider.input, { min: String(min), max: String(max), step: String(step) });
       if (!slider.moving) {
         slider.input.value = String(value);

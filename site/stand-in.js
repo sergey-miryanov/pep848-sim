@@ -1,6 +1,7 @@
 // @ts-check
-// The stand-in page: one widget's two runs, counted as they stream and digested
-// when they end, to hold against the digests tests/test_run.py pins.
+// The stand-in page's own two runs, of the workload tests/test_run.py pins,
+// asked for outside any widget. It counts their records as they stream and
+// digests them when the runs end, to hold against the pinned digests.
 
 import { requestRuns } from "./runs.js";
 
@@ -62,7 +63,7 @@ function start() {
     async done() {
       const ms = performance.now() - began;
       const digests = [await digest(runs.legacy), await digest(runs.incremental)];
-      // A click while the digests were taken asked for new runs.
+      // A click while the page took the digests asked for new runs.
       if (current !== runs) return;
       [cell("legacy", 3).textContent, cell("incremental", 3).textContent] = digests;
       const perKb = (ms * 1000) / (2 * REQUEST.run_length);

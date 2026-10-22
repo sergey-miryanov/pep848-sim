@@ -37,9 +37,10 @@
 
 const worker = new Worker(new URL("worker.js", import.meta.url), { type: "module" });
 
-/** Each widget's latest request, by its id. Parts of older requests are dropped. */
+/** The listener of each request still wanted, by the request's id. */
 /** @type {Map<number, Listener>} */
 const listeners = new Map();
+/** Each widget's latest request id. The page drops the parts of older requests. */
 /** @type {Map<string, number>} */
 const latest = new Map();
 let nextId = 0;

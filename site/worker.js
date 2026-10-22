@@ -1,9 +1,9 @@
 // @ts-check
 // The page's worker. It starts Pyodide as soon as the page makes it (ADR 0009),
 // and makes every widget's runs, a part of one run at a time, in turn (ADR 0006).
-// Records reach the page as the runs yield them (ADR 0007), each part with the
-// run's figures so far, after the controls the widget asked for, with the ranges
-// its request allows.
+// It answers each request with the controls the widget asked for and the ranges
+// the request allows, then posts records as the runs yield them (ADR 0007), each
+// part with its run's figures so far.
 
 // @ts-expect-error: an editor cannot fetch Pyodide's types from jsDelivr.
 import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.mjs";

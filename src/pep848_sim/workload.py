@@ -1,8 +1,8 @@
 """What a workload does to its heap.
 
 Every draw is exact (ADR 0007): integers from the run's own generator, and
-thresholds exact to the outcome, built from integers alone, with no C-library
-floating point.
+lifetime thresholds exact to the outcome, built from integers alone, with no
+C-library floating point.
 """
 
 from bisect import bisect_right
@@ -15,8 +15,8 @@ from random import Random
 from pep848_sim.collectors.heap import Heap
 from pep848_sim.structures import Build, StructureParameters
 
-# A draw is getrandbits(32), one word of the generator, and a threshold splits its
-# 2**32 outcomes.
+# A draw is getrandbits(32), one word of the generator, and a lifetime threshold
+# splits its 2**32 outcomes.
 _BITS = 32
 _OUTCOMES = 1 << _BITS
 

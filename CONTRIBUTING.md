@@ -98,7 +98,8 @@ parts listed before it, never from one after:
 
 `tests/test_parts.py` reads every module's imports and fails on one against
 that order. It also fails on a new package until its `PARTS` names it, so
-whoever adds one decides where it stands. The tests stay in one folder.
+whoever adds one decides where it stands. The tests stay in one folder, since
+they import strategies and helpers from one another.
 
 ## The site
 

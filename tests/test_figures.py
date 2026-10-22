@@ -111,7 +111,7 @@ def test_collections_counts_every_collection_idle_ones_included() -> None:
 
 
 def test_sweeps_are_the_sweeps_the_incremental_run_has_ended() -> None:
-    # Each record holds the sweeps ended by the time its collection did.
+    # Each record holds how many sweeps had ended when its collection ended.
     records = [
         record(kind="old", sweep=0),
         record(kind="old", sweep=1),

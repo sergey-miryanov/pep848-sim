@@ -175,8 +175,8 @@ change, and the charts of the runs it makes.
 _Avoid_: demo, applet, visualization, simulator (that is what it runs)
 
 **Control**:
-A slider on a widget for one workload parameter or collector setting, which
-the page names. Moving it reads out its value; releasing it starts the
+A slider the page puts on a widget for one workload parameter or collector
+setting. Moving it changes only the value it shows; releasing it starts the
 widget's two runs again. Its range keeps the workload valid.
 _Avoid_: knob (that is the parameter or setting it moves), input, option
 
