@@ -42,7 +42,7 @@ class Heap:
         self._uncollected_garbage = 0
         self._module_root = 0
         collector.attach(self)
-        collector.add(self._module_root)
+        collector.add_module_root(self._module_root)
         self._clock = 0
 
     def __len__(self) -> int:

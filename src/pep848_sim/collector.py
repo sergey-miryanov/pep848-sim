@@ -9,7 +9,7 @@ collection at each multiple of threshold0.
 
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from pep848_sim.heap import Heap
@@ -26,20 +26,63 @@ class CollectorSettings:
     threshold2: int = 10
 
 
-class Space:
-    """Objects in the order they entered."""
+@dataclass(frozen=True)
+class CollectionCounts:
+    """What one collection did: its kind, and how many objects it marked, saw
+    survive and freed."""
 
-    def __init__(self) -> None:
+    kind: str
+    marked: int
+    survived: int
+    freed: int
+
+    @property
+    def work(self) -> int:
+        """The simulator's stand-in for the collection's pause."""
+        return self.marked + self.survived + self.freed
+
+
+class Space:
+    """Objects in the order they entered, held as the pseudocode's lists hold them.
+    Each change goes through the collector, which keeps every object in one space."""
+
+    def __init__(self, collector: Collector) -> None:
+        self._collector = collector
         self._objects: dict[int, None] = {}
 
     def __iter__(self) -> Iterator[int]:
         return iter(self._objects)
 
+    def __len__(self) -> int:
+        return len(self._objects)
+
+    def __contains__(self, x: object) -> bool:
+        return x in self._objects
+
+    def append(self, x: int) -> None:
+        """Put x last, taking it out of the space it was in."""
+        self._collector._place(x, self)
+
+    def extend(self, objects: Iterable[int]) -> None:
+        for x in objects:
+            self.append(x)
+
+    def pop(self, index: Literal[0, -1] = -1) -> int:
+        """Take out the first object or the last, and return it."""
+        x = next(iter(self._objects) if index == 0 else reversed(self._objects))
+        self._collector._place(x, None)
+        return x
+
+    def remove(self, x: int) -> None:
+        assert x in self._objects, f"object {x} is not in the space"
+        self._collector._place(x, None)
+
 
 class Collector:
     def __init__(self, settings: CollectorSettings | None = None) -> None:
         self.settings = CollectorSettings() if settings is None else settings
-        self.nursery = Space()
+        self.counts: list[CollectionCounts] = []
+        self.nursery = Space(self)
         # Each object's space, as CPython's PyGC_Head links an object into a list.
         # Only _place changes it, together with the spaces themselves.
         self._spaces: dict[int, Space] = {}
@@ -67,10 +110,11 @@ class Collector:
         return [x for x in examined if x not in freed]
 
     def add(self, x: int) -> None:
-        self._place(x, self.nursery)
+        self.nursery.append(x)
 
-    def move(self, x: int, space: Space) -> None:
-        self._place(x, space)
+    def add_module_root(self, x: int) -> None:
+        """Take sys, which the heap makes before the run begins."""
+        self.add(x)
 
     def remove(self, x: int) -> None:
         self._place(x, None)

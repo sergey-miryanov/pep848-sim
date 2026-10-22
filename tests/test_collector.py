@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Literal
 
 from hypothesis import given
 from hypothesis import strategies as st
@@ -6,6 +7,8 @@ from hypothesis import strategies as st
 from pep848_sim.collector import Collector, Space, find_unreachable
 from pep848_sim.heap import Heap
 from test_heap import Built, built_heaps, reached_from
+
+ENDS: tuple[Literal[0, -1], ...] = (0, -1)
 
 
 @dataclass
@@ -19,29 +22,42 @@ class Spaced:
 
 @st.composite
 def spaced_collectors(draw: st.DrawFn) -> Spaced:
-    """A heap's collector after random allocations, moves and new nurseries."""
+    """A heap's collector after random allocations, appends, pops, removals and new
+    nurseries."""
     spaced = Spaced()
     collector = spaced.collector
     heap = Heap(collector)
-    spaced.spaces = [collector.nursery, Space(), Space()]
+    spaced.spaces = [collector.nursery, Space(collector), Space(collector)]
     spaced.contents = [[heap.module_root], [], []]
     objects = [heap.module_root]
     for _ in range(draw(st.integers(min_value=0, max_value=60))):
-        action = draw(st.sampled_from(["allocate", "move", "new nursery"]))
+        action = draw(
+            st.sampled_from(["allocate", "append", "pop", "remove", "new nursery"])
+        )
+        held = [i for i, content in enumerate(spaced.contents) if content]
         if action == "allocate":
             x = heap.allocate()
             objects.append(x)
             spaced.contents[0].append(x)
-        elif action == "move":
+        elif action == "append":
             x = draw(st.sampled_from(objects))
             to = draw(st.integers(min_value=0, max_value=len(spaced.spaces) - 1))
-            collector.move(x, spaced.spaces[to])
+            spaced.spaces[to].append(x)
             for content in spaced.contents:
                 if x in content:
                     content.remove(x)
             spaced.contents[to].append(x)
-        else:
-            collector.nursery = Space()
+        elif action == "pop" and held:
+            i = draw(st.sampled_from(held))
+            end = draw(st.sampled_from(ENDS))
+            assert spaced.spaces[i].pop(end) == spaced.contents[i].pop(end)
+        elif action == "remove" and held:
+            i = draw(st.sampled_from(held))
+            x = draw(st.sampled_from(spaced.contents[i]))
+            spaced.spaces[i].remove(x)
+            spaced.contents[i].remove(x)
+        elif action == "new nursery":
+            collector.nursery = Space(collector)
             spaced.spaces.insert(0, collector.nursery)
             spaced.contents.insert(0, [])
     return spaced
@@ -56,17 +72,32 @@ def test_new_objects_enter_the_collectors_nursery_after_those_already_there() ->
     assert list(collector.nursery) == [heap.module_root, a, b]
 
 
-def test_a_move_takes_an_object_out_of_its_space_and_puts_it_last() -> None:
+def test_appending_takes_an_object_out_of_its_space_and_puts_it_last() -> None:
     collector = Collector()
     heap = Heap(collector)
     a, b = heap.allocate(), heap.allocate()
-    visited = Space()
+    visited = Space(collector)
 
-    collector.move(b, visited)
-    collector.move(a, visited)
+    visited.append(b)
+    visited.append(a)
 
     assert list(collector.nursery) == [heap.module_root]
     assert list(visited) == [b, a]
+
+
+def test_a_space_pops_from_either_end_and_removes_as_a_list_does() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    a, b, c = heap.allocate(), heap.allocate(), heap.allocate()
+    visited = Space(collector)
+
+    visited.extend([c, a, b])
+
+    assert (visited.pop(0), visited.pop()) == (c, b)
+    assert (a in visited, c in visited, len(visited)) == (True, False, 1)
+    visited.remove(a)
+    assert not visited
+    assert list(collector.nursery) == [heap.module_root]
 
 
 def test_new_objects_enter_the_nursery_the_collector_holds_now() -> None:
@@ -75,7 +106,7 @@ def test_new_objects_enter_the_nursery_the_collector_holds_now() -> None:
     a = heap.allocate()
     aging = collector.nursery
 
-    collector.nursery = Space()
+    collector.nursery = Space(collector)
     b = heap.allocate()
 
     assert list(aging) == [heap.module_root, a]
