@@ -1,6 +1,6 @@
 """What both collectors share: their settings, the spaces they keep the heap's
-objects in, and how they find and free the cyclic garbage among the objects a
-collection examines.
+objects in, how they find and free the cyclic garbage among the objects a
+collection examines, and the record each collection leaves.
 
 The collector owns every space, the nursery included, as CPython's collector owns
 its generation lists. The heap hands it each new object, and calls for a

@@ -237,7 +237,8 @@ def test_the_next_old_collection_resumes_where_the_budget_ran_out() -> None:
 
     collector.old_collection()
 
-    # sys is marked, and the least recently scanned pending object is examined.
+    # Marking takes sys, and an increment takes the least recently scanned
+    # pending object.
     assert list(collector.visited_space) == [sys, p]
     assert list(collector.pending_space) == [q, r]
     assert collector.work_to_do == 0

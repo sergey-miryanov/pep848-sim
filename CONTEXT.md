@@ -154,9 +154,9 @@ _Avoid_: age (that is how long it has existed, reachable or not), TTL
 
 **Churn lifetime**:
 The lifetime that background churn draws for each transient and each cycle:
-geometric in whole kB, with a mean the workload sets. The long share of
-transients draw theirs from a range of kB past the young generation instead,
-each kB in it as likely as the next, so that some reach the old generation.
+geometric in whole kB, with a mean the workload sets. Transients in the long
+share draw theirs from a range of kB past the young generation instead, each
+kB in it as likely as the next, so that some reach the old generation.
 _Avoid_: lifespan, half-life (a geometric lifetime has one, but the word
 promises decay)
 
@@ -330,6 +330,13 @@ that were cyclic garbage. It leaves marked objects out, since the collection
 never examined them. Scale drops out of it, so you can hold a preset's yield
 against `collected / candidates` from a real run of its benchmark.
 _Avoid_: efficiency, hit rate, garbage ratio
+
+**Record**:
+What one collection did, with the heap before it and after it: by space, and
+as its reachable part. A run yields its records as it goes, and the widget's
+charts draw them.
+_Avoid_: stats (CPython's counters per generation), sample, snapshot (a
+record reads the heap twice), event
 
 **Idle collection**:
 A collection that triggered and did no work: marked, survived and freed are

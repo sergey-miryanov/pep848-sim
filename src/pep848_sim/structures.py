@@ -33,11 +33,11 @@ class Chains:
 
 @dataclass(frozen=True)
 class Tree:
-    """A binary tree with parent pointers: node i and its parent link each other."""
+    """A binary tree with parent pointers: object i and its parent link each other."""
 
     def cyclic_garbage(self, size: int) -> int:
         """How many objects of a dropped structure of this size stay as cyclic
-        garbage: every node lies on a cycle with its parent, unless the root stands
+        garbage: every object lies on a cycle with its parent, unless the root stands
         alone."""
         return size if size > 1 else 0
 
@@ -86,9 +86,9 @@ class Build:
         return len(self._objects) == self._parameters.size
 
     def add(self) -> None:
-        """Allocate the next object and link it in, then let go of its allocating
-        root. A frame-rooted structure's root keeps its own, and a module-rooted
-        one hangs off sys."""
+        """Allocate the next object and link it in, then let go of its frame root.
+        A frame-rooted structure's root keeps its frame root, and a module-rooted
+        structure's root hangs off sys instead."""
         heap = self._heap
         objects = self._objects
         x = heap.allocate()

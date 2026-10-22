@@ -52,9 +52,10 @@ coverage gate out: `poetry run just test tests/test_smoke.py --no-cov`.
 - ruff checks and formats the Python.
 - mypy and pyrefly both run in strict mode, and both have to pass.
 - pytest runs the example tests and the Hypothesis invariants: no reachable
-  object is ever freed, every live object sits in exactly one space, the work
+  object is ever freed, every alive object sits in exactly one space, the work
   budget moves by exactly what the counters say, and cyclic garbage wholly in
-  the old generation when a sweep starts is freed by its end.
+  the old generation when a sweep starts is freed by its end, unless newer
+  garbage holds it.
 - Coverage below 99% fails the run. CI uploads the report to Codecov, which
   holds the project to the same 99% and the lines a pull request changes to
   90%.

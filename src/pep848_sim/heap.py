@@ -8,8 +8,9 @@ of its own for the host's collector to chase. The heap hands each new object to
 its collector, which owns the spaces.
 
 A walk at every collection would take longer than most collections, so the heap
-keeps the count as it changes: the workload says how many objects each let-go
-leaves unreachable, and what a collection's clears free comes off.
+keeps the uncollected garbage count as it changes: the workload says how many
+objects each let-go leaves unreachable, and what a collection's clears free comes
+off.
 """
 
 from collections.abc import Iterable
@@ -18,7 +19,7 @@ from pep848_sim.collector import Collector
 
 
 class SimulatedObject:
-    """One object's state, kept in one place: what it holds and what holds it."""
+    """One object's state in one place: what it holds and what holds it."""
 
     __slots__ = ("frame_roots", "reference_count", "references")
 
@@ -123,7 +124,7 @@ class Heap:
         held.reference_count += 1
 
     def unlink(self, source: int, target: int, leaves_unreachable: int = 0) -> None:
-        """Take away source's first reference to target, as a program does when it
+        """Take away source's first reference to target, as Python code does when it
         rebinds a global or removes an item from a container. The cut leaves
         `leaves_unreachable` objects unreachable, as the workload knows from building
         them."""
@@ -144,9 +145,9 @@ class Heap:
 
     def collect_if_due(self) -> None:
         """Collect if the clock sits on a multiple of threshold0, the start aside.
-        Coming at the start of an allocation, the collection follows the let-gos of
-        the kB that just ended (ADR 0005). A run that ends on a boundary calls it
-        once more, as its next allocation would."""
+        Each allocation calls it first, so the collection follows the let-gos of the
+        kB before it (ADR 0005). A run that ends on a boundary calls it once more,
+        as its next allocation would."""
         if self._clock and not self._clock % self.threshold0:
             self._collector.collect()
 
