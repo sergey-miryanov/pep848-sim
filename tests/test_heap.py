@@ -322,7 +322,7 @@ def test_freeing_a_group_leaves_a_cycle_it_held_alive_and_counted() -> None:
 
 
 @pytest.mark.parametrize("times", [1, 2], ids=["each member once", "a member twice"])
-def test_the_heap_refuses_to_free_a_group_that_something_outside_holds(
+def test_freeing_a_group_that_something_outside_holds_fails_an_assertion(
     times: int,
 ) -> None:
     heap = new_heap()
@@ -333,7 +333,7 @@ def test_the_heap_refuses_to_free_a_group_that_something_outside_holds(
     heap.let_go_frame_root(a)
     heap.let_go_frame_root(b)
 
-    with pytest.raises(ValueError, match="outside"):
+    with pytest.raises(AssertionError, match="outside"):
         heap.free_cyclic_garbage([a] * times + [b])
 
     assert [heap.reference_count(x) for x in (a, b)] == [1, 2]

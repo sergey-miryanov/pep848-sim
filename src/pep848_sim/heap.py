@@ -89,9 +89,12 @@ class Heap:
         # would count its references twice.
         members = {x: self._alive(x) for x in group}
         held_inside = Counter(t for m in members.values() for t in m.references)
+        # A collection counts a reference from outside the objects it took as a
+        # root, so no group it finds has a holder outside it.
         for x, record in members.items():
-            if record.reference_count > held_inside[x]:
-                raise ValueError(f"something outside the group holds object {x}")
+            assert record.reference_count == held_inside[x], (
+                f"something outside the group holds object {x}"
+            )
         alive_before = self._alive_count
         for x in members:
             self._release(x)
