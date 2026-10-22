@@ -135,3 +135,22 @@ def test_it_finds_what_nothing_outside_the_examined_objects_reaches(
     reached = reached_from(heap, [heap.module_root, *built.frame_roots, *outside])
 
     assert find_unreachable(heap, examined) == [x for x in examined if x not in reached]
+
+
+def test_collecting_cycles_frees_the_garbage_and_returns_the_survivors() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    a, b, c, d, e = (heap.allocate() for _ in range(5))
+    heap.link(a, b)
+    heap.link(b, a)
+    heap.link(c, d)
+    heap.link(d, c)
+    heap.let_go_frame_root(b)
+    heap.let_go_frame_root(d)
+    heap.let_go_frame_root(c, leaves_unreachable=2)
+
+    survivors = collector.collect_cycles([a, c, e, b, d])
+
+    assert survivors == [a, e, b]
+    assert [heap.is_freed(x) for x in (c, d)] == [True, True]
+    assert heap.uncollected_garbage == 0

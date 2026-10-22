@@ -1,13 +1,14 @@
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import override
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, precondition, rule
 
-from pep848_sim.collector import Collector, find_unreachable
+from pep848_sim.collector import Collector, CollectorSettings
 from pep848_sim.heap import Heap
 
 
@@ -192,6 +193,39 @@ def test_the_clock_reads_the_kb_allocated_with_an_object_or_without(
             heap.allocate_unseen()
 
     assert heap.clock == len(makes_object)
+
+
+class Recording(Collector):
+    """A collector that notes the clock and the uncollected garbage at each
+    collection, and collects nothing."""
+
+    def __init__(self, threshold0: int) -> None:
+        super().__init__(CollectorSettings(threshold0=threshold0))
+        self.clocks: list[int] = []
+        self.garbage: list[int] = []
+
+    @override
+    def attach(self, heap: Heap) -> None:
+        super().attach(heap)
+        self.heap = heap
+
+    @override
+    def collect(self) -> None:
+        self.clocks.append(self.heap.clock)
+        self.garbage.append(self.heap.uncollected_garbage)
+
+
+def test_the_heap_collects_at_each_boundary_before_the_clock_moves() -> None:
+    collector = Recording(threshold0=3)
+    heap = Heap(collector)
+
+    for kb in range(10):
+        if kb % 2:
+            heap.allocate()
+        else:
+            heap.allocate_unseen()
+
+    assert collector.clocks == [3, 6, 9]
 
 
 def test_a_new_heap_has_the_module_root_held_by_the_interpreter() -> None:
@@ -400,7 +434,8 @@ class Workload(RuleBasedStateMachine):
 
     def __init__(self) -> None:
         super().__init__()
-        self.heap = new_heap()
+        self.collector = Collector()
+        self.heap = Heap(self.collector)
         self.objects = [self.heap.module_root]
         self.loose = [self.heap.module_root]
         # Each held cycle by its first member, which a frame root or sys holds: its
@@ -514,17 +549,17 @@ class Workload(RuleBasedStateMachine):
         assert [x for x in built if not self.heap.is_freed(x)] == []
 
     @rule()
-    def find_and_free_every_unreachable_object(self) -> None:
+    def collect_the_cycles_of_every_alive_object(self) -> None:
         heap = self.heap
         alive = [x for x in self.objects if not heap.is_freed(x)]
         dropped = {x for _, built in self.dropped for x in built}
 
-        found = find_unreachable(heap, alive)
+        survivors = self.collector.collect_cycles(alive)
 
-        assert found == [x for x in alive if x in dropped]
-        heap.free_cyclic_garbage(found)
-        self.dropped.clear()
+        assert survivors == [x for x in alive if x not in dropped]
+        assert [x for x in dropped if not heap.is_freed(x)] == []
         assert heap.uncollected_garbage == 0
+        self.dropped.clear()
 
     @invariant()
     def the_count_is_the_alive_objects_the_walk_does_not_reach(self) -> None:

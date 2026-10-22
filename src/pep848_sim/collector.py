@@ -1,15 +1,29 @@
-"""What both collectors share: the spaces they keep the heap's objects in, and how
-they find the unreachable objects among those a collection examines.
+"""What both collectors share: their settings, the spaces they keep the heap's
+objects in, and how they find and free the cyclic garbage among the objects a
+collection examines.
 
 The collector owns every space, the nursery included, as CPython's collector owns
-its generation lists. The heap hands it each new object.
+its generation lists. The heap hands it each new object, and calls for a
+collection at each multiple of threshold0.
 """
 
 from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pep848_sim.heap import Heap
+
+
+@dataclass(frozen=True)
+class CollectorSettings:
+    """The three thresholds of one `gc.set_threshold()` call, which both collectors
+    share and each reads its own way. The defaults are the PEP's."""
+
+    # kB allocated between collections: both collectors collect at its multiples.
+    threshold0: int = 2000
+    threshold1: int = 10
+    threshold2: int = 10
 
 
 class Space:
@@ -23,11 +37,29 @@ class Space:
 
 
 class Collector:
-    def __init__(self) -> None:
+    def __init__(self, settings: CollectorSettings | None = None) -> None:
+        self.settings = CollectorSettings() if settings is None else settings
         self.nursery = Space()
         # Each object's space, as CPython's PyGC_Head links an object into a list.
         # Only _place changes it, together with the spaces themselves.
         self._spaces: dict[int, Space] = {}
+
+    def attach(self, heap: Heap) -> None:
+        """Take the heap to collect, which hands itself over as it starts."""
+        self._heap = heap
+
+    def collect(self) -> None:
+        """Run one collection. The base collects nothing; each collector says how
+        it collects."""
+
+    def collect_cycles(self, objects: Iterable[int]) -> list[int]:
+        """Free the cyclic garbage among `objects` and return the survivors in their
+        order, as the pseudocode's collect_cycles does."""
+        examined = list(objects)
+        garbage = find_unreachable(self._heap, examined)
+        self._heap.free_cyclic_garbage(garbage)
+        freed = set(garbage)
+        return [x for x in examined if x not in freed]
 
     def add(self, x: int) -> None:
         self._place(x, self.nursery)

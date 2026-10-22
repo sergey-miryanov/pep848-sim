@@ -42,6 +42,7 @@ class Heap:
         self._next_object = 1
         self._uncollected_garbage = 0
         self._module_root = 0
+        collector.attach(self)
         collector.add(self._module_root)
         self._clock = 0
 
@@ -52,6 +53,11 @@ class Heap:
     @property
     def clock(self) -> int:
         return self._clock
+
+    @property
+    def threshold0(self) -> int:
+        """The kB between collections, a setting of the heap's collector."""
+        return self._collector.settings.threshold0
 
     @property
     def uncollected_garbage(self) -> int:
@@ -109,6 +115,7 @@ class Heap:
 
     def allocate(self) -> int:
         """A new object, which its allocating frame holds, as in CPython."""
+        self._collect_at_boundary()
         x = self._next_object
         self._next_object += 1
         self._objects[x] = SimulatedObject(1, 1)
@@ -117,6 +124,7 @@ class Heap:
         return x
 
     def allocate_unseen(self) -> None:
+        self._collect_at_boundary()
         self._clock += 1
 
     def link(self, source: int, target: int) -> None:
@@ -143,6 +151,13 @@ class Heap:
     def reference_count(self, x: int) -> int:
         record = self._objects.get(x)
         return 0 if record is None else record.reference_count
+
+    def _collect_at_boundary(self) -> None:
+        """Collect if the clock sits on a multiple of threshold0, the start aside.
+        Coming at the start of an allocation, the collection follows the let-gos of
+        the kB that just ended (ADR 0005)."""
+        if self._clock and not self._clock % self.threshold0:
+            self._collector.collect()
 
     def _alive(self, x: int) -> SimulatedObject:
         record = self._objects.get(x)

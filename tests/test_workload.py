@@ -5,7 +5,7 @@ from random import Random
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pep848_sim.collector import Collector
+from pep848_sim.collector import Collector, CollectorSettings
 from pep848_sim.heap import Heap
 from pep848_sim.structures import Chains, Root, StructureParameters, Tree
 from pep848_sim.workload import (
@@ -16,7 +16,7 @@ from pep848_sim.workload import (
     WorkloadParameters,
     geometric_thresholds,
 )
-from test_heap import reachable, reached_from
+from test_heap import Recording, reachable, reached_from
 
 LIFETIMES = ChurnLifetimes(
     mean=16, long_share=Fraction(1, 500), long_lifetimes=(30_000, 300_000)
@@ -112,7 +112,7 @@ def test_a_long_run_starts_cycles_at_the_fate_mix() -> None:
     heap = Heap(Collector())
     run_kb = 100_000
 
-    Churn(heap, Random(848), CHURN, threshold0=2_000).run_to(run_kb)
+    Churn(heap, Random(848), CHURN).run_to(run_kb)
 
     # Nothing collects, so the count holds every cycle let go of: all but the one
     # or two still held at the end.
@@ -131,9 +131,9 @@ def test_a_long_run_starts_cycles_at_the_fate_mix() -> None:
 def test_churn_stops_where_asked_and_counts_the_cycles_it_lets_go_of(
     parameters: ChurnParameters, seed: int, threshold0: int, stops: list[int]
 ) -> None:
-    collector = Collector()
+    collector = Collector(CollectorSettings(threshold0=threshold0))
     heap = Heap(collector)
-    churn = Churn(heap, Random(seed), parameters, threshold0)
+    churn = Churn(heap, Random(seed), parameters)
 
     for stop in sorted(stops):
         churn.run_to(stop)
@@ -153,11 +153,10 @@ def test_a_transient_let_go_by_the_next_boundary_moves_the_clock_alone() -> None
         long_share=Fraction(0),
         long_lifetimes=(1, 1),
     )
-    lazy, eager = Heap(Collector()), Heap(Collector())
-    lazy_churn = Churn(lazy, Random(848), parameters, threshold0=10)
-    eager_churn = Churn(
-        eager, Random(848), parameters, threshold0=10, make_every_transient=True
-    )
+    settings = CollectorSettings(threshold0=10)
+    lazy, eager = Heap(Collector(settings)), Heap(Collector(settings))
+    lazy_churn = Churn(lazy, Random(848), parameters)
+    eager_churn = Churn(eager, Random(848), parameters, make_every_transient=True)
 
     # sys, and the transient made in the kB, if the run made it. The one made in
     # kB 9 ends at the boundary at 10, and the one made in kB 11 well before the
@@ -194,12 +193,11 @@ def renamed(heap: Heap, collector: Collector) -> tuple[int, list[tuple[int, ...]
 def test_at_every_boundary_the_heap_matches_a_run_that_makes_every_transient(
     parameters: ChurnParameters, seed: int, threshold0: int, boundaries: int
 ) -> None:
-    lazy_collector, eager_collector = Collector(), Collector()
+    settings = CollectorSettings(threshold0=threshold0)
+    lazy_collector, eager_collector = Collector(settings), Collector(settings)
     lazy, eager = Heap(lazy_collector), Heap(eager_collector)
-    lazy_churn = Churn(lazy, Random(seed), parameters, threshold0)
-    eager_churn = Churn(
-        eager, Random(seed), parameters, threshold0, make_every_transient=True
-    )
+    lazy_churn = Churn(lazy, Random(seed), parameters)
+    eager_churn = Churn(eager, Random(seed), parameters, make_every_transient=True)
 
     for boundary in range(threshold0, threshold0 * (boundaries + 1), threshold0):
         lazy_churn.run_to(boundary)
@@ -209,7 +207,7 @@ def test_at_every_boundary_the_heap_matches_a_run_that_makes_every_transient(
 
 
 def test_a_repeating_structure_builds_where_its_rebuild_interval_puts_it() -> None:
-    heap = Heap(Collector())
+    heap = Heap(Collector(CollectorSettings(threshold0=1_000)))
     tree = StructureParameters(
         shape=Tree(),
         size=5,
@@ -219,7 +217,7 @@ def test_a_repeating_structure_builds_where_its_rebuild_interval_puts_it() -> No
         build_churn=0,
     )
     parameters = WorkloadParameters(churn=QUIET, structures=(tree,), seed=848)
-    workload = Workload(heap, parameters, threshold0=1_000)
+    workload = Workload(heap, parameters)
 
     starts: list[int] = []
     drops: list[int] = []
@@ -239,7 +237,7 @@ def test_a_repeating_structure_builds_where_its_rebuild_interval_puts_it() -> No
 
 
 def test_the_builds_churn_follows_each_built_object() -> None:
-    collector = Collector()
+    collector = Collector(CollectorSettings(threshold0=1_000))
     heap = Heap(collector)
     # Churn that makes a cycle of one object with every allocation.
     cycles = ChurnParameters(
@@ -259,7 +257,7 @@ def test_the_builds_churn_follows_each_built_object() -> None:
     )
     parameters = WorkloadParameters(churn=cycles, structures=(chain,), seed=848)
 
-    Workload(heap, parameters, threshold0=1_000).run_to(9)
+    Workload(heap, parameters).run_to(9)
 
     structure = reached_from(heap, [heap.module_root])
     built = [x in structure for x in collector.nursery]
@@ -267,7 +265,7 @@ def test_the_builds_churn_follows_each_built_object() -> None:
 
 
 def test_structures_without_an_interval_build_first_and_the_others_wait() -> None:
-    heap = Heap(Collector())
+    heap = Heap(Collector(CollectorSettings(threshold0=1_000)))
     long_lived = StructureParameters(
         shape=Chains(width=1),
         size=2,
@@ -294,7 +292,7 @@ def test_structures_without_an_interval_build_first_and_the_others_wait() -> Non
     )
     structures = (long_lived, repeating, one_off)
     parameters = WorkloadParameters(churn=QUIET, structures=structures, seed=848)
-    workload = Workload(heap, parameters, threshold0=1_000)
+    workload = Workload(heap, parameters)
 
     workload.run_to(30)
 
@@ -316,10 +314,10 @@ def test_a_workload_runs_to_any_point_and_its_builds_never_overlap(
     threshold0: int,
     stops: list[int],
 ) -> None:
-    collector = Collector()
+    collector = Collector(CollectorSettings(threshold0=threshold0))
     heap = Heap(collector)
     parameters = WorkloadParameters(churn, tuple(structures), seed)
-    workload = Workload(heap, parameters, threshold0)
+    workload = Workload(heap, parameters)
 
     for stop in sorted(stops):
         workload.run_to(stop)
@@ -350,13 +348,32 @@ def test_a_structure_that_falls_due_again_while_waiting_skips_that_rebuild() -> 
             build_churn=0,
         )
 
-    heap = Heap(Collector())
+    heap = Heap(Collector(CollectorSettings(threshold0=1_000)))
     structures = (repeating(2, 10), repeating(50, 100))
     parameters = WorkloadParameters(churn=QUIET, structures=structures, seed=848)
-    workload = Workload(heap, parameters, threshold0=1_000)
+    workload = Workload(heap, parameters)
 
     workload.run_to(70)
 
     # The short one falls due at 10, 20, 30, 40 and 50 while the long one builds,
     # and builds once after it.
     assert workload.builds == [(0, 1, 2), (1, 3, 52), (0, 53, 54), (0, 61, 62)]
+
+
+def test_a_collection_follows_the_let_gos_of_the_kb_before_it() -> None:
+    collector = Recording(threshold0=6)
+    heap = Heap(collector)
+    tree = StructureParameters(
+        shape=Tree(),
+        size=3,
+        root="module",
+        lifetime=3,
+        rebuild_interval=None,
+        build_churn=0,
+    )
+    parameters = WorkloadParameters(churn=QUIET, structures=(tree,), seed=848)
+
+    Workload(heap, parameters).run_to(7)
+
+    # The tree's build ends in kB 3, and its lifetime in kB 6, on the boundary.
+    assert collector.garbage == [3]
