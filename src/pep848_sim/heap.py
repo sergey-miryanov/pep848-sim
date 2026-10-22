@@ -105,7 +105,7 @@ class Heap:
 
     def allocate(self) -> int:
         """A new object, which its allocating frame holds, as in CPython."""
-        self._collect_at_boundary()
+        self.collect_if_due()
         x = self._next_object
         self._next_object += 1
         self._objects[x] = SimulatedObject(1, 1)
@@ -114,7 +114,7 @@ class Heap:
         return x
 
     def allocate_unseen(self) -> None:
-        self._collect_at_boundary()
+        self.collect_if_due()
         self._clock += 1
 
     def link(self, source: int, target: int) -> None:
@@ -142,10 +142,11 @@ class Heap:
         record = self._objects.get(x)
         return 0 if record is None else record.reference_count
 
-    def _collect_at_boundary(self) -> None:
+    def collect_if_due(self) -> None:
         """Collect if the clock sits on a multiple of threshold0, the start aside.
         Coming at the start of an allocation, the collection follows the let-gos of
-        the kB that just ended (ADR 0005)."""
+        the kB that just ended (ADR 0005). A run that ends on a boundary calls it
+        once more, as its next allocation would."""
         if self._clock and not self._clock % self.threshold0:
             self._collector.collect()
 
