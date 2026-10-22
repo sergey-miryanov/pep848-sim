@@ -25,6 +25,9 @@ from pep848_sim.collector import (
 
 
 class IncrementalCollector(Collector):
+    # reachable, sys and the marking worklist, counts among the visited.
+    SPACES = ("nursery", "aging", "pending", "visited")
+
     def __init__(self, settings: CollectorSettings | None = None) -> None:
         super().__init__(settings)
         # threshold1 counts half-spaces, two to an aging space.
@@ -35,6 +38,8 @@ class IncrementalCollector(Collector):
         # The pseudocode's -100_000 real objects, 16 to a simulated one (ADR 0002).
         self.work_to_do = -100_000 // 16
         self.young_next = False
+        # Sweeps ended, for the records.
+        self.sweeps = 0
 
     @override
     def add_module_root(self, x: int) -> None:
@@ -42,9 +47,27 @@ class IncrementalCollector(Collector):
         self.reachable.append(x)
 
     @override
+    def space_sizes(self) -> tuple[int, ...]:
+        return (
+            *super().space_sizes(),
+            sum(len(space) for space in self.aging),
+            len(self.pending_space),
+            len(self.visited_space) + len(self.reachable),
+        )
+
+    @override
+    def budget(self) -> int:
+        return self.work_to_do
+
+    @override
+    def sweep(self) -> int:
+        return self.sweeps
+
+    @override
     def collect(self) -> None:
-        self.young_collection() if self.young_next else self.old_collection()
-        self.young_next = not self.young_next
+        with self.recording():
+            self.young_collection() if self.young_next else self.old_collection()
+            self.young_next = not self.young_next
 
     def young_collection(self) -> None:
         oldest = self.aging.pop()
@@ -93,6 +116,7 @@ class IncrementalCollector(Collector):
                 self.pending_space.remove(sys)
                 self.reachable.append(sys)
                 self.work_to_do = 0
+                self.sweeps += 1
                 break  # the pseudocode returns; the counts below come first
             obj = self.pending_space.pop(0)
             # form transitive closure starting at obj, taking objects from pending

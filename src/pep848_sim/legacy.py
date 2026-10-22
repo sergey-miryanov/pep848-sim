@@ -24,6 +24,8 @@ from pep848_sim.collector import (
 
 
 class LegacyCollector(Collector):
+    SPACES = ("nursery", "aging", "old")
+
     def __init__(self, settings: CollectorSettings | None = None) -> None:
         super().__init__(settings)
         self.aging = Space(self)
@@ -38,6 +40,10 @@ class LegacyCollector(Collector):
         self.long_lived_total = 0
 
     @override
+    def space_sizes(self) -> tuple[int, ...]:
+        return (*super().space_sizes(), len(self.aging), len(self.old))
+
+    @override
     def collect(self) -> None:
         """Collect the generation that select_generation picks, as the branch's
         gc_collect_main does under -X gc=legacy."""
@@ -46,7 +52,8 @@ class LegacyCollector(Collector):
             self.collect_generation1,
             self.collect_generation2,
         )
-        collections[self.select_generation()]()
+        with self.recording():
+            collections[self.select_generation()]()
 
     def select_generation(self) -> int:
         """gc_select_generation, as the legacy collector reads it: the oldest

@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pep848_sim.collector import CollectionCounts, CollectorSettings
+from pep848_sim.collector import CollectionCounts, CollectorSettings, Record
 from pep848_sim.heap import Heap
 from pep848_sim.legacy import LegacyCollector
 from pep848_sim.structures import StructureParameters
@@ -152,3 +152,20 @@ def test_a_run_keeps_the_legacy_collectors_invariants(
 
     # A gen 2 collection takes the whole heap.
     assert [left for left in collector.left_by_gen2 if left] == []
+
+
+def test_a_legacy_record_holds_no_budget_and_no_sweep() -> None:
+    collector = LegacyCollector(
+        CollectorSettings(threshold0=1, threshold1=0, threshold2=0)
+    )
+    heap = Heap(collector)
+
+    for _ in range(4):
+        heap.allocate_unseen()
+
+    # Spaces: nursery, aging, old. Only sys is alive, and it moves on with each.
+    assert collector.records == [
+        Record(1, "gen 0", 0, 1, 0, 0, 0, (1, 0, 0), (0, 1, 0), 1, 1),
+        Record(2, "gen 1", 0, 1, 0, 0, 0, (0, 1, 0), (0, 0, 1), 1, 1),
+        Record(3, "gen 2", 0, 1, 0, 0, 0, (0, 0, 1), (0, 0, 1), 1, 1),
+    ]

@@ -8,8 +8,9 @@ collection at each multiple of threshold0.
 """
 
 from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, ClassVar, Literal, NamedTuple
 
 if TYPE_CHECKING:
     from pep848_sim.heap import Heap
@@ -40,6 +41,27 @@ class CollectionCounts:
     def work(self) -> int:
         """The simulator's stand-in for the collection's pause."""
         return self.marked + self.survived + self.freed
+
+
+class Record(NamedTuple):
+    """What one collection did and the heap around it, in ints and strings
+    (ADR 0007). The heap appears before the collection and after it (ADR 0010):
+    by space, in the order the collector's SPACES name them, and its reachable
+    part. The rest of each is uncollected garbage."""
+
+    clock: int
+    kind: str
+    marked: int
+    survived: int
+    freed: int
+    # The work budget after the collection, and the sweeps ended by then. The
+    # legacy collector keeps no budget and runs no sweeps, and reports 0 for both.
+    work_to_do: int
+    sweep: int
+    spaces_before: tuple[int, ...]
+    spaces_after: tuple[int, ...]
+    reachable_before: int
+    reachable_after: int
 
 
 class Space:
@@ -80,9 +102,13 @@ class Space:
 
 
 class Collector:
+    # The spaces a record reports, in the order a stacked chart draws them.
+    SPACES: ClassVar[tuple[str, ...]] = ("nursery",)
+
     def __init__(self, settings: CollectorSettings | None = None) -> None:
         self.settings = CollectorSettings() if settings is None else settings
         self.counts: list[CollectionCounts] = []
+        self.records: list[Record] = []
         self.nursery = Space(self)
         # Each object's space, as CPython's PyGC_Head links an object into a list.
         # Only _place changes it, together with the spaces themselves.
@@ -93,8 +119,44 @@ class Collector:
         self._heap = heap
 
     def collect(self) -> None:
-        """Run one collection. The base collects nothing; each collector says how
-        it collects."""
+        """Run one collection, as the heap asks at each multiple of threshold0. The
+        base collects nothing; each collector says how it collects, and records the
+        collection with `recording()`."""
+
+    @contextmanager
+    def recording(self) -> Iterator[None]:
+        """Record the collection run inside, with the heap before and after it."""
+        heap = self._heap
+        spaces_before = self.space_sizes()
+        reachable_before = len(heap) - heap.uncollected_garbage
+        yield
+        counts = self.counts[-1]
+        self.records.append(
+            Record(
+                heap.clock,
+                counts.kind,
+                counts.marked,
+                counts.survived,
+                counts.freed,
+                self.budget(),
+                self.sweep(),
+                spaces_before,
+                self.space_sizes(),
+                reachable_before,
+                len(heap) - heap.uncollected_garbage,
+            )
+        )
+
+    def space_sizes(self) -> tuple[int, ...]:
+        """The objects in each space SPACES names. The base reports the nursery, and
+        each collector adds the spaces it makes."""
+        return (len(self.nursery),)
+
+    def budget(self) -> int:
+        return 0
+
+    def sweep(self) -> int:
+        return 0
 
     def collect_cycles(self, objects: Iterable[int]) -> list[int]:
         """Free the cyclic garbage among `objects` and return the survivors in their

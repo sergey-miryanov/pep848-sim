@@ -6,6 +6,7 @@ from hypothesis import strategies as st
 from pep848_sim.collector import (
     CollectionCounts,
     CollectorSettings,
+    Record,
     find_unreachable,
 )
 from pep848_sim.heap import Heap
@@ -293,3 +294,42 @@ def test_an_older_cycle_that_a_newer_one_holds_waits_for_the_next_sweep() -> Non
 
     assert [heap.is_freed(x) for x in (a1, a2)] == [True, True]
     assert heap.uncollected_garbage == 0
+
+
+def test_each_collection_leaves_a_record_of_the_heap_before_and_after_it() -> None:
+    collector = IncrementalCollector(CollectorSettings(threshold0=5, threshold1=2))
+    heap = Heap(collector)
+    heap.allocate()  # its allocating frame holds it
+    a, b = heap.allocate(), heap.allocate()
+    heap.link(a, b)
+    heap.link(b, a)
+    heap.let_go_frame_root(b)
+    heap.let_go_frame_root(a, leaves_unreachable=2)
+
+    # Through clock 20, where the fourth collection runs.
+    for _ in range(18):
+        heap.allocate_unseen()
+
+    # Spaces: nursery, aging, pending, visited (sys on reachable among them).
+    idle = (0, 0, 0, -6_250, 0)
+    assert collector.records == [
+        Record(5, "old", *idle, (3, 0, 0, 1), (3, 0, 0, 1), 2, 2),
+        Record(10, "young", *idle, (3, 0, 0, 1), (0, 3, 0, 1), 2, 2),
+        Record(15, "old", *idle, (0, 3, 0, 1), (0, 3, 0, 1), 2, 2),
+        Record(20, "young", 0, 1, 2, -6_249, 0, (0, 3, 0, 1), (0, 0, 0, 2), 2, 2),
+    ]
+
+
+def test_an_old_collections_record_carries_the_budget_and_the_sweep() -> None:
+    collector = IncrementalCollector(CollectorSettings(threshold0=5))
+    heap = Heap(collector)
+    collector.work_to_do = 10
+
+    for _ in range(6):
+        heap.allocate_unseen()
+
+    # Marking takes sys (10 - 1); pending_space is empty, so the spaces swap, the
+    # budget goes to 0 and the first sweep ends.
+    assert collector.records == [
+        Record(5, "old", 1, 0, 0, 0, 1, (0, 0, 0, 1), (0, 0, 0, 1), 1, 1)
+    ]

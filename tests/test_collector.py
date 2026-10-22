@@ -1,12 +1,24 @@
 from dataclasses import dataclass, field
-from typing import Literal
+from itertools import pairwise
+from typing import Literal, override
 
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pep848_sim.collector import Collector, Space, find_unreachable
+from pep848_sim.collector import (
+    Collector,
+    CollectorSettings,
+    Record,
+    Space,
+    find_unreachable,
+)
 from pep848_sim.heap import Heap
-from test_heap import Built, built_heaps, reached_from
+from pep848_sim.incremental import IncrementalCollector
+from pep848_sim.legacy import LegacyCollector
+from pep848_sim.structures import StructureParameters
+from pep848_sim.workload import ChurnParameters, Workload, WorkloadParameters
+from test_heap import Built, built_heaps, reachable, reached_from
+from test_workload import churn_parameters, structure_parameters
 
 ENDS: tuple[Literal[0, -1], ...] = (0, -1)
 
@@ -239,3 +251,87 @@ def test_collecting_a_group_leaves_a_cycle_it_held_alive_and_counted() -> None:
     assert heap.reference_count(c) == 1
     assert list(collector.nursery) == [heap.module_root, c, d]
     assert heap.uncollected_garbage == 2
+
+
+# Around each collection: the alive objects and what the tests' walk reaches,
+# before it and after it.
+type Walks = list[tuple[int, int, int, int]]
+
+
+class WalkingIncremental(IncrementalCollector):
+    def __init__(self, settings: CollectorSettings) -> None:
+        super().__init__(settings)
+        self.work_to_do = 0  # so that old collections run within a short run
+        self.walks: Walks = []
+
+    @override
+    def attach(self, heap: Heap) -> None:
+        super().attach(heap)
+        self.heap = heap
+
+    @override
+    def collect(self) -> None:
+        before = len(self.heap), len(reachable(self.heap))
+        super().collect()
+        self.walks.append((*before, len(self.heap), len(reachable(self.heap))))
+
+
+class WalkingLegacy(LegacyCollector):
+    def __init__(self, settings: CollectorSettings) -> None:
+        super().__init__(settings)
+        self.walks: Walks = []
+
+    @override
+    def attach(self, heap: Heap) -> None:
+        super().attach(heap)
+        self.heap = heap
+
+    @override
+    def collect(self) -> None:
+        before = len(self.heap), len(reachable(self.heap))
+        super().collect()
+        self.walks.append((*before, len(self.heap), len(reachable(self.heap))))
+
+
+def uncollected(spaces: tuple[int, ...], reachable_part: int) -> int:
+    return sum(spaces) - reachable_part
+
+
+@given(
+    st.sampled_from([WalkingIncremental, WalkingLegacy]),
+    churn_parameters(),
+    st.lists(structure_parameters(), max_size=2),
+    st.integers(min_value=0, max_value=2**32),
+    st.integers(min_value=1, max_value=20),
+    st.integers(min_value=1, max_value=10),
+    st.integers(min_value=0, max_value=3),
+    st.integers(min_value=0, max_value=400),
+)
+def test_each_record_holds_the_heap_and_its_reachable_part_before_and_after(
+    walking: type[WalkingIncremental | WalkingLegacy],
+    churn: ChurnParameters,
+    structures: list[StructureParameters],
+    seed: int,
+    threshold0: int,
+    threshold1: int,
+    threshold2: int,
+    run_kb: int,
+) -> None:
+    collector = walking(CollectorSettings(threshold0, threshold1, threshold2))
+    heap = Heap(collector)
+
+    Workload(heap, WorkloadParameters(churn, tuple(structures), seed)).run_to(run_kb)
+
+    records: list[Record] = collector.records
+    for record, walk in zip(records, collector.walks, strict=True):
+        assert (
+            sum(record.spaces_before),
+            record.reachable_before,
+            sum(record.spaces_after),
+            record.reachable_after,
+        ) == walk
+    # Between collections, the workload only adds to the uncollected garbage.
+    for previous, record in pairwise(records):
+        assert uncollected(record.spaces_before, record.reachable_before) >= (
+            uncollected(previous.spaces_after, previous.reachable_after)
+        )
