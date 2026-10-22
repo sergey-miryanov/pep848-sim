@@ -1,0 +1,9 @@
+// The worker, against a web worker's globals in place of the DOM.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["es2023", "webworker"]
+  },
+  "include": ["site/worker.js"],
+  "exclude": []
+}

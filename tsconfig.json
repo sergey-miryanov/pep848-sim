@@ -1,0 +1,16 @@
+// tsc checks the site's JavaScript from its JSDoc and emits nothing: the page's
+// scripts here, against the DOM, and the worker in tsconfig.worker.json.
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "target": "es2023",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2023", "dom"]
+  },
+  "include": ["site/**/*.js"],
+  "exclude": ["site/worker.js"]
+}

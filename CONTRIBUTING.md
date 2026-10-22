@@ -21,6 +21,7 @@ Pyodide pin together, in one pull request.
 poetry env use 3.14
 poetry install
 poetry run pre-commit install
+npm ci
 ```
 
 The environment lives in `.venv` inside the repo: `poetry.toml` sets
@@ -28,6 +29,9 @@ The environment lives in `.venv` inside the repo: `poetry.toml` sets
 If Poetry cannot find 3.14 by version, give `poetry env use` the full path to
 the interpreter. If a `.venv` on another Python is already there, delete it
 first: Poetry reuses an in-project `.venv` whatever its version.
+
+`npm ci` installs tsc into `node_modules`, at the version `package-lock.json`
+locks. It needs Node 24, the version CI runs.
 
 ## Commands
 
@@ -37,7 +41,9 @@ lists them.
 
 | Recipe | What it does |
 |---|---|
-| `check` | `lint`, `typecheck` and `test`: what CI gates on |
+| `check` | `check-py` and `check-ts`: what CI gates on |
+| `check-py` | `lint`, `typecheck` and `test`: the Python |
+| `check-ts` | tsc over the site's JavaScript |
 | `test` | pytest, Hypothesis invariants included, with the coverage gate |
 | `lint` | ruff's checker and formatter |
 | `typecheck` | mypy and pyrefly, both strict |
@@ -51,6 +57,9 @@ coverage gate out: `poetry run just test tests/test_smoke.py --no-cov`.
 
 - ruff checks and formats the Python.
 - mypy and pyrefly both run in strict mode, and both have to pass.
+- tsc checks the site's JavaScript from its JSDoc, in strict mode: the page's
+  scripts against the DOM (`tsconfig.json`), and the worker against a web
+  worker's globals (`tsconfig.worker.json`).
 - pytest runs the example tests and the Hypothesis invariants: no reachable
   object is ever freed, every alive object sits in exactly one space, the work
   budget moves by exactly what the counters say, and cyclic garbage wholly in
@@ -65,15 +74,16 @@ coverage gate out: `poetry run just test tests/test_smoke.py --no-cov`.
   file names Windows cannot check out. The tree is LF-only. pre-commit.ci
   runs the same hooks on every pull request.
 - Hook revisions are pinned by commit SHA, the tag in a `# frozen:` comment.
-  Dependabot moves them, the Python packages and the actions daily, once a
-  release is a week old. pre-commit.ci's own update runs only quarterly, and
-  it and `poetry run pre-commit autoupdate --freeze` both pin an annotated
-  tag's own SHA rather than its commit: take the commit from
+  Dependabot moves them, the Python and npm packages and the actions daily,
+  once a release is a week old. pre-commit.ci's own update runs only
+  quarterly, and it and `poetry run pre-commit autoupdate --freeze` both pin
+  an annotated tag's own SHA rather than its commit: take the commit from
   `git ls-remote <repo> 'refs/tags/<tag>^{}'`. Keep ruff's at the version in
   `poetry.lock`.
 
-The JavaScript (the widget and the worker) has no tooling in CI. Every file
-starts with `// @ts-check` so an editor type checks it; keep it small.
+Every JavaScript file starts with `// @ts-check`, so an editor checks it as
+`check-ts` does. tsc emits nothing, and the browser runs the files as written;
+keep them small.
 
 ## The site
 
