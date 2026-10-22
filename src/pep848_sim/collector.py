@@ -1,10 +1,15 @@
-"""What both collectors share: the spaces they keep the heap's objects in.
+"""What both collectors share: the spaces they keep the heap's objects in, and how
+they find the unreachable objects among those a collection examines.
 
 The collector owns every space, the nursery included, as CPython's collector owns
 its generation lists. The heap hands it each new object.
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pep848_sim.heap import Heap
 
 
 class Space:
@@ -41,3 +46,25 @@ class Collector:
         if space is not None:
             space._objects[x] = None
             self._spaces[x] = space
+
+
+def find_unreachable(heap: Heap, examined: Iterable[int]) -> list[int]:
+    """The objects among `examined` that nothing outside them reaches, in their
+    order, found as CPython's collector finds them."""
+    # Each object's references from outside the examined ones: its count less the
+    # references from examined objects, as update_refs and subtract_refs leave it.
+    from_outside = {x: heap.reference_count(x) for x in examined}
+    for x in from_outside:
+        for target in heap.references(x):
+            if target in from_outside:
+                from_outside[target] -= 1
+    # What something outside holds survives, with all it reaches among the
+    # examined objects, as in move_unreachable.
+    stack = [x for x, held in from_outside.items() if held]
+    reached = set(stack)
+    while stack:
+        for target in heap.references(stack.pop()):
+            if target in from_outside and target not in reached:
+                reached.add(target)
+                stack.append(target)
+    return [x for x in from_outside if x not in reached]
