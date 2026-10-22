@@ -6,8 +6,9 @@ simulator of the proposed collector and the legacy one runs in your browser,
 and a guide and a playground let you change the workload and the
 `gc.set_threshold()` settings and watch what each collector does.
 
-The guide will live at <https://sergey-miryanov.github.io/pep848-sim/>. It is
-still being designed.
+The site, <https://sergey-miryanov.github.io/pep848-sim/>, runs the widget on a
+stand-in workload today. Presets modelled on pyperformance benchmarks come
+next, then the guide.
 
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): how to set up, run and publish
 - [`CONTEXT.md`](CONTEXT.md): the vocabulary
