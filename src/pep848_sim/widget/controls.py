@@ -41,6 +41,13 @@ def _control(request: Request, path: str) -> Control:
             share = round(request.workload.churn.cycle_share * 1000)
             label = "Churn that starts a cycle"
             return Control(path, label, "share", share, 0, max(500, share), 1)
+        case ["workload", "churn", "lifetime_mean"]:
+            # Up to half the PEP's threshold0, or the request's own. Longer lives
+            # mostly outlast the nursery, where the long share already draws them.
+            # Every kB, since the short lives matter most.
+            mean = request.workload.churn.lifetime_mean
+            label = "Churn lifetime mean"
+            return Control(path, label, "kB", mean, 1, max(1000, mean), 1)
         case ["workload", "structures", index, "size"] if index.isdigit():
             structure = _structure(request, int(index))
             name = type(structure.shape).__name__
