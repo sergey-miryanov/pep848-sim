@@ -106,7 +106,6 @@ class Churn:
         heap: Heap,
         rng: Random,
         parameters: ChurnParameters,
-        threshold0: int,
         *,
         make_every_transient: bool = False,
         let_gos: LetGos | None = None,
@@ -117,7 +116,8 @@ class Churn:
         self._lifetimes = ChurnLifetimes(
             parameters.lifetime_mean, parameters.long_share, parameters.long_lifetimes
         )
-        self._threshold0 = threshold0
+        # Collections come at multiples of the collector's threshold0.
+        self._threshold0 = heap.threshold0
         self._make_every_transient = make_every_transient
         # The members of the cycle being built, one per kB.
         self._cycle: list[int] = []
@@ -195,7 +195,6 @@ class Workload:
         self,
         heap: Heap,
         parameters: WorkloadParameters,
-        threshold0: int,
         *,
         make_every_transient: bool = False,
     ) -> None:
@@ -206,7 +205,6 @@ class Workload:
             heap,
             Random(parameters.seed),
             parameters.churn,
-            threshold0,
             make_every_transient=make_every_transient,
             let_gos=self._let_gos,
         )
