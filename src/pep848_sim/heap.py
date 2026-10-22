@@ -2,10 +2,10 @@
 roots that keep them reachable, the allocation clock, and a count of uncollected
 garbage.
 
-A simulated object is an int indexing the heap's list of records. Its references
-are ints too, so the simulator makes no reference cycles of its own for the host's
-collector to chase. The heap hands each new object to its collector, which owns
-the spaces.
+A simulated object is an int, the key to its record among the heap's alive
+objects. Its references are ints too, so the simulator makes no reference cycles
+of its own for the host's collector to chase. The heap hands each new object to
+its collector, which owns the spaces.
 
 A walk at every collection would take longer than most collections, so the heap
 keeps the count as it changes: the workload says how many objects each let-go
@@ -34,11 +34,12 @@ class SimulatedObject:
 class Heap:
     def __init__(self, collector: Collector) -> None:
         self._collector = collector
-        # A freed object's record is None.
+        # The alive objects' records. A counter hands out the ints in allocation
+        # order, no int serves twice, and freeing an object deletes its record.
         # sys exists before the run begins, so making it moves no clock, and the
         # interpreter holds it for good.
-        self._objects: list[SimulatedObject | None] = [SimulatedObject(1, 0)]
-        self._alive_count = 1
+        self._objects = {0: SimulatedObject(1, 0)}
+        self._next_object = 1
         self._uncollected_garbage = 0
         self._module_root = 0
         collector.add(self._module_root)
@@ -46,7 +47,7 @@ class Heap:
 
     def __len__(self) -> int:
         """The alive objects, sys among them."""
-        return self._alive_count
+        return len(self._objects)
 
     @property
     def clock(self) -> int:
@@ -63,8 +64,8 @@ class Heap:
     def frame_roots(self) -> dict[int, int]:
         return {
             x: record.frame_roots
-            for x, record in enumerate(self._objects)
-            if record is not None and record.frame_roots
+            for x, record in self._objects.items()
+            if record.frame_roots
         }
 
     def take_frame_root(self, x: int) -> None:
@@ -75,7 +76,7 @@ class Heap:
     def let_go_frame_root(self, x: int, leaves_unreachable: int = 0) -> None:
         """Let go of one frame root on x, which leaves `leaves_unreachable` objects
         unreachable, as the workload knows from building them."""
-        record = self._objects[x]
+        record = self._objects.get(x)
         if record is None or not record.frame_roots:
             raise ValueError(f"no frame root on object {x}")
         record.frame_roots -= 1
@@ -95,22 +96,22 @@ class Heap:
             assert record.reference_count == held_inside[x], (
                 f"something outside the group holds object {x}"
             )
-        alive_before = self._alive_count
+        alive_before = len(self._objects)
         for x in members:
             self._release(x)
         self._let_go(
             t for m in members.values() for t in m.references if t not in members
         )
-        self._count_garbage(self._alive_count - alive_before)
+        self._count_garbage(len(self._objects) - alive_before)
 
     def is_freed(self, x: int) -> bool:
-        return self._objects[x] is None
+        return x not in self._objects
 
     def allocate(self) -> int:
         """A new object, which its allocating frame holds, as in CPython."""
-        x = len(self._objects)
-        self._objects.append(SimulatedObject(1, 1))
-        self._alive_count += 1
+        x = self._next_object
+        self._next_object += 1
+        self._objects[x] = SimulatedObject(1, 1)
         self._collector.add(x)
         self._clock += 1
         return x
@@ -124,15 +125,15 @@ class Heap:
         held.reference_count += 1
 
     def references(self, x: int) -> tuple[int, ...]:
-        record = self._objects[x]
+        record = self._objects.get(x)
         return () if record is None else tuple(record.references)
 
     def reference_count(self, x: int) -> int:
-        record = self._objects[x]
+        record = self._objects.get(x)
         return 0 if record is None else record.reference_count
 
     def _alive(self, x: int) -> SimulatedObject:
-        record = self._objects[x]
+        record = self._objects.get(x)
         if record is None:
             raise ValueError(f"object {x} is freed")
         return record
@@ -140,8 +141,8 @@ class Heap:
     def _count_garbage(self, change: int) -> None:
         self._uncollected_garbage += change
         # sys stays reachable, so at least one alive object is not garbage.
-        assert 0 <= self._uncollected_garbage < self._alive_count, (
-            f"{self._uncollected_garbage} of {self._alive_count} objects uncollected"
+        assert 0 <= self._uncollected_garbage < len(self._objects), (
+            f"{self._uncollected_garbage} of {len(self._objects)} objects uncollected"
         )
 
     def _let_go(self, targets: Iterable[int]) -> None:
@@ -158,6 +159,5 @@ class Heap:
                 stack.extend(record.references)
 
     def _release(self, x: int) -> None:
-        self._objects[x] = None
-        self._alive_count -= 1
+        del self._objects[x]
         self._collector.remove(x)
