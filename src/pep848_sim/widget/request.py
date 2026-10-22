@@ -7,7 +7,7 @@ import json
 from collections.abc import Collection, Iterator
 from dataclasses import fields
 from fractions import Fraction
-from typing import Any, get_args
+from typing import Any, NamedTuple, get_args
 
 from pep848_sim.collectors.collector import CollectorSettings, Record
 from pep848_sim.collectors.incremental import IncrementalCollector
@@ -17,16 +17,29 @@ from pep848_sim.structures import Chains, Root, Shape, StructureParameters, Tree
 from pep848_sim.workload import ChurnParameters, WorkloadParameters
 
 
+class Request(NamedTuple):
+    workload: WorkloadParameters
+    settings: CollectorSettings
+    run_length: int
+    every: int
+
+
+def parse(request: str) -> Request:
+    """The request a widget sends, refused unless it holds every field and no other."""
+    values = _values(json.loads(request), Request._fields, "request")
+    return Request(
+        _workload(values["workload"]),
+        CollectorSettings(
+            **_values(values["settings"], _names(CollectorSettings), "settings")
+        ),
+        values["run_length"],
+        values["every"],
+    )
+
+
 def runs(request: str) -> tuple[Iterator[list[Record]], Iterator[list[Record]]]:
     """The two runs a widget compares, legacy first."""
-    values = _values(
-        json.loads(request), ("workload", "settings", "run_length", "every"), "request"
-    )
-    workload = _workload(values["workload"])
-    settings = CollectorSettings(
-        **_values(values["settings"], _names(CollectorSettings), "settings")
-    )
-    run_length, every = values["run_length"], values["every"]
+    workload, settings, run_length, every = parse(request)
     return (
         run(workload, LegacyCollector, settings, run_length, every),
         run(workload, IncrementalCollector, settings, run_length, every),

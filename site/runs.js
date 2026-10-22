@@ -18,8 +18,17 @@
  */
 
 /**
- * What a widget hears about its runs: each part of one, with its figures so far.
+ * One control, as pep848_sim.widget.controls.Control holds it: its path into the
+ * request, label, unit ("kB", or "share" in thousandths), value, min, max and
+ * step.
+ * @typedef {[string, string, "kB" | "share", number, number, number, number]} Control
+ */
+
+/**
+ * What a widget hears about its runs: the controls it asked for, with the ranges
+ * the request allows, then each part of a run, with its figures so far.
  * @typedef {{
+ *   controls?: (controls: Control[]) => void,
  *   records: (collector: "legacy" | "incremental", records: Record[], figures: Figures) => void,
  *   done: () => void,
  *   error: (message: string) => void,
@@ -38,7 +47,8 @@ let nextId = 0;
 worker.onmessage = (/** @type {MessageEvent} */ { data }) => {
   const listener = listeners.get(data.id);
   if (!listener) return;
-  if (data.kind === "records") listener.records(data.collector, data.records, data.figures);
+  if (data.kind === "controls") listener.controls?.(data.controls);
+  else if (data.kind === "records") listener.records(data.collector, data.records, data.figures);
   else {
     listeners.delete(data.id);
     if (data.kind === "done") listener.done();
@@ -52,12 +62,14 @@ worker.onmessage = (/** @type {MessageEvent} */ { data }) => {
  * @param {string} widget names the widget, unique on the page
  * @param {object} request what pep848_sim.widget.request.runs reads
  * @param {Listener} listener
+ * @param {string[]} controls the paths into the request of the controls the
+ *   widget shows
  */
-export function requestRuns(widget, request, listener) {
+export function requestRuns(widget, request, listener, controls = []) {
   const before = latest.get(widget);
   if (before !== undefined) listeners.delete(before);
   const id = nextId++;
   latest.set(widget, id);
   listeners.set(id, listener);
-  worker.postMessage({ id, widget, request: JSON.stringify(request) });
+  worker.postMessage({ id, widget, request: JSON.stringify(request), controls });
 }

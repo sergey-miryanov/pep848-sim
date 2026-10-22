@@ -11,6 +11,7 @@ import { requestRuns } from "./runs.js";
 
 /** @typedef {import("./runs.js").Record} Record */
 /** @typedef {import("./runs.js").Figures} Figures */
+/** @typedef {import("./runs.js").Control} Control */
 /** @typedef {"legacy" | "incremental"} Collector */
 
 /** @type {Collector[]} */
@@ -73,6 +74,21 @@ const FIGURES = [
   { label: "Gen 2 collections / sweeps", read: (figures, collector) => figures[collector === "legacy" ? 6 : 5], show: count },
 ];
 
+/** A control's value as the reader reads it: kB, or a share as a percentage. */
+const reading = (/** @type {Control[2]} */ unit, /** @type {number} */ value) =>
+  unit === "share" ? percent(value / 1000) : `${whole(value)} kB`;
+
+/** A control's value as the request holds it: kB, or a share as a fraction. */
+const held = (/** @type {Control[2]} */ unit, /** @type {number} */ value) =>
+  unit === "share" ? `${value}/1000` : value;
+
+/** Put a value into the request at a path of keys and indices joined by dots. */
+function assign(/** @type {any} */ request, /** @type {string} */ path, /** @type {unknown} */ value) {
+  const keys = path.split(".");
+  const last = /** @type {string} */ (keys.pop());
+  keys.reduce((object, key) => object[key], request)[last] = value;
+}
+
 /** The y-scale's end for data that reaches `value`, with room above it. */
 function ceiling(/** @type {number} */ value) {
   const room = value * 1.05;
@@ -124,6 +140,11 @@ const TEMPLATE = `
       --freed: #e66767;
     }
   }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 32px; margin: 0 0 24px; }
+  .control { display: grid; gap: 4px; width: 200px; font-size: 13px; color: var(--text-secondary); }
+  .control .name { display: flex; justify-content: space-between; gap: 8px; }
+  .control output { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .control input { margin: 0; accent-color: var(--text-secondary); }
   .figures { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px 16px; margin: 0 0 24px; }
   .figure { display: grid; grid-row: span 2; grid-template-rows: subgrid; grid-template-columns: 1fr 1fr; column-gap: 8px; }
   .figure dt { grid-column: 1 / -1; align-self: end; font-size: 13px; color: var(--text-secondary); }
@@ -140,6 +161,7 @@ const TEMPLATE = `
   .error { color: var(--text-primary); }
 </style>
 <p class="error" hidden></p>
+<div class="controls" hidden></div>
 <dl class="figures"></dl>
 <div class="columns">
   <section data-collector="legacy">
@@ -177,8 +199,19 @@ class GcWidget extends HTMLElement {
   /** Where each figure shows each run's value. */
   /** @type {{ legacy: HTMLElement, incremental: HTMLElement }[]} */
   #values = [];
+  /** The request as the controls have set it. */
   /** @type {any} */
   #request = null;
+  /** The request the drawn records answer, until the next one's first records. */
+  /** @type {any} */
+  #drawn = null;
+  #name = "";
+  /** The paths into the request of the controls the page names. */
+  /** @type {string[]} */
+  #paths = [];
+  /** Each control's slider, by path, and whether the reader is moving it. */
+  /** @type {Map<string, { input: HTMLInputElement, read: (value: number) => void, moving: boolean }>} */
+  #sliders = new Map();
   #frame = 0;
 
   connectedCallback() {
@@ -191,8 +224,6 @@ class GcWidget extends HTMLElement {
       this.#fail(`The widget's request is not JSON: ${error}`);
       return;
     }
-    const { run_length: runLength, settings: { threshold0 } } = this.#request;
-    const binKb = Math.ceil(runLength / BINS / threshold0) * threshold0;
     const row = /** @type {HTMLElement} */ (root.querySelector(".figures"));
     this.#values = FIGURES.map(({ label }) => {
       const figure = document.createElement("div");
@@ -219,23 +250,91 @@ class GcWidget extends HTMLElement {
         ...SPACES[collector].map((space) => key(space, `var(--${space})`)),
         key("reachable", "var(--text-primary)", true),
       );
-      /** @type {HTMLElement} */ (column.querySelector('[data-panel="work"] figcaption')).textContent =
-        `Work per ${binKb / 1000} MB allocated`;
       /** @type {HTMLElement} */ (column.querySelector('[data-panel="work"] .legend')).append(
         ...PARTS.map((part) => key(part, `var(--${part})`)),
       );
     }
+    this.#drawn = this.#request;
+    this.#name = this.id || `gc-widget-${widgets++}`;
+    this.#paths = (this.getAttribute("controls") ?? "").split(/\s+/).filter(Boolean);
     new ResizeObserver(() => this.#schedule()).observe(this);
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.#schedule());
-    requestRuns(this.id || `gc-widget-${widgets++}`, this.#request, {
+    this.#start();
+  }
+
+  /**
+   * Ask for both runs of the request as the controls have set it, in place of any
+   * runs asked for before. The charts keep the old runs until the new runs' first
+   * records arrive.
+   */
+  #start() {
+    const request = structuredClone(this.#request);
+    let fresh = true;
+    /** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".error")).hidden = true;
+    requestRuns(this.#name, request, {
+      controls: (controls) => this.#show(controls),
       records: (collector, records, figures) => {
+        if (fresh) {
+          fresh = false;
+          this.#drawn = request;
+          this.#records = { legacy: [], incremental: [] };
+          this.#figures = {};
+        }
         this.#records[collector].push(...records);
         this.#figures[collector] = figures;
         this.#schedule();
       },
       done: () => {},
       error: (message) => this.#fail(message),
-    });
+    }, this.#paths);
+  }
+
+  /** Show each control with the range its request allows. */
+  #show(/** @type {Control[]} */ controls) {
+    const row = /** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".controls"));
+    row.hidden = !controls.length;
+    for (const [path, label, unit, value, min, max, step] of controls) {
+      let slider = this.#sliders.get(path);
+      if (!slider) {
+        const control = document.createElement("label");
+        control.className = "control";
+        const name = document.createElement("span");
+        name.className = "name";
+        const output = document.createElement("output");
+        name.append(label, output);
+        const input = document.createElement("input");
+        input.type = "range";
+        input.name = path;
+        control.append(name, input);
+        row.append(control);
+        const made = {
+          input,
+          moving: false,
+          read: (/** @type {number} */ value) => {
+            output.textContent = reading(unit, value);
+            input.setAttribute("aria-valuetext", output.textContent);
+          },
+        };
+        // Moving a slider only reads out its value; releasing it runs again.
+        input.addEventListener("input", () => {
+          made.moving = true;
+          made.read(Number(input.value));
+        });
+        input.addEventListener("change", () => {
+          made.moving = false;
+          assign(this.#request, path, held(unit, Number(input.value)));
+          this.#start();
+        });
+        slider = made;
+        this.#sliders.set(path, slider);
+      }
+      // A range a release elsewhere moved; the value, unless the reader holds it.
+      Object.assign(slider.input, { min: String(min), max: String(max), step: String(step) });
+      if (!slider.moving) {
+        slider.input.value = String(value);
+        slider.read(value);
+      }
+    }
   }
 
   /** @param {Collector} collector */
@@ -274,7 +373,7 @@ class GcWidget extends HTMLElement {
       });
     });
 
-    const { run_length: runLength, settings: { threshold0 } } = this.#request;
+    const { run_length: runLength, settings: { threshold0 } } = this.#drawn;
     const style = getComputedStyle(this);
     const token = (/** @type {string} */ name) => style.getPropertyValue(`--${name}`).trim();
     const xMax = runLength / 1000;
@@ -299,6 +398,8 @@ class GcWidget extends HTMLElement {
 
     for (const collector of COLLECTORS) {
       const column = this.#column(collector);
+      /** @type {HTMLElement} */ (column.querySelector('[data-panel="work"] figcaption')).textContent =
+        `Work per ${binKb / 1000} MB allocated`;
       const { bands, points } = heaps[collector];
       const colors = { domain: STACKED[collector], range: STACKED[collector].map((space) => token(space)) };
       // Name each band at the run's edge where it is tall enough to hold its name.
