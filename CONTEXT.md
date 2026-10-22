@@ -296,8 +296,9 @@ swap of pending and visited to the next, in which the collector marks or
 examines once each object that was old at the swap. The work budget alone
 paces it, so it runs long when few objects survive and short when cyclic
 garbage is plentiful. Cyclic garbage wholly in the old generation when a
-sweep starts is freed by the time it ends. The legacy collector has no
-sweeps; a gen 2 collection covers the same ground in one go.
+sweep starts is freed by the time it ends, unless newer garbage holds it,
+which leaves it for a later sweep. The legacy collector has no sweeps; a gen
+2 collection covers the same ground in one go.
 _Avoid_: cycle, GC cycle (both collide with reference cycles), pass, epoch,
 full collection (that is `gc.collect()`)
 

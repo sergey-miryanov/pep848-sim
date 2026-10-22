@@ -1,7 +1,13 @@
+from typing import override
+
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pep848_sim.collector import CollectorSettings
+from pep848_sim.collector import (
+    CollectionCounts,
+    CollectorSettings,
+    find_unreachable,
+)
 from pep848_sim.heap import Heap
 from pep848_sim.incremental import IncrementalCollector
 from pep848_sim.structures import StructureParameters
@@ -71,6 +77,43 @@ def test_collections_alternate_from_an_old_one_and_young_ones_start_idle() -> No
     assert list(collector.visited_space) == first
 
 
+class Recorded(IncrementalCollector):
+    """An incremental collector whose budget starts at 0, so that old collections
+    run within a short run. It notes the budget around each collection, and at each
+    swap the cyclic garbage wholly in the old generation."""
+
+    def __init__(self, settings: CollectorSettings) -> None:
+        super().__init__(settings)
+        self.work_to_do = 0
+        # Each collection's budget before and after, whether it swapped, and its
+        # counts.
+        self.budgets: list[tuple[int, int, bool, CollectionCounts]] = []
+        self.garbage_at_swaps: list[list[int]] = []
+        # At each swap, what the last swap found that is still alive.
+        self.left_by_sweeps: list[list[int]] = []
+
+    @override
+    def attach(self, heap: Heap) -> None:
+        super().attach(heap)
+        self.heap = heap
+
+    @override
+    def collect(self) -> None:
+        before, pending = self.work_to_do, self.pending_space
+        super().collect()
+        swapped = self.pending_space is not pending
+        self.budgets.append((before, self.work_to_do, swapped, self.counts[-1]))
+        if swapped:
+            if self.garbage_at_swaps:
+                last = self.garbage_at_swaps[-1]
+                self.left_by_sweeps.append(
+                    [x for x in last if not self.heap.is_freed(x)]
+                )
+            self.garbage_at_swaps.append(
+                find_unreachable(self.heap, self.pending_space)
+            )
+
+
 @given(
     churn_parameters(),
     st.lists(structure_parameters(), max_size=2),
@@ -79,7 +122,7 @@ def test_collections_alternate_from_an_old_one_and_young_ones_start_idle() -> No
     st.integers(min_value=1, max_value=6),
     st.lists(st.integers(min_value=0, max_value=600), max_size=4),
 )
-def test_a_run_keeps_each_alive_object_in_one_space_and_frees_none_reachable(
+def test_a_run_keeps_the_incremental_collectors_invariants(
     churn: ChurnParameters,
     structures: list[StructureParameters],
     seed: int,
@@ -87,8 +130,10 @@ def test_a_run_keeps_each_alive_object_in_one_space_and_frees_none_reachable(
     threshold1: int,
     stops: list[int],
 ) -> None:
+    """The workloads' garbage never holds other garbage, so each sweep frees the
+    cyclic garbage wholly in the old generation when it starts."""
     settings = CollectorSettings(threshold0=threshold0, threshold1=threshold1)
-    collector = IncrementalCollector(settings)
+    collector = Recorded(settings)
     heap = Heap(collector)
     workload = Workload(heap, WorkloadParameters(churn, tuple(structures), seed))
 
@@ -108,3 +153,143 @@ def test_a_run_keeps_each_alive_object_in_one_space_and_frees_none_reachable(
         reached = reachable(heap)
         assert [x for x in reached if heap.is_freed(x)] == []
         assert heap.uncollected_garbage == len(set(placed) - reached)
+
+    for before, after, swapped, counts in collector.budgets:
+        if counts.kind == "young":
+            assert after == before + counts.survived
+        elif swapped:
+            assert after == 0
+        else:
+            assert after == before - counts.marked - counts.survived + counts.freed
+    assert [left for left in collector.left_by_sweeps if left] == []
+
+
+def test_an_old_collection_follows_the_pseudocode_line_by_line() -> None:
+    collector = IncrementalCollector(CollectorSettings(threshold0=1_000))
+    heap = Heap(collector)
+    sys = heap.module_root
+    m1, m2 = heap.allocate(), heap.allocate()
+    heap.link(sys, m1)
+    heap.link(m1, m2)
+    heap.let_go_frame_root(m1)
+    heap.let_go_frame_root(m2)
+    held = heap.allocate()  # its allocating frame holds it
+    a, b = heap.allocate(), heap.allocate()
+    heap.link(a, b)
+    heap.link(b, a)
+    heap.let_go_frame_root(b)
+    heap.let_go_frame_root(a, leaves_unreachable=2)
+    # The old generation, least recently scanned first.
+    collector.pending_space.extend([m1, m2, held, a, b])
+    collector.work_to_do = 10
+
+    collector.old_collection()
+
+    # scan_reachable(10) marks sys and the chain it holds: 10 - 3.
+    # The increment [held] survives: 7 - 1.
+    # The increment [a, b] is cyclic garbage: 6 - 2 + 2 * 2.
+    # pending_space runs empty: the spaces swap, sys goes back on reachable, and
+    # work_to_do = 0 ends the sweep.
+    assert [heap.is_freed(x) for x in (a, b)] == [True, True]
+    assert list(collector.pending_space) == [m1, m2, held]
+    assert list(collector.visited_space) == []
+    assert list(collector.reachable) == [sys]
+    assert collector.work_to_do == 0
+    assert collector.counts == [CollectionCounts("old", 3, 1, 2)]
+
+
+def test_marking_takes_from_pending_alone_and_stops_where_the_budget_does() -> None:
+    collector = IncrementalCollector(CollectorSettings(threshold0=1_000))
+    heap = Heap(collector)
+    sys = heap.module_root
+    m1, m2, young = heap.allocate(), heap.allocate(), heap.allocate()
+    heap.link(sys, m1)
+    heap.link(sys, young)
+    heap.link(m1, m2)
+    for x in (m1, m2, young):
+        heap.let_go_frame_root(x)
+    collector.pending_space.extend([m1, m2])
+    collector.work_to_do = 2
+
+    collector.old_collection()
+
+    # scan_reachable(2) moves sys and m1, leaves m2 on reachable, and leaves the
+    # young object where it is.
+    assert list(collector.visited_space) == [sys, m1]
+    assert list(collector.reachable) == [m2]
+    assert list(collector.nursery) == [young]
+
+    collector.work_to_do = 1
+    collector.old_collection()
+
+    assert list(collector.visited_space) == [sys, m1, m2]
+    assert list(collector.reachable) == []
+
+
+def test_the_next_old_collection_resumes_where_the_budget_ran_out() -> None:
+    collector = IncrementalCollector(CollectorSettings(threshold0=1_000))
+    heap = Heap(collector)
+    sys = heap.module_root
+    p, q, r = heap.allocate(), heap.allocate(), heap.allocate()  # frames hold them
+    collector.pending_space.extend([p, q, r])
+    collector.work_to_do = 2
+
+    collector.old_collection()
+
+    # sys is marked, and the least recently scanned pending object is examined.
+    assert list(collector.visited_space) == [sys, p]
+    assert list(collector.pending_space) == [q, r]
+    assert collector.work_to_do == 0
+
+    collector.work_to_do = 1
+    collector.old_collection()
+
+    assert list(collector.visited_space) == [sys, p, q]
+    assert list(collector.pending_space) == [r]
+    assert collector.counts == [
+        CollectionCounts("old", 1, 1, 0),
+        CollectionCounts("old", 0, 1, 0),
+    ]
+
+
+def test_an_old_collection_without_a_positive_budget_is_idle() -> None:
+    collector = IncrementalCollector(CollectorSettings(threshold0=1_000))
+    heap = Heap(collector)
+    x = heap.allocate()
+    collector.pending_space.append(x)
+    collector.work_to_do = 0
+
+    collector.old_collection()
+
+    assert list(collector.reachable) == [heap.module_root]
+    assert list(collector.pending_space) == [x]
+    assert collector.counts == [CollectionCounts("old", 0, 0, 0)]
+
+
+def test_an_older_cycle_that_a_newer_one_holds_waits_for_the_next_sweep() -> None:
+    collector = IncrementalCollector(CollectorSettings(threshold0=1_000))
+    heap = Heap(collector)
+    a1, a2, b1, b2 = (heap.allocate() for _ in range(4))
+    heap.link(a1, a2)
+    heap.link(a2, a1)
+    heap.link(b1, b2)
+    heap.link(b2, b1)
+    heap.link(b1, a1)
+    for x in (a1, a2, b2):
+        heap.let_go_frame_root(x)
+    heap.let_go_frame_root(b1, leaves_unreachable=4)
+    collector.pending_space.extend([a1, a2, b1, b2])
+    collector.work_to_do = 100
+
+    collector.old_collection()
+
+    # The increment from a1 holds a1 and a2 alone, and b1 holds a1 from outside it.
+    assert [heap.is_freed(x) for x in (a1, a2, b1, b2)] == [False, False, True, True]
+    assert list(collector.pending_space) == [a1, a2]
+    assert heap.uncollected_garbage == 2
+
+    collector.work_to_do = 100
+    collector.old_collection()
+
+    assert [heap.is_freed(x) for x in (a1, a2)] == [True, True]
+    assert heap.uncollected_garbage == 0
