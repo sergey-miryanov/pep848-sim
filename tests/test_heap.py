@@ -364,65 +364,45 @@ def test_letting_go_of_a_cycle_counts_it_as_uncollected_garbage() -> None:
     assert heap.uncollected_garbage == 3
 
 
-def test_freeing_a_group_of_cyclic_garbage_frees_what_only_the_group_held() -> None:
+def test_clearing_breaks_a_cycle_and_frees_what_that_leaves_at_zero() -> None:
     collector = Collector()
     heap = Heap(collector)
-    outside = heap.allocate()  # its allocating frame holds it
     a, b, c = heap.allocate(), heap.allocate(), heap.allocate()
     heap.link(a, b)
     heap.link(b, a)
     heap.link(b, c)
-    heap.link(a, outside)
     heap.let_go_frame_root(b)
     heap.let_go_frame_root(c)
     heap.let_go_frame_root(a, leaves_unreachable=3)
 
-    heap.free_cyclic_garbage([a, b])
+    heap.clear(a)
 
     assert [heap.is_freed(x) for x in (a, b, c)] == [True, True, True]
-    assert heap.reference_count(outside) == 1
-    assert list(collector.nursery) == [heap.module_root, outside]
+    assert list(collector.nursery) == [heap.module_root]
     assert heap.uncollected_garbage == 0
 
 
-def test_freeing_a_group_leaves_a_cycle_it_held_alive_and_counted() -> None:
-    collector = Collector()
-    heap = Heap(collector)
-    a, b, c, d = heap.allocate(), heap.allocate(), heap.allocate(), heap.allocate()
-    heap.link(a, b)
-    heap.link(b, a)
-    heap.link(c, d)
-    heap.link(d, c)
-    heap.link(b, c)
-    for x in (b, c, d):
-        heap.let_go_frame_root(x)
-    heap.let_go_frame_root(a, leaves_unreachable=4)
-
-    heap.free_cyclic_garbage([a, b])
-
-    assert [heap.is_freed(x) for x in (a, b, c, d)] == [True, True, False, False]
-    assert heap.reference_count(c) == 1
-    assert list(collector.nursery) == [heap.module_root, c, d]
-    assert heap.uncollected_garbage == 2
-
-
-@pytest.mark.parametrize("times", [1, 2], ids=["each member once", "a member twice"])
-def test_freeing_a_group_that_something_outside_holds_fails_an_assertion(
-    times: int,
-) -> None:
+def test_clearing_an_object_something_holds_leaves_it_alive_holding_nothing() -> None:
     heap = new_heap()
-    holder, a, b = heap.allocate(), heap.allocate(), heap.allocate()
+    a, b, c = heap.allocate(), heap.allocate(), heap.allocate()
     heap.link(a, b)
-    heap.link(b, a)
-    heap.link(holder, b)
-    heap.let_go_frame_root(a)
+    heap.link(b, c)
+    heap.link(c, a)
+    heap.link(c, b)
     heap.let_go_frame_root(b)
+    heap.let_go_frame_root(c)
+    heap.let_go_frame_root(a, leaves_unreachable=3)
 
-    with pytest.raises(AssertionError, match="outside"):
-        heap.free_cyclic_garbage([a] * times + [b])
+    heap.clear(a)
 
-    assert [heap.reference_count(x) for x in (a, b)] == [1, 2]
-    assert heap.references(a) == (b,)
+    assert [heap.is_freed(x) for x in (a, b, c)] == [False, False, False]
+    assert heap.references(a) == ()
+    assert heap.uncollected_garbage == 3
+
+    heap.clear(b)
+
+    assert [heap.is_freed(x) for x in (a, b, c)] == [True, True, True]
+    assert heap.uncollected_garbage == 0
 
 
 class Workload(RuleBasedStateMachine):
@@ -544,8 +524,9 @@ class Workload(RuleBasedStateMachine):
         i = data.draw(st.integers(min_value=0, max_value=len(self.dropped) - 1))
         members, built = self.dropped.pop(i)
 
-        self.heap.free_cyclic_garbage(members)
+        survivors = self.collector.collect_cycles(members)
 
+        assert survivors == []
         assert [x for x in built if not self.heap.is_freed(x)] == []
 
     @rule()
