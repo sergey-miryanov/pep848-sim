@@ -3,8 +3,9 @@ from dataclasses import dataclass, field
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pep848_sim.collector import Collector, Space
+from pep848_sim.collector import Collector, Space, find_unreachable
 from pep848_sim.heap import Heap
+from test_heap import Built, built_heaps, reached_from
 
 
 @dataclass
@@ -86,3 +87,51 @@ def test_each_object_sits_in_one_space_in_the_order_it_entered(
     spaced: Spaced,
 ) -> None:
     assert [list(space) for space in spaced.spaces] == spaced.contents
+
+
+def test_it_finds_cyclic_garbage_and_what_that_garbage_alone_holds() -> None:
+    heap = Heap(Collector())
+    rooted, w = heap.allocate(), heap.allocate()  # rooted keeps its frame root
+    holder, x, y = heap.allocate(), heap.allocate(), heap.allocate()
+    a, b, c = heap.allocate(), heap.allocate(), heap.allocate()
+    heap.link(rooted, w)
+    heap.link(holder, x)
+    heap.link(x, y)
+    heap.link(y, x)
+    heap.link(a, b)
+    heap.link(b, a)
+    heap.link(b, c)
+    for held in (w, x, y, b, c):
+        heap.let_go_frame_root(held)
+    heap.let_go_frame_root(a, leaves_unreachable=3)
+
+    assert find_unreachable(heap, [rooted, w, x, y, a, b, c]) == [a, b, c]
+
+
+def test_cyclic_garbage_held_from_outside_the_examined_objects_survives() -> None:
+    heap = Heap(Collector())
+    p, q, c, d = heap.allocate(), heap.allocate(), heap.allocate(), heap.allocate()
+    heap.link(p, q)
+    heap.link(q, p)
+    heap.link(c, d)
+    heap.link(d, c)
+    heap.link(q, c)
+    for x in (q, c, d):
+        heap.let_go_frame_root(x)
+    heap.let_go_frame_root(p, leaves_unreachable=4)
+
+    assert find_unreachable(heap, [c, d]) == []
+    assert find_unreachable(heap, [p, q, c, d]) == [p, q, c, d]
+
+
+@given(built_heaps(), st.data())
+def test_it_finds_what_nothing_outside_the_examined_objects_reaches(
+    built: Built, data: st.DataObject
+) -> None:
+    heap = built.heap
+    alive = [x for x in built.objects if not heap.is_freed(x)]
+    examined = data.draw(st.lists(st.sampled_from(alive), unique=True))
+    outside = [x for x in alive if x not in examined]
+    reached = reached_from(heap, [heap.module_root, *built.frame_roots, *outside])
+
+    assert find_unreachable(heap, examined) == [x for x in examined if x not in reached]

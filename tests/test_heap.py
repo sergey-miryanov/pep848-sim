@@ -7,7 +7,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, precondition, rule
 
-from pep848_sim.collector import Collector
+from pep848_sim.collector import Collector, find_unreachable
 from pep848_sim.heap import Heap
 
 
@@ -435,6 +435,19 @@ class Workload(RuleBasedStateMachine):
         self.heap.free_cyclic_garbage(members)
 
         assert [x for x in built if not self.heap.is_freed(x)] == []
+
+    @rule()
+    def find_and_free_every_unreachable_object(self) -> None:
+        heap = self.heap
+        alive = [x for x in self.objects if not heap.is_freed(x)]
+        dropped = {x for _, built in self.dropped for x in built}
+
+        found = find_unreachable(heap, alive)
+
+        assert found == [x for x in alive if x in dropped]
+        heap.free_cyclic_garbage(found)
+        self.dropped.clear()
+        assert heap.uncollected_garbage == 0
 
     @invariant()
     def the_count_is_the_alive_objects_the_walk_does_not_reach(self) -> None:
