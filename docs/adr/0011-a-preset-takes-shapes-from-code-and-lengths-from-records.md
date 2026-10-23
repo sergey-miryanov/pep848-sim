@@ -21,7 +21,9 @@ A loop that allocates less than `threshold0` kB between two calls leaves no
 automatic collection to count, so we take its length from the code's counts.
 
 A preset runs for its worker's own length on the clock: start-up, the
-benchmark's loops as many times as the records show, and shutdown. Where the
+benchmark's loops as many times as the records show, and shutdown. The loops
+begin as start-up ends: a repeating structure counts its interval from there,
+so its first build starts the first loop, whatever start-up's length. Where the
 loops leave no count in the records, as json_loads' calls leave none, the
 worker's automatic collections give its length: it ends within `threshold0` kB
 of the last one, and the preset ends halfway. A target of
@@ -55,3 +57,8 @@ we fitted it to.
   create_gc_cycles never ends one.
 - A start-up structure with a fitted share of cycles of its own: it needs a
   new shape, where two structures need none.
+- Repeating structures that count their intervals from the run's start, with a
+  start-up that fills whole intervals, as create_gc_cycles' does:
+  xml_etree_parse's values run 25 MB each, and no start-up fills a whole
+  number of them. An offset for each repeating structure would add a workload
+  parameter for every request to spell out.

@@ -372,8 +372,9 @@ def test_structures_without_an_interval_build_first_and_the_others_wait() -> Non
 
     workload.run_to(30)
 
-    # (structure, first kB, last kB): the repeating one falls due at 0 and at 20.
-    assert workload.builds == [(0, 1, 2), (2, 3, 5), (1, 6, 7), (1, 21, 22)]
+    # (structure, first kB, last kB): the repeating one falls due once the others
+    # have built, at 5, and again at 25.
+    assert workload.builds == [(0, 1, 2), (2, 3, 5), (1, 6, 7), (1, 26, 27)]
 
 
 @given(

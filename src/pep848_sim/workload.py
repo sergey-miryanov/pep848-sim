@@ -203,9 +203,10 @@ class Workload:
     background churn between them.
 
     Structures without a rebuild interval build first, one after another, in the
-    order the parameters list them. A repeating structure falls due at each
-    multiple of its interval and waits for any build under way, so builds never
-    overlap. A structure that asks for full collections gets one before each build
+    order the parameters list them, as a worker starts up. A repeating structure
+    first falls due once they have built, and again each time its interval comes
+    round from there. It waits for any build under way, so builds never overlap.
+    A structure that asks for full collections gets one before each build
     and one after each drop, after the let-gos of the drop's kB."""
 
     def __init__(
@@ -229,13 +230,15 @@ class Workload:
         )
         # The full collections that follow drops, by the clock of their kB.
         self._full_collections: dict[int, int] = {}
-        # Each repeating structure's rebuild interval, and when it next falls due.
+        # Each repeating structure's rebuild interval, and when it next falls due,
+        # counted from the clock the others finish building at.
         self._intervals = {
             i: s.rebuild_interval
             for i, s in enumerate(self._structures)
             if s.rebuild_interval is not None
         }
-        self._due = dict.fromkeys(self._intervals, 0)
+        self._start: int | None = None
+        self._due: dict[int, int] = {}
         # The structures waiting to build, in the order they fell due.
         self._waiting = [
             i for i, s in enumerate(self._structures) if s.rebuild_interval is None
@@ -304,12 +307,18 @@ class Workload:
         """Queue each repeating structure that has fallen due. If its last build is
         still waiting or under way, skip this rebuild."""
         clock = self._heap.clock
+        start = self._start
+        if start is None:
+            if self._waiting or self._current is not None:
+                return
+            self._start = start = clock
+            self._due = dict.fromkeys(self._intervals, clock)
         building = None if self._current is None else self._current[0]
         for i, interval in self._intervals.items():
             if self._due[i] <= clock:
                 if i != building and i not in self._waiting:
                     self._waiting.append(i)
-                self._due[i] = (clock // interval + 1) * interval
+                self._due[i] = start + ((clock - start) // interval + 1) * interval
 
     def _finish(self, i: int, build: Build, first_kb: int) -> None:
         clock = self._heap.clock
@@ -332,9 +341,10 @@ class Workload:
         for i, structure in enumerate(self._structures):
             if not structure.full_collections:
                 continue
-            # A waiting build could start at the next kB; a repeating structure's
+            # A waiting build could start at the next kB, and so could a repeating
+            # structure's first once the others have built. A repeating structure's
             # next build starts no sooner than it falls due.
-            if i in self._waiting:
+            if i in self._waiting or (self._start is None and i in self._intervals):
                 earliest.append(clock)
             if i in self._due:
                 earliest.append(self._due[i])

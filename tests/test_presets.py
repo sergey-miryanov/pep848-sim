@@ -1,11 +1,15 @@
+from itertools import pairwise
+
 import pytest
 
 from benchmarks import Tally, load_data, mock
 from compare_presets import COLLECTORS, run_preset, tally
 from pep848_sim.collectors.collector import Collector, CollectorSettings
+from pep848_sim.collectors.heap import Heap
 from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.collectors.legacy import LegacyCollector
-from pep848_sim.presets import CREATE_GC_CYCLES, JSON_LOADS, PRESETS
+from pep848_sim.presets import CREATE_GC_CYCLES, JSON_LOADS, PRESETS, XML_ETREE_PARSE
+from pep848_sim.workload import Workload
 from test_run import digest
 
 # Placeholder until the rerun's records settle it (#117): how far a preset's yield
@@ -17,6 +21,7 @@ def test_each_preset_is_named_for_its_benchmark() -> None:
     assert {name: preset.benchmark for name, preset in PRESETS.items()} == {
         "create_gc_cycles": "create_gc_cycles",
         "json_loads": "json_loads",
+        "xml_etree_parse": "xml_etree_parse",
     }
 
 
@@ -27,6 +32,8 @@ def test_each_preset_is_named_for_its_benchmark() -> None:
         ("create_gc_cycles", LegacyCollector, "3facc140edae9c35"),
         ("json_loads", IncrementalCollector, "6fafb92dad242ff4"),
         ("json_loads", LegacyCollector, "0b0de830268571c1"),
+        ("xml_etree_parse", IncrementalCollector, "52482d165ce1db17"),
+        ("xml_etree_parse", LegacyCollector, "19f765838ff779b7"),
     ],
 )
 def test_each_presets_records_keep_their_digest(
@@ -83,6 +90,24 @@ def test_json_loads_finds_no_cyclic_garbage_before_shutdown(
     assert [first.kind, second.kind] == ["shutdown", "shutdown"]
     assert first.freed == tree.shape.cyclic_garbage(tree.size)
     assert second.freed == 0
+
+
+def test_xml_etree_parse_builds_a_tree_then_parses_60_in_each_value() -> None:
+    preset = XML_ETREE_PARSE
+    workload = Workload(Heap(LegacyCollector()), preset.workload)
+
+    workload.run_to(preset.run_length)
+
+    # Start-up's two structures, then each of the four values: its own tree, the
+    # third structure, and 60 parses of it, the fourth.
+    built = [i for i, _, _ in workload.builds]
+    assert built == [0, 1, *[2, *[3] * 60] * 4]
+    # Each value ends as the next begins, and the last as the run does.
+    value = preset.workload.structures[2].rebuild_interval
+    assert value is not None
+    starts = [first for i, first, _ in workload.builds if i == 2]
+    assert [b - a for a, b in pairwise(starts)] == [value] * 3
+    assert starts[-1] - 1 + value == preset.run_length
 
 
 @pytest.mark.skipif(mock(), reason="the records in data/ are mock until the rerun")
