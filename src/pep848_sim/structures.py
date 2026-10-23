@@ -48,7 +48,39 @@ class Tree:
         return [(parent, i), (i, parent)]
 
 
-type Shape = Chains | Tree
+@dataclass(frozen=True)
+class Rings:
+    """Rings in a list, as create_gc_cycles builds them: the root, a list, holds
+    each ring's first object, and each object links to the next in its ring and
+    back. A ring closes as its last object, `length` objects in, links back to its
+    first."""
+
+    length: int
+
+    def __post_init__(self) -> None:
+        if self.length < 1:
+            raise ValueError(f"a ring of {self.length} objects holds none")
+
+    def cyclic_garbage(self, size: int) -> int:
+        """How many objects of a dropped structure of this size stay as cyclic
+        garbage: every object of a ring, closed or not, that links both ways with a
+        neighbour or with itself. The list goes on the spot, and so does a last ring
+        cut short at its first object."""
+        objects = max(size - 1, 0)
+        lone = objects % self.length == 1
+        return objects - lone
+
+    def links(self, i: int) -> list[tuple[int, int]]:
+        if not i:
+            return []
+        first = i - (i - 1) % self.length
+        links = [(0, i)] if i == first else [(i - 1, i), (i, i - 1)]
+        if i - first == self.length - 1:
+            links += [(i, first), (first, i)]
+        return links
+
+
+type Shape = Chains | Tree | Rings
 
 
 @dataclass(frozen=True)
