@@ -6,21 +6,21 @@
 import { test } from "node:test";
 // @ts-expect-error: as above.
 import assert from "node:assert/strict";
-import { FADED, ceiling, heap, work } from "../site/panels.js";
+import { FADED, budgetAt, ceiling, collections, heap, heapAt, work, workAt } from "../site/panels.js";
 
 /**
  * A record with the fields a test names, and the rest empty.
  * @param {{
- *   clock?: number, kind?: string, marked?: number, survived?: number, freed?: number,
+ *   clock?: number, kind?: string, marked?: number, survived?: number, freed?: number, workToDo?: number,
  *   before?: number[], after?: number[], reachableBefore?: number, reachableAfter?: number,
  * }} fields
  * @returns {import("../site/runs.js").Record}
  */
 function record({
-  clock = 0, kind = "young", marked = 0, survived = 0, freed = 0,
+  clock = 0, kind = "young", marked = 0, survived = 0, freed = 0, workToDo = 0,
   before = [0, 0, 0], after = [0, 0, 0], reachableBefore = 0, reachableAfter = 0,
 } = {}) {
-  return [clock, kind, marked, survived, freed, 0, 0, before, after, reachableBefore, reachableAfter];
+  return [clock, kind, marked, survived, freed, workToDo, 0, before, after, reachableBefore, reachableAfter];
 }
 
 test("the heap starts empty at clock 0", () => {
@@ -116,4 +116,68 @@ test("a y-scale ends at the next step above its data, with room to spare", () =>
   for (let value = 0.01; value < 1e7; value *= 1.37) {
     assert.ok(ceiling(value) >= value * 1.05, `${ceiling(value)} leaves ${value} no room`);
   }
+});
+
+test("the pointer reads the heap at the nearest collection, before it and after it", () => {
+  const records = [
+    record({ clock: 2000, before: [1500, 300, 4000], after: [0, 1200, 4000], reachableBefore: 3000, reachableAfter: 2800 }),
+    record({ clock: 4000, before: [2000, 1200, 4000], after: [0, 0, 6500], reachableBefore: 5000, reachableAfter: 5000 }),
+  ];
+
+  assert.equal(heapAt([], 2000), null);
+  assert.deepEqual(heapAt(records, 2900), {
+    clock: 2000,
+    kinds: ["young"],
+    before: { heap: 5.8, reachable: 3, garbage: 2.8, spaces: [1.5, 0.3, 4] },
+    after: { heap: 5.2, reachable: 2.8, garbage: 2.4, spaces: [0, 1.2, 4] },
+  });
+  // Halfway between two collections, the earlier.
+  assert.equal(heapAt(records, 3000)?.clock, 2000);
+  assert.equal(heapAt(records, 3001)?.clock, 4000);
+  assert.equal(heapAt(records, 90_000)?.clock, 4000);
+});
+
+test("the pointer reads the heap before the first collection at a clock and after the last", () => {
+  const records = [
+    record({ clock: 9000, kind: "shutdown", before: [0, 0, 7000], after: [0, 0, 3000], reachableBefore: 3000, reachableAfter: 3000 }),
+    record({ clock: 9000, kind: "shutdown", before: [0, 0, 3000], after: [0, 0, 1000], reachableBefore: 1000, reachableAfter: 1000 }),
+  ];
+
+  const at = heapAt(records, 9000);
+
+  assert.deepEqual(at?.kinds, ["shutdown", "shutdown"]);
+  assert.equal(at?.before.heap, 7);
+  assert.equal(at?.after.heap, 1);
+});
+
+test("the pointer reads the budget the nearest collections left", () => {
+  const records = [
+    record({ clock: 2000, workToDo: 500 }),
+    record({ clock: 4000, kind: "old", workToDo: -200 }),
+    record({ clock: 4000, kind: "young", workToDo: 300 }),
+  ];
+
+  assert.equal(budgetAt([], 2000), null);
+  assert.deepEqual(budgetAt(records, 2500), { clock: 2000, kinds: ["young"], budget: 500 });
+  assert.deepEqual(budgetAt(records, 3500), { clock: 4000, kinds: ["old", "young"], budget: 300 });
+});
+
+test("the pointer reads the work of the bin under it, the full collections' apart", () => {
+  const records = [
+    record({ clock: 2000, marked: 10, survived: 5 }),
+    record({ clock: 3000, kind: "full", marked: 100, freed: 20 }),
+    record({ clock: 4001, marked: 7 }),
+  ];
+
+  assert.deepEqual(workAt(records, 4000, 3999), { x1: 0, x2: 4, automatic: [10, 5, 0], full: [100, 0, 20] });
+  assert.deepEqual(workAt(records, 4000, 4000), { x1: 4, x2: 8, automatic: [7, 0, 0], full: [0, 0, 0] });
+  assert.deepEqual(workAt(records, 4000, 9000), { x1: 8, x2: 12, automatic: [0, 0, 0], full: [0, 0, 0] });
+  assert.deepEqual(workAt(records, 4000, -5), { x1: 0, x2: 4, automatic: [10, 5, 0], full: [100, 0, 20] });
+});
+
+test("a tooltip names the collections at its clock by kind", () => {
+  assert.equal(collections(["young"]), "young collection");
+  assert.equal(collections(["shutdown", "shutdown"]), "2 shutdown collections");
+  assert.equal(collections(["old", "young"]), "old and young collections");
+  assert.equal(collections(["full", "young", "young", "old"]), "full, 2 young and old collections");
 });

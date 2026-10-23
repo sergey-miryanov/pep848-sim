@@ -43,6 +43,18 @@ runs stream (ADR 0006), the page draws whatever records have arrived, once an
 animation frame, and each y-scale grows to the next of 1, 1.2, 1.5, 2, 2.5, 3,
 4, 5, 6 and 8 times a power of ten.
 
+Each panel reads its values under the pointer (#115). On the heap panel and
+the work budget, a crosshair snaps to the collection nearest the pointer,
+across all four of the heap's lanes, and a tooltip gives the heap before that
+collection and after it, or the budget it left. On the work panel, an outline
+marks the bar under the pointer, and a tooltip gives its work, the full
+collections' apart from the runtime's own. The widget draws the crosshair, the
+outline and the tooltip in an overlay of its own above Plot's charts, and
+keeps where the pointer rests. A pointer move redraws no chart: it took about
+0.65 ms at 1,028 collections. Each redraw while runs stream draws the overlay
+again from the records so far, so the tooltip holds and its values follow the
+run.
+
 ## Considered Options
 
 - Both collectors overlaid on the same axes: the clearest comparison of the
@@ -60,3 +72,10 @@ animation frame, and each y-scale grows to the next of 1, 1.2, 1.5, 2, 2.5, 3,
   generation's tangled near zero, under the old generation's.
 - Lanes with a y-scale each: the nursery's sawtooth filled its lane, but the
   same height read as 4 MB in one lane and 60 MB in another.
+- Plot's pointer and tip marks in each chart: each pointer move would rebuild
+  every chart, 20 to 65 ms at 600 to 2,000 collections, and Plot's pointer
+  reads one chart, where the heap panel is four.
+- Hover only once both runs finish: the tooltip would go for the seconds each
+  run takes after every slider release.
+- A crosshair at the pointer's own clock: between two collections it would
+  read the straight line drawn between their records, a value no record holds.
