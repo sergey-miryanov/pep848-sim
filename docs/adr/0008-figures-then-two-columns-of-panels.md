@@ -51,12 +51,15 @@ marks the bar under the pointer, and a tooltip gives its work, the full
 collections' apart from the runtime's own. The crosshair and the outline
 follow the pointer at once, and the tooltip waits until the pointer has rested
 350 ms, so a sweep across a panel leaves its plot in view (#143). A move of
-more than 3 px hides the tooltip again, and so does Escape. The widget draws
+more than 3 px hides the tooltip again, and so does Escape. Both runs share
+the allocation clock, so the pointer marks it in every panel of both columns,
+and once it rests, the panel under it shows its tooltip in both, legacy beside
+incremental at the same point in the same allocations (#116). The widget draws
 the crosshair, the outline and the tooltip in an overlay of its own above
 Plot's charts, and keeps where the pointer rests. A pointer move redraws no
-chart: it took about 0.65 ms at 1,028 collections. Each redraw while runs
-stream draws the overlay again from the records so far, so the tooltip holds
-and its values follow the run.
+chart: marking every panel of both columns took about 0.5 ms at 1,028
+collections. Each redraw while runs stream draws the overlay again from the
+records so far, so the tooltip holds and its values follow the run.
 
 ## Considered Options
 
@@ -91,3 +94,5 @@ and its values follow the run.
   compared it with the rest delay and the tooltip at once.
 - A tooltip only while a key is held: no reader would find it, and touch has
   no keys.
+- The crosshair alone in the column the pointer is not in: comparing the two
+  runs at one clock would take a move to the other column and back.
