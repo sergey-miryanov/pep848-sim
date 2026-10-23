@@ -66,7 +66,7 @@ const LANE_HEIGHT = 64;
 const LANE_MARGIN = 12;
 // About how many ticks a lane's y-axis takes.
 const LANE_TICKS = 3;
-// The tallest a bar of work grows.
+// The widest a bar of work grows, in px. A wider bin pads its bar on both sides.
 const BAR = 24;
 // Counts of objects on an axis: 0, 500, 1K, 20K.
 const compact = new Intl.NumberFormat("en", { notation: "compact" }).format;
