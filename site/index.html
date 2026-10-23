@@ -99,6 +99,16 @@ the browser, downloads and starts.</p>
         "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
         "every": 1
       }
+    },
+    {
+      "name": "xml_etree_parse",
+      "title": "xml_etree_parse",
+      "controls": ["workload.structures.3.size"],
+      "request": {
+        "preset": "xml_etree_parse",
+        "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+        "every": 5
+      }
     }
   ]
 }
@@ -170,6 +180,14 @@ early, and its old collections have no work budget to spend. Lower threshold0
 to give it more collections. Until the benchmark runs again under gcmon, the
 start-up heap, the churn that outlives a collection and the run's length are
 placeholders.</p>
+<p>xml_etree_parse models a worker of the xml_etree benchmark's parse task.
+Four times over, it builds a tree of 5,103 elements, then parses it 60 times,
+from a file and from bytes in turn, and each parsed tree replaces the last of
+its kind. No element links back to its parent, so refcounting frees
+each tree as the next replaces it, and a collection that examines a tree finds
+it alive. The slider sets the parsed trees' size. Until the benchmark runs
+again under gcmon, the start-up heap, the churn with its cycles and each
+tree's share of the clock are placeholders.</p>
 
 <h2>More</h2>
 <p><a href="widget.html">The stand-in page</a> holds a second widget, on the

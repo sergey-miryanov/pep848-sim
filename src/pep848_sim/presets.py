@@ -10,7 +10,13 @@ from dataclasses import dataclass
 from fractions import Fraction
 
 from pep848_sim.collectors.collector import CollectorSettings
-from pep848_sim.structures import Chains, Rings, StructureParameters, Tree
+from pep848_sim.structures import (
+    Chains,
+    Hierarchy,
+    Rings,
+    StructureParameters,
+    Tree,
+)
 from pep848_sim.workload import ChurnParameters, WorkloadParameters
 
 
@@ -150,4 +156,74 @@ JSON_LOADS = Preset(
     run_length=(2 * _JSON_LOADS_COLLECTIONS + 1) * CollectorSettings().threshold0 // 2,
 )
 
-PRESETS = {"create_gc_cycles": CREATE_GC_CYCLES, "json_loads": JSON_LOADS}
+
+# xml_etree_parse, in bm_xml_etree, pyperf's --worker-task=0: each value builds a
+# tree of elements, writes it to a file and runs one loop, which parses the file and
+# the tree's bytes 30 times each. Each parse's tree replaces the last of its kind.
+
+# Start-up and imports: the interpreter, pyperf, xml.etree.ElementTree with its C
+# accelerator, and tempfile. Placeholders until the rerun.
+_XML_ETREE_PARSE_START_UP = _StartUp(acyclic=350, cyclic=350, churn=6)
+# Code: 5,103 elements and the dicts of the 53 with attributes, 322 simulated
+# objects (ADR 0002). The root holds 50 children of 100 subchildren each, so 50
+# branches keep the tree two levels deep, as nearly all its elements are, and no
+# element links back to its parent.
+_XML_TREE = 322
+_XML_SHAPE = Hierarchy(branches=50)
+# Placeholder: each tree's slot on the clock, the tree and the parser's other
+# objects: the records' automatic collections over a worker's 244 trees.
+_XML_SLOT = 420
+# Code: a value's own tree and its 60 parses. pyperf runs a warmup and three values
+# a worker, one loop each.
+_XML_VALUE = 61 * _XML_SLOT
+_XML_VALUES = 4
+
+XML_ETREE_PARSE = Preset(
+    benchmark="xml_etree_parse",
+    workload=WorkloadParameters(
+        # Placeholders: the parser's own objects, and the cycles the records' young
+        # collections find, which the code does not show.
+        churn=ChurnParameters(
+            cycle_share=Fraction(1, 50),
+            cycle_size=2,
+            lifetime_mean=4,
+            long_share=Fraction(0),
+            long_lifetimes=(1, 1),
+        ),
+        structures=(
+            *_XML_ETREE_PARSE_START_UP.structures,
+            # Code: build_xml_tree's tree, a local of bench_etree, built as each value
+            # starts and dropped as it ends.
+            StructureParameters(
+                shape=_XML_SHAPE,
+                size=_XML_TREE,
+                root="frame",
+                lifetime=_XML_VALUE - _XML_TREE,
+                rebuild_interval=_XML_VALUE,
+                build_churn=0,
+            ),
+            # Code: the parsed trees, from the file and from the bytes in turn, each
+            # dropped as the next of its kind, the next build but one, is built. A
+            # value's first parse waits for its own tree and runs into the next
+            # slot, which it takes, so a value parses 60.
+            StructureParameters(
+                shape=_XML_SHAPE,
+                size=_XML_TREE,
+                root="frame",
+                lifetime=2 * _XML_SLOT,
+                rebuild_interval=_XML_SLOT,
+                build_churn=0,
+            ),
+        ),
+        seed=848,
+        shutdown=True,
+    ),
+    # The worker's own length: start-up, then its values.
+    run_length=_XML_ETREE_PARSE_START_UP.length + _XML_VALUES * _XML_VALUE,
+)
+
+PRESETS = {
+    "create_gc_cycles": CREATE_GC_CYCLES,
+    "json_loads": JSON_LOADS,
+    "xml_etree_parse": XML_ETREE_PARSE,
+}
