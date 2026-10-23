@@ -6,6 +6,11 @@
 // budget, on y-scales the two columns share. Above the figures it shows the
 // controls its `controls` attribute names, and releasing one asks for both runs
 // again.
+//
+// The JSON can list entries in place of one request, each with a name, a title,
+// its own request and its own controls. The widget then shows a select of their
+// titles and runs one entry at a time, and the URL fragment names the entry each
+// widget shows, as widget-id=entry-name pairs.
 
 // @ts-expect-error: an editor cannot fetch Plot's types from jsDelivr.
 import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+esm";
@@ -15,6 +20,11 @@ import { requestRuns } from "./runs.js";
 /** @typedef {import("./runs.js").Figures} Figures */
 /** @typedef {import("./runs.js").Control} Control */
 /** @typedef {"legacy" | "incremental"} Collector */
+/**
+ * A workload a widget offers: its name in the URL fragment, its title in the
+ * select, its request as the controls have set it, and the paths of its controls.
+ * @typedef {{ name: string, title: string, request: any, controls: string[] }} Entry
+ */
 
 /** @type {Collector[]} */
 const COLLECTORS = ["legacy", "incremental"];
@@ -99,6 +109,28 @@ function assign(/** @type {any} */ request, /** @type {string} */ path, /** @typ
   keys.reduce((object, key) => object[key], request)[last] = value;
 }
 
+/**
+ * The entries a widget's JSON offers: the ones it lists, or else the one request
+ * it holds, with the controls the widget's `controls` attribute names.
+ * @param {any} json
+ * @param {string | null} controls
+ * @returns {Entry[]}
+ */
+function entriesOf(json, controls) {
+  if (!("entries" in json)) {
+    return [{ name: "", title: "", request: json, controls: (controls ?? "").split(/\s+/).filter(Boolean) }];
+  }
+  /** @type {Entry[]} */
+  const entries = json.entries;
+  if (!entries.length) throw new Error("The widget lists no entries.");
+  const names = entries.map((entry) => entry.name);
+  if (new Set(names).size < names.length) throw new Error("The widget lists two entries under one name.");
+  return entries.map(({ name, title, request, controls = [] }) => ({ name, title, request, controls }));
+}
+
+/** The URL fragment's pairs of a widget's id and the name of the entry it shows. */
+const fragment = () => new URLSearchParams(location.hash.slice(1));
+
 /** The y-scale's end for data that reaches `value`, with room above it. */
 function ceiling(/** @type {number} */ value) {
   const room = value * 1.05;
@@ -150,7 +182,11 @@ const TEMPLATE = `
       --freed: #e66767;
     }
   }
+  .entries { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; font-size: 13px; color: var(--text-secondary); }
+  .entries select { font: inherit; color: var(--text-primary); background: var(--surface); }
   .controls { display: flex; flex-wrap: wrap; gap: 12px 32px; margin: 0 0 24px; }
+  /* Their display would otherwise outrank the hidden attribute's. */
+  .entries[hidden], .controls[hidden] { display: none; }
   .control { display: grid; gap: 4px; width: 200px; font-size: 13px; color: var(--text-secondary); }
   .control .name { display: flex; justify-content: space-between; gap: 8px; }
   .control output { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -171,6 +207,7 @@ const TEMPLATE = `
   .error { color: var(--text-primary); }
 </style>
 <p class="error" hidden></p>
+<label class="entries" hidden>Workload <select></select></label>
 <div class="controls" hidden></div>
 <dl class="figures"></dl>
 <div class="columns">
@@ -209,16 +246,16 @@ class GcWidget extends HTMLElement {
   /** Where each figure shows each run's value. */
   /** @type {{ legacy: HTMLElement, incremental: HTMLElement }[]} */
   #values = [];
-  /** The request as the controls have set it. */
-  /** @type {any} */
-  #request = null;
+  /** The workloads the widget offers, each with its request as the controls have set it. */
+  /** @type {Entry[]} */
+  #entries = [];
+  /** The entry the widget shows. */
+  /** @type {Entry | null} */
+  #entry = null;
   /** The request whose records the charts show, until a newer one's first records arrive. */
   /** @type {any} */
   #drawn = null;
   #name = "";
-  /** The paths into the request of the controls the page names. */
-  /** @type {string[]} */
-  #paths = [];
   /** Each control's slider, by path, and whether the reader is moving it. */
   /** @type {Map<string, { input: HTMLInputElement, read: (value: number) => void, moving: boolean }>} */
   #sliders = new Map();
@@ -228,10 +265,17 @@ class GcWidget extends HTMLElement {
     if (this.shadowRoot) return;
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = TEMPLATE;
+    let json;
     try {
-      this.#request = JSON.parse(this.querySelector('script[type="application/json"]')?.textContent ?? "");
+      json = JSON.parse(this.querySelector('script[type="application/json"]')?.textContent ?? "");
     } catch (error) {
       this.#fail(`The widget's request is not JSON: ${error}`);
+      return;
+    }
+    try {
+      this.#entries = entriesOf(json, this.getAttribute("controls"));
+    } catch (error) {
+      this.#fail(String(error instanceof Error ? error.message : error));
       return;
     }
     const row = /** @type {HTMLElement} */ (root.querySelector(".figures"));
@@ -267,11 +311,48 @@ class GcWidget extends HTMLElement {
         ...PARTS.map((part) => key(part, `var(--${part})`)),
       );
     }
-    this.#drawn = this.#request;
     this.#name = this.id || `gc-widget-${widgets++}`;
-    this.#paths = (this.getAttribute("controls") ?? "").split(/\s+/).filter(Boolean);
+    if (this.#entries.length > 1) {
+      const label = /** @type {HTMLElement} */ (root.querySelector(".entries"));
+      const select = /** @type {HTMLSelectElement} */ (label.querySelector("select"));
+      select.append(...this.#entries.map(({ name, title }) => new Option(title, name)));
+      label.hidden = false;
+      select.addEventListener("change", () => this.#choose(select.value, true));
+      addEventListener("hashchange", () => this.#choose(fragment().get(this.id) ?? "", false));
+    }
     new ResizeObserver(() => this.#schedule()).observe(this);
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.#schedule());
+    this.#choose(fragment().get(this.id) ?? "", false);
+  }
+
+  /**
+   * Show the entry of that name, or the first if the widget offers none by it, and
+   * start its runs. The last entry's controls, figures and charts go at once, and
+   * its request keeps the values its controls set, for when it is shown again.
+   * @param {string} name
+   * @param {boolean} picked whether the reader picked it, which the URL fragment
+   *   then records
+   */
+  #choose(name, picked) {
+    const entry = this.#entries.find((offered) => offered.name === name) ?? this.#entries[0];
+    if (entry === this.#entry) return;
+    this.#entry = entry;
+    const root = /** @type {ShadowRoot} */ (this.shadowRoot);
+    /** @type {HTMLSelectElement} */ (root.querySelector(".entries select")).value = entry.name;
+    if (picked && this.id) {
+      const pairs = fragment();
+      pairs.set(this.id, entry.name);
+      history.replaceState(null, "", `#${pairs}`);
+    }
+    const row = /** @type {HTMLElement} */ (root.querySelector(".controls"));
+    row.replaceChildren();
+    row.hidden = true;
+    this.#sliders.clear();
+    for (const chart of root.querySelectorAll(".chart")) chart.replaceChildren();
+    this.#records = { legacy: [], incremental: [] };
+    this.#figures = {};
+    this.#drawn = entry.request;
+    this.#schedule();
     this.#start();
   }
 
@@ -281,7 +362,8 @@ class GcWidget extends HTMLElement {
    * records arrive.
    */
   #start() {
-    let request = structuredClone(this.#request);
+    const entry = /** @type {Entry} */ (this.#entry);
+    let request = structuredClone(entry.request);
     let fresh = true;
     /** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".error")).hidden = true;
     requestRuns(this.#name, request, {
@@ -290,7 +372,7 @@ class GcWidget extends HTMLElement {
         // workload and run length, which the controls edit from then on.
         if ("preset" in request) {
           request = expanded;
-          this.#request = structuredClone(expanded);
+          entry.request = structuredClone(expanded);
           if ("preset" in this.#drawn) this.#drawn = request;
         }
         this.#show(controls);
@@ -308,7 +390,7 @@ class GcWidget extends HTMLElement {
       },
       done: () => {},
       error: (message) => this.#fail(message),
-    }, this.#paths);
+    }, entry.controls);
   }
 
   /** Show each control with the range its request allows. */
@@ -345,7 +427,7 @@ class GcWidget extends HTMLElement {
         });
         input.addEventListener("change", () => {
           made.moving = false;
-          assign(this.#request, path, held(unit, Number(input.value)));
+          assign(/** @type {Entry} */ (this.#entry).request, path, held(unit, Number(input.value)));
           this.#start();
         });
         slider = made;

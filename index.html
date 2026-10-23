@@ -43,33 +43,54 @@
 <p><a href="https://peps.python.org/pep-0848/">PEP 848</a> proposes a
 generational incremental cycle collector for CPython. This page runs a small
 Python simulator of it, and of the legacy collector beside it, in your
-browser: each widget below runs one workload under both collectors and draws
-what each does. A guide built on such widgets comes later.</p>
+browser: the widget below runs the workload you pick under both collectors
+and draws what each does. A guide built on such widgets comes later.</p>
 <p>The first runs wait a few seconds while Pyodide, the Python that runs in
 the browser, downloads and starts.</p>
 
-<gc-widget id="home-widget" controls="settings.threshold0 workload.churn.cycle_share workload.churn.lifetime_mean workload.structures.1.size workload.structures.1.rebuild_interval">
+<gc-widget id="home-widget">
 <script type="application/json">
 {
-  "workload": {
-    "churn": {
-      "cycle_share": "3/100", "cycle_size": 3, "lifetime_mean": 5,
-      "long_share": "1/20", "long_lifetimes": [100, 1000]
+  "entries": [
+    {
+      "name": "stand-in",
+      "title": "Stand-in",
+      "controls": ["settings.threshold0", "workload.churn.cycle_share",
+                   "workload.churn.lifetime_mean", "workload.structures.1.size",
+                   "workload.structures.1.rebuild_interval"],
+      "request": {
+        "workload": {
+          "churn": {
+            "cycle_share": "3/100", "cycle_size": 3, "lifetime_mean": 5,
+            "long_share": "1/20", "long_lifetimes": [100, 1000]
+          },
+          "structures": [
+            {"shape": {"chains": 16}, "size": 8000, "root": "module",
+             "lifetime": null, "rebuild_interval": null, "build_churn": 0,
+             "full_collections": false},
+            {"shape": "tree", "size": 20000, "root": "frame",
+             "lifetime": 40000, "rebuild_interval": 80000, "build_churn": 1,
+             "full_collections": false}
+          ],
+          "seed": 848,
+          "shutdown": false
+        },
+        "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+        "run_length": 150000,
+        "every": 5
+      }
     },
-    "structures": [
-      {"shape": {"chains": 16}, "size": 8000, "root": "module",
-       "lifetime": null, "rebuild_interval": null, "build_churn": 0,
-       "full_collections": false},
-      {"shape": "tree", "size": 20000, "root": "frame",
-       "lifetime": 40000, "rebuild_interval": 80000, "build_churn": 1,
-       "full_collections": false}
-    ],
-    "seed": 848,
-    "shutdown": false
-  },
-  "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
-  "run_length": 150000,
-  "every": 5
+    {
+      "name": "create_gc_cycles",
+      "title": "create_gc_cycles",
+      "controls": ["workload.structures.2.size"],
+      "request": {
+        "preset": "create_gc_cycles",
+        "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+        "every": 20
+      }
+    }
+  ]
 }
 </script>
 </gc-widget>
@@ -80,6 +101,10 @@ on the left, the incremental collector on the right. Each simulated object
 stands for 1 kB of real objects, and the allocation clock along the bottom
 counts the MB a run has allocated.</p>
 <dl>
+<dt>Workload</dt>
+<dd>Pick the workload both runs share. Each keeps the values you gave its
+controls while the page stays open, and the page's address names the one
+shown, so a link opens it.</dd>
 <dt>Controls</dt>
 <dd>Move a slider to pick a value, and release it to run both collectors
 again with it.</dd>
@@ -104,14 +129,12 @@ the PEP. Young collections add to it and old collections spend it; at zero
 or below, old collections do no work until young ones raise it again.</dd>
 </dl>
 
-<h2>The workload</h2>
-<p>The widget above runs a stand-in workload: 8 MB of module globals, a 20 MB
-tree rebuilt every 80 MB, and churn with 3% of its allocations in cycles.
-Presets will replace it, each modelled on a pyperformance benchmark and
-checked against that benchmark's yield. The guide comes after them.</p>
-
-<h2>The first preset</h2>
-<p>This widget runs create_gc_cycles, which models one worker of the
+<h2>The workloads</h2>
+<p>The stand-in has 8 MB of module globals, a 20 MB tree rebuilt every 80 MB,
+and churn with 3% of its allocations in cycles. Presets will replace it, each
+modelled on a pyperformance benchmark and checked against that benchmark's
+yield. The guide comes after them.</p>
+<p>create_gc_cycles, the first preset, models one worker of the
 pyperformance benchmark of that name. After start-up, each of its 512 loops
 calls <code>gc.collect()</code>, builds 100 rings of 21 objects, drops them
 and calls <code>gc.collect()</code> again, and shutdown ends the run. The
@@ -120,16 +143,6 @@ starts none of its own once the loops begin. The charts don't yet tell those
 calls apart from the collections the runtime starts. Until the benchmark runs
 again under gcmon, the start-up heap, the churn and the number of loops are
 placeholders.</p>
-
-<gc-widget id="preset-widget" controls="workload.structures.2.size">
-<script type="application/json">
-{
-  "preset": "create_gc_cycles",
-  "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
-  "every": 20
-}
-</script>
-</gc-widget>
 
 <h2>More</h2>
 <p><a href="widget.html">The stand-in page</a> holds a second widget, on the
