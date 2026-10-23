@@ -14,12 +14,13 @@
 
 // @ts-expect-error: an editor cannot fetch Plot's types from jsDelivr.
 import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+esm";
+import { CLOCK, FADED, FULL, KIND, LANES, PARTS, SPACES, WORK_TO_DO, ceiling, heap, work } from "./panels.js";
 import { requestRuns } from "./runs.js";
 
 /** @typedef {import("./runs.js").Record} Record */
 /** @typedef {import("./runs.js").Figures} Figures */
 /** @typedef {import("./runs.js").Control} Control */
-/** @typedef {"legacy" | "incremental"} Collector */
+/** @typedef {import("./panels.js").Collector} Collector */
 /**
  * A workload a widget offers: its name in the URL fragment, its title in the
  * select, its request as the controls have set it, and the paths of its controls.
@@ -29,35 +30,12 @@ import { requestRuns } from "./runs.js";
 /** @type {Collector[]} */
 const COLLECTORS = ["legacy", "incremental"];
 const TITLES = { legacy: "Legacy collector", incremental: "Incremental collector" };
-// Each collector's spaces in the order its records hold them.
-const SPACES = {
-  legacy: ["nursery", "aging", "old"],
-  incremental: ["nursery", "aging", "pending", "visited"],
-};
-// The heap panel's lanes below the whole heap's, each with the spaces it stacks:
-// the incremental collector's old generation is two.
-const LANES = {
-  legacy: [["nursery"], ["aging"], ["old"]],
-  incremental: [["nursery"], ["aging"], ["pending", "visited"]],
-};
-const PARTS = ["marked", "survived", "freed"];
-// The fields of a record, by position.
-const CLOCK = 0, KIND = 1, MARKED = 2, WORK_TO_DO = 5;
-const SPACES_BEFORE = 7, SPACES_AFTER = 8, REACHABLE_BEFORE = 9, REACHABLE_AFTER = 10;
-
-// The kinds of a full collection's record: the workload's gc.collect() calls,
-// and shutdown's two (ADR 0012).
-const FULL = ["full", "shutdown"];
-// How opaque a full collection's work stands beside the runtime's own collections'.
-const FADED = 0.45;
 // How far below the top lane's baseline, in px, a tick at each gc.collect()
 // reaches: into the margin, clear of the heap.
 const TICK = 6;
 
 // About this many bins of work a run, each a whole number of collection intervals.
 const BINS = 40;
-// Each y-scale grows to the next of these times a power of ten (ADR 0008).
-const STEPS = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
 const HEIGHTS = { work: 160, budget: 130 };
 const MARGINS = { marginLeft: 48, marginRight: 72, marginTop: 16, marginBottom: 32 };
 // A lane of the heap panel: its plot, without its margins, and the margin above
@@ -139,14 +117,6 @@ function entriesOf(json, controls) {
 
 /** The URL fragment's pairs of a widget's id and the name of the entry it shows. */
 const fragment = () => new URLSearchParams(location.hash.slice(1));
-
-/** The y-scale's end for data that reaches `value`, with room above it. */
-function ceiling(/** @type {number} */ value) {
-  const room = value * 1.05;
-  if (room <= 0) return 1;
-  const power = 10 ** Math.floor(Math.log10(room));
-  return STEPS.map((step) => step * power).find((end) => end >= room) ?? 10 * power;
-}
 
 // The colors come from the dataviz skill's reference palette, assigned so that
 // neighbors in each stack pass its validator in both modes.
@@ -628,71 +598,6 @@ class GcWidget extends HTMLElement {
 /** Put freshly drawn charts in their panel, in place of the ones before. */
 function chart(/** @type {HTMLElement} */ column, /** @type {string} */ panel, /** @type {Element[]} */ ...svgs) {
   /** @type {HTMLElement} */ (column.querySelector(`[data-panel="${panel}"] .chart`)).replaceChildren(...svgs);
-}
-
-/**
- * The heap panel's data: each record reads the heap before its collection and
- * after it, at the same clock (ADR 0010), so each lane rises between collections
- * and drops at each. The run starts from an empty heap. `whole` is the whole
- * heap and its reachable part, and `lanes` the bands each lane below it stacks.
- * @param {Collector} collector
- * @param {Record[]} records
- */
-function heap(collector, records) {
-  const names = SPACES[collector];
-  const points = [{ mb: 0, sizes: names.map(() => 0), reachable: 0 }];
-  for (const record of records) {
-    const mb = record[CLOCK] / 1000;
-    points.push(
-      { mb, sizes: record[SPACES_BEFORE], reachable: record[REACHABLE_BEFORE] / 1000 },
-      { mb, sizes: record[SPACES_AFTER], reachable: record[REACHABLE_AFTER] / 1000 },
-    );
-  }
-  const whole = points.map(({ mb, sizes, reachable }) => ({ mb, heap: sizes.reduce((sum, size) => sum + size, 0) / 1000, reachable }));
-  const lanes = LANES[collector].map((spaces) => points.flatMap((point) => {
-    let y = 0;
-    return spaces.map((space) => {
-      const y1 = y;
-      y += point.sizes[names.indexOf(space)] / 1000;
-      return { mb: point.mb, space, y1, y2: y };
-    });
-  }));
-  return { whole, lanes };
-}
-
-/**
- * The work panel's data: each bin's work, stacked as marked, survived and freed,
- * the runtime's own collections' first and the full collections' faded above
- * them. A collection falls in the bin of the kB it ran after: an automatic one
- * ends the threshold0 kB it covers, a full one the kB the workload called it in.
- * @param {Record[]} records
- * @param {number} binKb
- */
-function work(records, binKb) {
-  /** @type {Map<number, number[]>} */
-  const bins = new Map();
-  for (const record of records) {
-    // A gc.collect() can come before the first allocation, at clock 0.
-    const bin = Math.max(0, Math.floor((record[CLOCK] - 1) / binKb));
-    const sums = bins.get(bin) ?? [0, 0, 0, 0, 0, 0];
-    const first = FULL.includes(/** @type {string} */ (record[KIND])) ? PARTS.length : 0;
-    for (let part = 0; part < PARTS.length; part++) sums[first + part] += /** @type {number} */ (record[MARKED + part]);
-    bins.set(bin, sums);
-  }
-  return [...bins].flatMap(([bin, sums]) => {
-    const top = sums.findLastIndex((sum) => sum > 0);
-    let y = 0;
-    return sums.flatMap((sum, i) => {
-      if (!sum) return [];
-      const y1 = y;
-      y += sum;
-      const faded = i >= PARTS.length;
-      return [{
-        x1: (bin * binKb) / 1000, x2: ((bin + 1) * binKb) / 1000, y1, y2: y,
-        part: PARTS[i % PARTS.length], opacity: faded ? FADED : 1, top: i === top,
-      }];
-    });
-  });
 }
 
 /** Mark a legend entry as one for full collections, hidden until a run makes some. */
