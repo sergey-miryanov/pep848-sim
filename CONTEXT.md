@@ -21,13 +21,19 @@ it allocates, how it links objects, and when it lets go of them.
 _Avoid_: benchmark, program, test case
 
 **Preset**:
-A named workload with every workload parameter chosen by hand to model the
-code of a pyperformance benchmark. Every preset has a benchmark behind it:
-there are no made-up workloads. Each carries its own seed and a run length
-chosen by hand, which aims at about three sweeps and stops sooner when sweeps
-run long.
+A named workload with every workload parameter chosen by hand to model one
+worker of a pyperformance benchmark, from interpreter start-up to shutdown.
+Every preset has a benchmark behind it: there are no made-up workloads. Each
+carries its own seed and a run length chosen by hand, which aims at about
+three sweeps and stops sooner when sweeps run long.
 _Avoid_: benchmark (that is the real program it is modelled on), scenario,
 example, template
+
+**Worker**:
+One process pyperf starts to run a benchmark: interpreter start-up, imports,
+the benchmark's loops, and shutdown with its full collections. gcmon records
+each worker's collections, and a preset models one worker.
+_Avoid_: process (bare), run (that is the simulator's), job
 
 **Workload parameter**:
 One knob that shapes a workload: the churn's fate mix, cycle size and
