@@ -26,9 +26,10 @@
 
 /**
  * What a widget hears about its runs: the controls it asked for, with the ranges
- * the request allows, then each part of a run, with its figures so far.
+ * the request allows and the request with any preset it names spelled out, then
+ * each part of a run, with its figures so far.
  * @typedef {{
- *   controls?: (controls: Control[]) => void,
+ *   controls?: (controls: Control[], request: any) => void,
  *   records: (collector: "legacy" | "incremental", records: Record[], figures: Figures) => void,
  *   done: () => void,
  *   error: (message: string) => void,
@@ -48,7 +49,7 @@ let nextId = 0;
 worker.onmessage = (/** @type {MessageEvent} */ { data }) => {
   const listener = listeners.get(data.id);
   if (!listener) return;
-  if (data.kind === "controls") listener.controls?.(data.controls);
+  if (data.kind === "controls") listener.controls?.(data.controls, JSON.parse(data.request));
   else if (data.kind === "records") listener.records(data.collector, data.records, data.figures);
   else {
     listeners.delete(data.id);
