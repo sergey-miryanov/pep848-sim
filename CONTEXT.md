@@ -183,8 +183,8 @@ _Avoid_: existing, allocated (that is the act of making it)
 ### What readers see
 
 **Widget**:
-One embedding of the simulator on a page: a preset, the controls a reader may
-change, and the charts of the runs it makes.
+One embedding of the simulator on a page: one preset or a choice of several,
+the controls a reader may change for each, and the charts of the runs it makes.
 _Avoid_: demo, applet, visualization, simulator (that is what it runs)
 
 **Control**:
