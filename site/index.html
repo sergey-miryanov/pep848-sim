@@ -109,6 +109,16 @@ the browser, downloads and starts.</p>
         "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
         "every": 5
       }
+    },
+    {
+      "name": "async_tree_io_tg",
+      "title": "async_tree_io_tg",
+      "controls": ["workload.structures.2.size"],
+      "request": {
+        "preset": "async_tree_io_tg",
+        "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+        "every": 10
+      }
     }
   ]
 }
@@ -188,6 +198,16 @@ each tree as the next replaces it, and a collection that examines a tree finds
 it alive. The slider sets the parsed trees' size. Until the benchmark runs
 again under gcmon, the start-up heap, the churn with its cycles and each
 tree's share of the clock are placeholders.</p>
+<p>async_tree_io_tg models a worker of the benchmark of that name. Four times
+over, it starts a tree of 55,987 asyncio tasks, six levels of six under the
+root, each level under a <code>TaskGroup</code>, and each leaf sleeps 50 ms.
+No task links back to the one that started it, so refcounting frees the tree
+as the run ends, and the collections find no cyclic garbage before shutdown.
+Here the incremental collector's peak work passes the legacy collector's: an
+old collection takes all of the tree in the pending space as one increment,
+since the tree's root reaches it all. Until the benchmark runs again under
+gcmon, the start-up heap, the churn, the tree's size and each run's length are
+placeholders.</p>
 
 <h2>More</h2>
 <p><a href="widget.html">The stand-in page</a> holds a second widget, on the

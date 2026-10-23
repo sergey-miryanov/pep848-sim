@@ -222,8 +222,65 @@ XML_ETREE_PARSE = Preset(
     run_length=_XML_ETREE_PARSE_START_UP.length + _XML_VALUES * _XML_VALUE,
 )
 
+
+# async_tree_io_tg, in bm_async_tree with "io --task-groups": each run starts a tree
+# of asyncio tasks six levels deep, each level's six under a TaskGroup of its
+# parent's, and each leaf sleeps 50 ms. A task goes as it finishes, and the whole
+# tree by the run's end.
+
+# Start-up and imports: the interpreter, pyperf and asyncio. Placeholders until the
+# rerun.
+_ASYNC_TREE_IO_TG_START_UP = _StartUp(acyclic=350, cyclic=350, churn=6)
+# Code: the root task and six levels of six branches under it.
+_TASKS = sum(6**level for level in range(7))
+# Placeholder: real objects to a task, with its coroutine, its group and its sleep's
+# future and timer handle: the records' peak heap over the tasks.
+_REAL_PER_TASK = 15
+# Placeholder: a run's length on the clock, the records' automatic collections over
+# the worker's four runs.
+_ASYNC_RUN = 130_000
+# Placeholder: the event loop's churn after each task it starts.
+_ASYNC_BUILD_CHURN = 1
+_ASYNC_TREE = _TASKS * _REAL_PER_TASK // 16
+# pyperf runs a warmup and three values a worker, one loop each.
+_ASYNC_RUNS = 4
+
+ASYNC_TREE_IO_TG = Preset(
+    benchmark="async_tree_io_tg",
+    workload=WorkloadParameters(
+        # Placeholders: the event loop's handles and callbacks, in which the
+        # records' collections find almost no cycles.
+        churn=ChurnParameters(
+            cycle_share=Fraction(0),
+            cycle_size=1,
+            lifetime_mean=4,
+            long_share=Fraction(0),
+            long_lifetimes=(1, 1),
+        ),
+        structures=(
+            *_ASYNC_TREE_IO_TG_START_UP.structures,
+            # Code: the task tree, built a level at a time as asyncio runs each
+            # task after the one that started it. No task links back to its parent,
+            # so refcounting frees the tree as the run ends.
+            StructureParameters(
+                shape=Hierarchy(branches=6),
+                size=_ASYNC_TREE,
+                root="frame",
+                lifetime=_ASYNC_RUN - _ASYNC_TREE * (1 + _ASYNC_BUILD_CHURN),
+                rebuild_interval=_ASYNC_RUN,
+                build_churn=_ASYNC_BUILD_CHURN,
+            ),
+        ),
+        seed=848,
+        shutdown=True,
+    ),
+    # The worker's own length: start-up, then its runs.
+    run_length=_ASYNC_TREE_IO_TG_START_UP.length + _ASYNC_RUNS * _ASYNC_RUN,
+)
+
 PRESETS = {
     "create_gc_cycles": CREATE_GC_CYCLES,
     "json_loads": JSON_LOADS,
     "xml_etree_parse": XML_ETREE_PARSE,
+    "async_tree_io_tg": ASYNC_TREE_IO_TG,
 }
