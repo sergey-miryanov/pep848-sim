@@ -8,8 +8,8 @@ and a guide and a playground let you change the workload and the
 
 The site, <https://sergey-miryanov.github.io/pep848-sim/>, runs one widget
 whose select offers a stand-in workload and the first presets,
-create_gc_cycles, json_loads and xml_etree_parse. More presets modelled on
-pyperformance benchmarks come next, then the guide.
+create_gc_cycles, json_loads, xml_etree_parse and async_tree_io_tg. More
+presets modelled on pyperformance benchmarks come next, then the guide.
 
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): how to set up, run and publish
 - [`CONTEXT.md`](CONTEXT.md): the vocabulary

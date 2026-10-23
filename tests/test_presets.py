@@ -8,7 +8,13 @@ from pep848_sim.collectors.collector import Collector, CollectorSettings
 from pep848_sim.collectors.heap import Heap
 from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.collectors.legacy import LegacyCollector
-from pep848_sim.presets import CREATE_GC_CYCLES, JSON_LOADS, PRESETS, XML_ETREE_PARSE
+from pep848_sim.presets import (
+    ASYNC_TREE_IO_TG,
+    CREATE_GC_CYCLES,
+    JSON_LOADS,
+    PRESETS,
+    XML_ETREE_PARSE,
+)
 from pep848_sim.workload import Workload
 from test_run import digest
 
@@ -22,6 +28,7 @@ def test_each_preset_is_named_for_its_benchmark() -> None:
         "create_gc_cycles": "create_gc_cycles",
         "json_loads": "json_loads",
         "xml_etree_parse": "xml_etree_parse",
+        "async_tree_io_tg": "async_tree_io_tg",
     }
 
 
@@ -34,6 +41,8 @@ def test_each_preset_is_named_for_its_benchmark() -> None:
         ("json_loads", LegacyCollector, "0b0de830268571c1"),
         ("xml_etree_parse", IncrementalCollector, "52482d165ce1db17"),
         ("xml_etree_parse", LegacyCollector, "19f765838ff779b7"),
+        ("async_tree_io_tg", IncrementalCollector, "bf999cc59d2cdeec"),
+        ("async_tree_io_tg", LegacyCollector, "229fe4e864440024"),
     ],
 )
 def test_each_presets_records_keep_their_digest(
@@ -108,6 +117,34 @@ def test_xml_etree_parse_builds_a_tree_then_parses_60_in_each_value() -> None:
     starts = [first for i, first, _ in workload.builds if i == 2]
     assert [b - a for a, b in pairwise(starts)] == [value] * 3
     assert starts[-1] - 1 + value == preset.run_length
+
+
+def test_async_tree_io_tg_drops_each_runs_tree_as_the_next_run_starts() -> None:
+    preset = ASYNC_TREE_IO_TG
+    tree = preset.workload.structures[2]
+    assert tree.lifetime is not None
+    workload = Workload(Heap(LegacyCollector()), preset.workload)
+
+    workload.run_to(preset.run_length)
+
+    # Start-up's two structures, then the tree once a run, four times.
+    assert [i for i, _, _ in workload.builds] == [0, 1, *[2] * 4]
+    # Each run's tree goes as the next run starts, and the last as the worker ends.
+    trees = [(first, last) for i, first, last in workload.builds if i == 2]
+    drops = [last + tree.lifetime for _, last in trees]
+    assert drops == [*(first - 1 for first, _ in trees[1:]), preset.run_length]
+
+
+@pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
+def test_async_tree_io_tg_finds_no_cyclic_garbage_before_shutdown(
+    collector: type[Collector],
+) -> None:
+    *automatic, first, second = run_preset(ASYNC_TREE_IO_TG, collector)
+
+    # Refcounting frees each tree, and nothing calls gc.collect().
+    assert {record.kind for record in automatic}.isdisjoint({"full", "shutdown"})
+    assert all(record.freed == 0 for record in automatic)
+    assert [first.kind, second.kind] == ["shutdown", "shutdown"]
 
 
 @pytest.mark.skipif(mock(), reason="the records in data/ are mock until the rerun")
