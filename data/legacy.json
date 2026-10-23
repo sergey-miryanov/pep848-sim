@@ -1,0 +1,14 @@
+{
+  "mock": true,
+  "collector": "legacy",
+  "commit": null,
+  "thresholds": [
+    2000,
+    10,
+    10
+  ],
+  "gcmon": null,
+  "pyperformance": null,
+  "date": null,
+  "trace_sha256": null
+}
