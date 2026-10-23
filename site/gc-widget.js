@@ -52,6 +52,16 @@ const BAR = 24;
 // past a chart's plot the pointer still reads it.
 const GAP = 12;
 const SLACK = 4;
+
+// PROTOTYPE, not for main: three ways to show what a panel reads under the
+// pointer, picked by ?variant= in the page's address (prototype-switcher.js).
+// A: the tooltip once the pointer rests. B: the values in the legend row and
+// caption, no tooltip. C: the tooltip at once, as on main.
+const variant = () => new URLSearchParams(location.search).get("variant") ?? "A";
+// How long, in ms, the pointer rests before variant A shows the tooltip, and how
+// far, in px, it can drift then before the tooltip goes.
+const DWELL = 350;
+const DRIFT = 3;
 // Counts of objects on an axis: 0, 500, 1K, 20K.
 const compact = new Intl.NumberFormat("en", { notation: "compact" }).format;
 
@@ -207,6 +217,11 @@ const TEMPLATE = `
   .tip th { padding: 0; font-weight: 400; text-align: left; color: var(--text-secondary); }
   .tip thead th:not(:first-child) { text-align: right; padding-left: 12px; }
   .tip td { padding: 0 0 0 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+  /* PROTOTYPE: variant B's readings, and two lines kept for a legend, so that its
+     readings never push the charts down under the pointer. */
+  .reading { margin-left: 4px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+  .where { font-weight: 400; color: var(--text-secondary); }
+  :host([data-variant="B"]) .legend { min-height: 36px; align-content: flex-start; }
   .error { color: var(--text-primary); }
 </style>
 <p class="error" hidden></p>
@@ -232,6 +247,7 @@ const TEMPLATE = `
 /** A legend entry: a swatch for a fill, a short stroke for a line. */
 function key(/** @type {string} */ name, /** @type {string} */ color, line = false) {
   const entry = document.createElement("span");
+  entry.dataset.name = name;
   const swatch = document.createElement("span");
   swatch.className = line ? "key line" : "key";
   swatch.style.background = color;
@@ -269,6 +285,11 @@ class GcWidget extends HTMLElement {
   /** The panel under the pointer, and where in it the pointer rests, in px. */
   /** @type {{ collector: Collector, panel: string, x: number, y: number } | null} */
   #pointer = null;
+  /** PROTOTYPE: where the pointer came to rest, for variant A, and the timer that waits for it. */
+  /** @type {{ x: number, y: number } | null} */
+  #rested = null;
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  #dwell = undefined;
 
   connectedCallback() {
     if (this.shadowRoot) return;
@@ -333,11 +354,25 @@ class GcWidget extends HTMLElement {
         plot.addEventListener("pointermove", (event) => {
           const box = plot.getBoundingClientRect();
           const { clientX, clientY } = /** @type {PointerEvent} */ (event);
-          this.#pointer = { collector, panel, x: clientX - box.left, y: clientY - box.top };
+          const x = clientX - box.left, y = clientY - box.top;
+          this.#pointer = { collector, panel, x, y };
+          // PROTOTYPE: variant A waits for the pointer to rest, and a move past
+          // DRIFT hides the tooltip until it rests again.
+          const rested = this.#rested;
+          if (!rested || Math.hypot(x - rested.x, y - rested.y) > DRIFT) {
+            this.#rested = null;
+            clearTimeout(this.#dwell);
+            this.#dwell = setTimeout(() => {
+              this.#rested = { x, y };
+              this.#hover();
+            }, DWELL);
+          }
           this.#hover();
         });
         plot.addEventListener("pointerleave", () => {
           this.#pointer = null;
+          this.#rested = null;
+          clearTimeout(this.#dwell);
           this.#hover();
         });
       }
@@ -351,6 +386,12 @@ class GcWidget extends HTMLElement {
       select.addEventListener("change", () => this.#choose(select.value, true));
       addEventListener("hashchange", () => this.#choose(fragment().get(this.id) ?? "", false));
     }
+    // PROTOTYPE: the switcher changes the variant in place.
+    this.dataset.variant = variant();
+    addEventListener("prototype-variant", () => {
+      this.dataset.variant = variant();
+      this.#hover();
+    });
     new ResizeObserver(() => this.#schedule()).observe(this);
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.#schedule());
     this.#choose(fragment().get(this.id) ?? "", false);
@@ -660,6 +701,7 @@ class GcWidget extends HTMLElement {
   #hover() {
     const root = /** @type {ShadowRoot} */ (this.shadowRoot);
     for (const mark of root.querySelectorAll(".crosshair, .outline, .tip")) /** @type {HTMLElement} */ (mark).hidden = true;
+    for (const reading of root.querySelectorAll(".reading, .where")) reading.remove();
     const pointer = this.#pointer, layout = this.#layout;
     if (!pointer || !layout) return;
     const { collector, panel, x, y } = pointer;
@@ -675,6 +717,8 @@ class GcWidget extends HTMLElement {
     const records = this.#records[collector];
     // The span the tooltip stands beside: a crosshair's x, or a bar's two edges.
     let left, right;
+    /** @type {[string, string[], [string, string, string[]][]]} */
+    let shown;
     if (panel === "work") {
       const at = workAt(records, binKb, kb);
       const total = [...at.automatic, ...at.full].reduce((sum, part) => sum + part, 0);
@@ -684,11 +728,11 @@ class GcWidget extends HTMLElement {
       Object.assign(mark.style, { left: `${left}px`, width: `${right - left}px`, top: `${top}px`, height: `${HEIGHTS.work - marginBottom - top}px` });
       mark.hidden = !total;
       const fulls = at.full.some(Boolean);
-      tip.replaceChildren(...readout(
+      shown = [
         `${megabytes(at.x1)}–${megabytes(at.x2)} MB allocated`,
         fulls ? ["objects", "automatic", "full"] : ["objects"],
         PARTS.map((part, i) => [part, `var(--${part})`, (fulls ? [at.automatic[i], at.full[i]] : [at.automatic[i]]).map(whole)]),
-      ));
+      ];
     } else {
       const at = panel === "heap" ? heapAt(records, kb) : budgetAt(records, kb);
       if (!at) return;
@@ -697,20 +741,45 @@ class GcWidget extends HTMLElement {
       mark.hidden = false;
       const where = `${collections(at.kinds)} at ${megabytes(at.clock / 1000)} MB`;
       if ("budget" in at) {
-        tip.replaceChildren(...readout(where, ["objects"], [["work budget", "var(--text-primary)", [whole(at.budget)]]]));
+        shown = [where, ["objects"], [["work budget", "var(--text-primary)", [whole(at.budget)]]]];
       } else {
         const { before, after } = at;
         /** @returns {[string, string, string[]]} */
         const row = (/** @type {string} */ name, /** @type {string} */ color, /** @type {(read: typeof before) => number} */ value) =>
           [name, color, [hundredths(value(before)), hundredths(value(after))]];
-        tip.replaceChildren(...readout(where, ["MB", "before", "after"], [
+        shown = [where, ["MB", "before", "after"], [
           row("heap", "var(--text-muted)", (read) => read.heap),
           row("reachable", "var(--text-primary)", (read) => read.reachable),
           row("uncollected garbage", "transparent", (read) => read.garbage),
           ...SPACES[collector].map((space, i) => row(space, `var(--${space})`, (read) => read.spaces[i])),
-        ]));
+        ]];
       }
     }
+    const [where, columns, rows] = shown;
+    if (variant() === "B") {
+      // PROTOTYPE: the caption says where the panel reads, and each legend entry
+      // its value; the budget's panel has no legend, so its caption holds both.
+      const figure = /** @type {HTMLElement} */ (plot.closest("figure"));
+      const caption = /** @type {HTMLElement} */ (figure.querySelector("figcaption"));
+      const legend = figure.querySelector(".legend");
+      const note = document.createElement("span");
+      note.className = "where";
+      note.textContent = ` · ${where}${columns[0] === "MB" ? ", in MB" : ""}`;
+      caption.append(note);
+      for (const [name, , values] of rows) {
+        const reading = document.createElement("span");
+        reading.className = "reading";
+        reading.textContent = columns.includes("before")
+          ? (values[0] === values[1] ? values[0] : `${values[0]} → ${values[1]}`)
+          : columns.includes("full") ? `${values[0]} + ${values[1]} full` : values[0];
+        const entry = legend && [...legend.children].find((child) => /** @type {HTMLElement} */ (child).dataset.name === name);
+        if (entry) entry.append(reading);
+        else note.append(`: ${reading.textContent} ${columns[0]}`);
+      }
+      return;
+    }
+    if (variant() === "A" && !this.#rested) return;
+    tip.replaceChildren(...readout(where, columns, rows));
     tip.hidden = false;
     // Right of the mark, or left of it where the chart ends; level with the
     // pointer, inside the panel.
