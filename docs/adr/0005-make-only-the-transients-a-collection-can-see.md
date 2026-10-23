@@ -17,6 +17,18 @@ enough because both collectors collect at the same boundaries (ADR 0004). If
 their triggers ever differ, the two runs of a widget no longer make the same
 objects.
 
+A full collection is a boundary too (ADR 0012). It runs after the let-gos of
+its kB, and both collectors' runs call it at the same clock. A workload calls
+one before each build and after each drop of a structure that asks for it,
+so churn can't always know the next one's clock in advance. It takes the
+earliest clock the workload could call one at, from the drops already
+scheduled, the builds waiting and when each repeating structure next falls
+due. A transient that outlasts that clock or the next automatic collection
+gets made. The bound errs early: churn makes some transients no collection
+sees, and never skips one a collection could see. Shutdown lets go of every
+frame root before its two full collections, so the transients alive at a
+run's end never reach them.
+
 ## Considered Options
 
 - Make every transient: simpler, and about a third slower.

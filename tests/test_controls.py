@@ -24,11 +24,14 @@ STAND_IN = """{
         },
         "structures": [
             {"shape": {"chains": 16}, "size": 8000, "root": "module",
-             "lifetime": null, "rebuild_interval": null, "build_churn": 0},
+             "lifetime": null, "rebuild_interval": null, "build_churn": 0,
+             "full_collections": false},
             {"shape": "tree", "size": 20000, "root": "frame",
-             "lifetime": 40000, "rebuild_interval": 80000, "build_churn": 1}
+             "lifetime": 40000, "rebuild_interval": 80000, "build_churn": 1,
+             "full_collections": false}
         ],
-        "seed": 848
+        "seed": 848,
+        "shutdown": false
     },
     "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
     "run_length": 150000,
@@ -173,10 +176,12 @@ def request(
                         "lifetime": structure.lifetime,
                         "rebuild_interval": structure.rebuild_interval,
                         "build_churn": structure.build_churn,
+                        "full_collections": structure.full_collections,
                     }
                     for structure in parameters.structures
                 ],
                 "seed": parameters.seed,
+                "shutdown": parameters.shutdown,
             },
             "settings": {
                 "threshold0": settings.threshold0,

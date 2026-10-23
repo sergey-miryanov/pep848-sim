@@ -77,6 +77,7 @@ def _workload(values: dict[str, Any]) -> WorkloadParameters:
         ),
         tuple(_structure(structure) for structure in values["structures"]),
         values["seed"],
+        values["shutdown"],
     )
 
 

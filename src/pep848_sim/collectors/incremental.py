@@ -16,7 +16,12 @@ branch, sergey-miryanov/cpython@incremental-gc-update-2:
 
 from typing import override
 
-from pep848_sim.collectors.collector import Collector, CollectorSettings, Space
+from pep848_sim.collectors.collector import (
+    Collector,
+    CollectorSettings,
+    FullKind,
+    Space,
+)
 
 
 class IncrementalCollector(Collector):
@@ -63,6 +68,11 @@ class IncrementalCollector(Collector):
         with self.recording("young" if self.young_next else "old"):
             self.young_collection() if self.young_next else self.old_collection()
             self.young_next = not self.young_next
+
+    @override
+    def collect_full(self, kind: FullKind) -> None:
+        with self.recording(kind):
+            self.full_collection()
 
     def young_collection(self) -> None:
         oldest = self.aging.pop()
@@ -120,6 +130,25 @@ class IncrementalCollector(Collector):
             # cycle garbage and we should sweep the heap faster to keep the amount
             # of garbage down
             self.work_to_do += 2 * collected
+
+    def full_collection(self) -> None:
+        """Collect the whole heap, as `gc.collect()` does. The PEP gives it no
+        pseudocode, so it follows the branch's gc_collect_incremental_full (ADR 0012).
+        Every object joins pending, old ones first and the young generation after them
+        in the order they entered. What sys reaches moves to visited unexamined, and
+        the rest is examined, its survivors joining visited. The work budget starts
+        again from 0, and with pending empty the next old collection starts a new
+        sweep."""
+        pending = self.pending_space
+        pending.extend(self.visited_space)
+        pending.extend(self.reachable)
+        for space in reversed(self.aging):
+            pending.extend(space)
+        pending.extend(self.nursery)
+        self.reachable.append(self._heap.module_root)
+        self.marked += self.scan_reachable(len(self._heap))
+        self.visited_space.extend(self.collect_cycles(pending))
+        self.work_to_do = 0
 
     def form_transitive_closure(self, obj: int) -> Space:
         """An increment: obj, and every pending object it reaches through pending

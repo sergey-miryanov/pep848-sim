@@ -35,10 +35,17 @@ the benchmark's loops, and shutdown with its full collections. gcmon records
 each worker's collections, and a preset models one worker.
 _Avoid_: process (bare), run (that is the simulator's), job
 
+**Shutdown**:
+The end of a worker. Its frames have returned, and `finalize_modules` lets go
+of the modules and runs two full collections. A run ends in shutdown when its
+workload asks for one.
+_Avoid_: exit, teardown, finalization (bare)
+
 **Workload parameter**:
 One knob that shapes a workload: the churn's fate mix, cycle size and
-lifetimes, a structure's shape, size, root, lifetime and rebuild interval, and
-the churn per built object.
+lifetimes; a structure's shape, size, root, lifetime, rebuild interval and
+full collections; the churn per built object; and whether the run ends in
+shutdown.
 _Avoid_: parameter (bare), setting (that is the collector's side), option
 
 **Collector setting**:
@@ -199,8 +206,9 @@ _Avoid_: sandbox, lab, explorer
 **Run**:
 One simulation of one workload by one collector under one set of collector
 settings, from an empty heap to the preset's run length on the allocation
-clock. A widget comparing the collectors makes two runs of the same workload,
-which allocate the same objects in the same order.
+clock, and on through shutdown if the workload asks for one. A widget
+comparing the collectors makes two runs of the same workload, which allocate
+the same objects in the same order.
 _Avoid_: simulation (bare), trial, execution, benchmark
 
 **Uncollected garbage**:
@@ -300,7 +308,7 @@ One turn of the incremental collector on the old generation: zero or more
 increments, which it collects while the work budget stays positive.
 _Avoid_: gen1, generation 1 (the stats slot the C implementation files it
 under, which reads as the aging generation), major GC, full collection (that
-is `gc.collect()`, the whole heap)
+takes the whole heap)
 
 **Sweep**:
 One pass of the incremental collector over the whole old generation, from one
@@ -312,7 +320,15 @@ sweep starts is freed by the time it ends, unless newer garbage holds it,
 which leaves it for a later sweep. The legacy collector has no sweeps; a gen
 2 collection covers the same ground in one go.
 _Avoid_: cycle, GC cycle (both collide with reference cycles), pass, epoch,
-full collection (that is `gc.collect()`)
+full collection (that takes the whole heap in one go)
+
+**Full collection**:
+A collection of the whole heap in one go, which a workload asks for with
+`gc.collect()` and shutdown runs twice. The legacy collector runs a gen 2
+collection; the incremental collector marks what the module root reaches and
+examines everything else, whatever space it sits in.
+_Avoid_: major GC, whole-heap collection, gen 2 collection (that names the
+legacy collector's automatic one), sweep
 
 ### What a collection did
 

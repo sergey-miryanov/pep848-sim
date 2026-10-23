@@ -8,7 +8,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, precondition, rule
 
-from pep848_sim.collectors.collector import Collector, CollectorSettings
+from pep848_sim.collectors.collector import Collector, CollectorSettings, FullKind
 from pep848_sim.collectors.heap import Heap
 
 
@@ -203,6 +203,8 @@ class Recording(Collector):
         super().__init__(CollectorSettings(threshold0=threshold0))
         self.clocks: list[int] = []
         self.garbage: list[int] = []
+        # The clock and kind of each full collection.
+        self.full: list[tuple[int, FullKind]] = []
 
     @override
     def attach(self, heap: Heap) -> None:
@@ -213,6 +215,10 @@ class Recording(Collector):
     def collect(self) -> None:
         self.clocks.append(self.heap.clock)
         self.garbage.append(self.heap.uncollected_garbage)
+
+    @override
+    def collect_full(self, kind: FullKind) -> None:
+        self.full.append((self.heap.clock, kind))
 
 
 def test_the_heap_collects_at_each_boundary_before_the_clock_moves() -> None:
@@ -226,6 +232,72 @@ def test_the_heap_collects_at_each_boundary_before_the_clock_moves() -> None:
             heap.allocate_unseen()
 
     assert collector.clocks == [3, 6, 9]
+
+
+def test_a_full_collection_puts_the_next_automatic_one_threshold0_after_it() -> None:
+    collector = Recording(threshold0=3)
+    heap = Heap(collector)
+
+    for _ in range(4):
+        heap.allocate_unseen()
+    heap.collect_full("full")
+    for _ in range(7):
+        heap.allocate_unseen()
+
+    assert collector.full == [(4, "full")]
+    assert collector.clocks == [3, 7, 10]
+
+
+def test_a_full_collection_where_an_automatic_one_is_due_stands_in_for_it() -> None:
+    collector = Recording(threshold0=3)
+    heap = Heap(collector)
+
+    for _ in range(3):
+        heap.allocate_unseen()
+    heap.collect_full("full")
+    for _ in range(4):
+        heap.allocate_unseen()
+
+    assert collector.full == [(3, "full")]
+    assert collector.clocks == [6]
+
+
+def test_the_next_collection_is_the_first_a_new_object_can_meet() -> None:
+    heap = Heap(Recording(threshold0=3))
+
+    assert heap.next_collection() == 3
+    for _ in range(3):
+        heap.allocate_unseen()
+    # The collection at 3 runs as the next allocation starts, before its object.
+    assert heap.next_collection() == 6
+    heap.allocate_unseen()
+    heap.collect_full("full")
+    assert heap.next_collection() == 7
+
+
+def test_letting_go_of_every_frame_root_frees_what_frames_alone_held() -> None:
+    heap = new_heap()
+    sys = heap.module_root
+    kept = heap.allocate()
+    heap.link(sys, kept)
+    transient = heap.allocate()
+    a, b = heap.allocate(), heap.allocate()
+    heap.link(a, b)
+    heap.link(b, a)
+    heap.let_go_frame_root(b)
+    heap.take_frame_root(a)
+
+    heap.let_go_every_frame_root()
+
+    assert heap.frame_roots() == {}
+    assert [heap.is_freed(x) for x in (kept, transient, a, b)] == [
+        False,
+        True,
+        False,
+        False,
+    ]
+    # The cycle stays, unreachable, for a collection to free.
+    assert heap.uncollected_garbage == 2
 
 
 def test_a_new_heap_has_the_module_root_held_by_the_interpreter() -> None:

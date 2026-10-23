@@ -15,7 +15,12 @@ Each name stands for a field of `struct _gc_runtime_state`:
 
 from typing import override
 
-from pep848_sim.collectors.collector import Collector, CollectorSettings, Space
+from pep848_sim.collectors.collector import (
+    Collector,
+    CollectorSettings,
+    FullKind,
+    Space,
+)
 
 
 class LegacyCollector(Collector):
@@ -50,6 +55,12 @@ class LegacyCollector(Collector):
         generation = self.select_generation()
         with self.recording(f"gen {generation}"):
             collections[generation]()
+
+    @override
+    def collect_full(self, kind: FullKind) -> None:
+        """A gen 2 collection, as gc_collect_main runs one for `gc.collect()`."""
+        with self.recording(kind):
+            self.collect_generation2()
 
     def select_generation(self) -> int:
         """gc_select_generation, as the legacy collector reads it: the oldest

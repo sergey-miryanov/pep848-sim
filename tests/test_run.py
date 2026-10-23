@@ -65,6 +65,7 @@ def workloads(draw: st.DrawFn) -> WorkloadParameters:
         draw(churn_parameters()),
         tuple(draw(st.lists(structure_parameters(), max_size=2))),
         draw(st.integers(min_value=0, max_value=2**32)),
+        draw(st.booleans()),
     )
 
 
@@ -96,8 +97,8 @@ def test_a_run_yields_its_newest_records_every_few_collections(
     every: int,
 ) -> None:
     parts = list(run(parameters, collector, settings, run_length, every))
-    # More than the run's collections: one part, at the end.
-    whole = list(run(parameters, collector, settings, run_length, run_length + 1))
+    # More than any of these runs collects: one part, at the end.
+    whole = list(run(parameters, collector, settings, run_length, 10**6))
 
     assert len(whole) <= 1
     assert [len(part) for part in parts[:-1]] == [every] * (len(parts) - 1)
@@ -123,6 +124,28 @@ def test_a_run_that_ends_on_a_boundary_collects_there(
     parts = run(parameters, collector, settings, run_length, every=1)
 
     assert [record.clock for record in records(parts)] == clocks
+
+
+@pytest.mark.parametrize("collector", COLLECTORS)
+def test_a_run_that_asks_for_shutdown_ends_with_two_full_collections(
+    collector: type[Collector],
+) -> None:
+    parameters = WorkloadParameters(CHURN, (), seed=1, shutdown=True)
+    settings = CollectorSettings(threshold0=10)
+
+    parts = run(parameters, collector, settings, 29, every=1)
+
+    whole = records(parts)
+    assert [(record.clock, record.kind) for record in whole[2:]] == [
+        (29, "shutdown"),
+        (29, "shutdown"),
+    ]
+    assert [record.clock for record in whole[:2]] == [10, 20]
+    # The first frees all the cyclic garbage, the cycles the frames held among it,
+    # and leaves the second none.
+    first, second = whole[2:]
+    assert sum(first.spaces_after) == first.reachable_after
+    assert second.freed == 0
 
 
 @given(

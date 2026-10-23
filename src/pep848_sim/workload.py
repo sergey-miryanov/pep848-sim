@@ -107,7 +107,8 @@ class Churn:
     It makes only the transients a collection can see (ADR 0005), unless the caller
     asks for every one with `make_every_transient`. Both ways draw the same
     lifetimes, so the tests can compare them. A workload hands it the schedule of
-    let-gos it shares with its structures."""
+    let-gos it shares with its structures, and if it calls `gc.collect()`, the
+    earliest clock it could next call it at."""
 
     def __init__(
         self,
@@ -117,6 +118,7 @@ class Churn:
         *,
         make_every_transient: bool = False,
         let_gos: LetGos | None = None,
+        next_full_collection: Callable[[], int | None] | None = None,
     ) -> None:
         self._heap = heap
         self._rng = rng
@@ -124,9 +126,8 @@ class Churn:
         self._lifetimes = ChurnLifetimes(
             parameters.lifetime_mean, parameters.long_share, parameters.long_lifetimes
         )
-        # Collections come at multiples of the collector's threshold0.
-        self._threshold0 = heap.threshold0
         self._make_every_transient = make_every_transient
+        self._next_full_collection = next_full_collection
         # The members of the cycle being built, one per kB.
         self._cycle: list[int] = []
         self._let_gos = LetGos() if let_gos is None else let_gos
@@ -166,9 +167,13 @@ class Churn:
         heap = self._heap
         made_in = heap.clock + 1
         ends = made_in + self._lifetimes.transient(self._rng)
-        # The next collection runs at the first boundary at or after the transient's
-        # own kB, after that kB's let-gos.
-        boundary = -(-made_in // self._threshold0) * self._threshold0
+        # The next collection runs after the let-gos of its kB: the next automatic
+        # one, or a full one the workload may call sooner.
+        boundary = heap.next_collection()
+        if self._next_full_collection is not None:
+            full = self._next_full_collection()
+            if full is not None:
+                boundary = min(boundary, full)
         if ends <= boundary and not self._make_every_transient:
             heap.allocate_unseen()
             return
@@ -188,6 +193,9 @@ class WorkloadParameters:
     churn: ChurnParameters
     structures: tuple[StructureParameters, ...]
     seed: int
+    # Whether the run ends as a worker does, in shutdown: its frames return, and
+    # finalize_modules runs two full collections.
+    shutdown: bool = False
 
 
 class Workload:
@@ -197,7 +205,8 @@ class Workload:
     Structures without a rebuild interval build first, one after another, in the
     order the parameters list them. A repeating structure falls due at each
     multiple of its interval and waits for any build under way, so builds never
-    overlap."""
+    overlap. A structure that asks for full collections gets one before each build
+    and one after each drop, after the let-gos of the drop's kB."""
 
     def __init__(
         self,
@@ -209,13 +218,17 @@ class Workload:
         self._heap = heap
         self._structures = parameters.structures
         self._let_gos = LetGos()
+        calls_collect = any(s.full_collections for s in self._structures)
         self._churn = Churn(
             heap,
             Random(parameters.seed),
             parameters.churn,
             make_every_transient=make_every_transient,
             let_gos=self._let_gos,
+            next_full_collection=self._next_full_collection if calls_collect else None,
         )
+        # The full collections that follow drops, by the clock of their kB.
+        self._full_collections: dict[int, int] = {}
         # Each repeating structure's rebuild interval, and when it next falls due.
         self._intervals = {
             i: s.rebuild_interval
@@ -244,8 +257,19 @@ class Workload:
         while heap.clock < clock:
             self._step()
             # Within each kB the clock moves, then the workload lets go of each
-            # lifetime that ends there (ADR 0005).
+            # lifetime that ends there (ADR 0005), and calls `gc.collect()` after
+            # each drop that asks for it.
             self._let_gos.run(heap.clock)
+            for _ in range(self._full_collections.pop(heap.clock, 0)):
+                heap.collect_full("full")
+
+    def shut_down(self) -> None:
+        """End as a worker does: its frames have returned, and finalize_modules runs
+        two full collections."""
+        heap = self._heap
+        heap.let_go_every_frame_root()
+        for _ in range(2):
+            heap.collect_full("shutdown")
 
     def _step(self) -> None:
         """Make the kB's one allocation. With no build under way, the first
@@ -255,6 +279,8 @@ class Workload:
         self._fall_due()
         if self._current is None and self._waiting:
             i = self._waiting.pop(0)
+            if self._structures[i].full_collections:
+                self._heap.collect_full("full")
             self._current = (
                 i,
                 Build(self._heap, self._structures[i]),
@@ -287,7 +313,32 @@ class Workload:
     def _finish(self, i: int, build: Build, first_kb: int) -> None:
         clock = self._heap.clock
         self._builds.append((i, first_kb, clock))
-        lifetime = self._structures[i].lifetime
-        if lifetime is not None:
-            self._let_gos.at(clock + lifetime, build.drop)
+        structure = self._structures[i]
+        if structure.lifetime is not None:
+            drop = clock + structure.lifetime
+            self._let_gos.at(drop, build.drop)
+            if structure.full_collections:
+                calls = self._full_collections
+                calls[drop] = calls.get(drop, 0) + 1
         self._current = None
+
+    def _next_full_collection(self) -> int | None:
+        """The earliest clock the workload could call `gc.collect()` at, as far as it
+        can tell now, or None if it never calls it again. Erring early makes
+        transients no collection sees, never misses one (ADR 0005)."""
+        clock = self._heap.clock
+        earliest = list(self._full_collections)
+        for i, structure in enumerate(self._structures):
+            if not structure.full_collections:
+                continue
+            # A waiting build could start at the next kB; a repeating structure's
+            # next build starts no sooner than it falls due.
+            if i in self._waiting:
+                earliest.append(clock)
+            if i in self._due:
+                earliest.append(self._due[i])
+            # A build under way ends now or later, and its drop a lifetime after.
+            building = self._current is not None and self._current[0] == i
+            if building and structure.lifetime is not None:
+                earliest.append(clock + structure.lifetime)
+        return min(earliest, default=None)
