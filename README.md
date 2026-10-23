@@ -7,9 +7,9 @@ and a guide and a playground let you change the workload and the
 `gc.set_threshold()` settings and watch what each collector does.
 
 The site, <https://sergey-miryanov.github.io/pep848-sim/>, runs one widget
-whose select offers a stand-in workload and the first preset,
-create_gc_cycles. More presets modelled on pyperformance benchmarks come
-next, then the guide.
+whose select offers a stand-in workload and the first presets,
+create_gc_cycles and json_loads. More presets modelled on pyperformance
+benchmarks come next, then the guide.
 
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): how to set up, run and publish
 - [`CONTEXT.md`](CONTEXT.md): the vocabulary

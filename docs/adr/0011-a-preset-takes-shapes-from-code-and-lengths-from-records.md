@@ -21,7 +21,10 @@ A loop that allocates less than `threshold0` kB between two calls leaves no
 automatic collection to count, so we take its length from the code's counts.
 
 A preset runs for its worker's own length on the clock: start-up, the
-benchmark's loops as many times as the records show, and shutdown. A target of
+benchmark's loops as many times as the records show, and shutdown. Where the
+loops leave no count in the records, as json_loads' calls leave none, the
+worker's automatic collections give its length: it ends within `threshold0` kB
+of the last one, and the preset ends halfway. A target of
 so many sweeps fails for a benchmark that calls `gc.collect()` more often than
 every `threshold0` kB, as create_gc_cycles does. Each call resets the budget,
 so no automatic collection comes during its loops, and no sweep ends.

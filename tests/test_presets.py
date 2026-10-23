@@ -2,10 +2,10 @@ import pytest
 
 from benchmarks import Tally, load_data, mock
 from compare_presets import COLLECTORS, run_preset, tally
-from pep848_sim.collectors.collector import Collector
+from pep848_sim.collectors.collector import Collector, CollectorSettings
 from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.collectors.legacy import LegacyCollector
-from pep848_sim.presets import CREATE_GC_CYCLES, PRESETS
+from pep848_sim.presets import CREATE_GC_CYCLES, JSON_LOADS, PRESETS
 from test_run import digest
 
 # Placeholder until the rerun's records settle it (#117): how far a preset's yield
@@ -15,7 +15,8 @@ YIELD_TOLERANCE = 0.05
 
 def test_each_preset_is_named_for_its_benchmark() -> None:
     assert {name: preset.benchmark for name, preset in PRESETS.items()} == {
-        "create_gc_cycles": "create_gc_cycles"
+        "create_gc_cycles": "create_gc_cycles",
+        "json_loads": "json_loads",
     }
 
 
@@ -24,6 +25,8 @@ def test_each_preset_is_named_for_its_benchmark() -> None:
     [
         ("create_gc_cycles", IncrementalCollector, "056d431af7a2b8f8"),
         ("create_gc_cycles", LegacyCollector, "3facc140edae9c35"),
+        ("json_loads", IncrementalCollector, "6fafb92dad242ff4"),
+        ("json_loads", LegacyCollector, "0b0de830268571c1"),
     ],
 )
 def test_each_presets_records_keep_their_digest(
@@ -57,6 +60,28 @@ def test_create_gc_cycles_runs_its_loops_between_start_up_and_shutdown(
     assert [record.kind for record in shutdown] == ["shutdown", "shutdown"]
     first, second = shutdown
     assert sum(first.spaces_after) == first.reachable_after
+    assert second.freed == 0
+
+
+@pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
+def test_json_loads_finds_no_cyclic_garbage_before_shutdown(
+    collector: type[Collector],
+) -> None:
+    preset = JSON_LOADS
+    tree = preset.workload.structures[1]
+
+    *automatic, first, second = run_preset(preset, collector)
+
+    # Nothing calls gc.collect(), so the runtime starts every collection before
+    # shutdown, one each threshold0 kB, and no result json.loads returns leaves a
+    # cycle for one to free.
+    assert len(automatic) == preset.run_length // CollectorSettings().threshold0
+    assert {record.kind for record in automatic}.isdisjoint({"full", "shutdown"})
+    assert all(record.freed == 0 for record in automatic)
+    # Shutdown's first full collection frees the start-up tree, and leaves the
+    # second nothing.
+    assert [first.kind, second.kind] == ["shutdown", "shutdown"]
+    assert first.freed == tree.shape.cyclic_garbage(tree.size)
     assert second.freed == 0
 
 
