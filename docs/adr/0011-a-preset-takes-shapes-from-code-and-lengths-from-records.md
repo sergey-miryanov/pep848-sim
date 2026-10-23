@@ -3,38 +3,39 @@
 A preset models one worker of its benchmark, from interpreter start-up to
 shutdown, since the collector sees all of it: the imports, the benchmark's
 loops, pyperf's own work, and the full collections the interpreter runs as it
-shuts down. Two sources give a preset its workload parameters, and a fit by
-hand settles what they leave open.
+shuts down. We take its workload parameters from two sources and fit the rest
+by hand.
 
-The benchmark's code gives the shapes and the roots, which objects form cycles
-and how large, what lives for one loop or for the whole worker, where
-`gc.collect()` runs, and how many real objects each part makes. The simulator
-divides those counts by 16, as ADR 0002 has it.
+From the benchmark's code we take the shapes and the roots, which objects form
+cycles and how large, what lives for one loop or for the whole worker, where
+`gc.collect()` runs, and how many real objects each part makes. We divide
+those counts by 16, as ADR 0002 has it.
 
-gcmon's records of the worker's collections (#117) give lengths on the
+From gcmon's records of the worker's collections (#117) we take lengths on the
 allocation clock. The reference branch takes each new real object's size off a
 budget of `threshold0` kB, every collection resets the budget, and the next
 automatic collection comes when it runs out: the rule the simulator's clock
 follows. Each automatic collection marks `threshold0` kB, so a loop that spans
 n of them allocates n × `threshold0` kB. `gc.collect()` resets the budget too.
 A loop that allocates less than `threshold0` kB between two calls leaves no
-automatic collection to count, and the code's counts set its length instead.
+automatic collection to count, so we take its length from the code's counts.
 
 Some parameters neither source fixes, such as the start-up heap's shape or the
 churn inside a library. A script in `tools/` prints a preset's yields,
-collections and heap sizes beside its benchmark's, and we change only those
-open parameters until the two agree within #117's tolerance. Each parameter's
-comment names its source: the code, at the pyperformance version #117's
-metadata records, or the record we fitted it to.
+collections and heap sizes beside its benchmark's. We change the open
+parameters until the two agree within #117's tolerance, and leave the rest as
+the code and the records set them. Each parameter's comment names its source:
+the code, at the pyperformance version #117's metadata records, or the record
+we fitted it to.
 
 ## Considered Options
 
 - Measure the object graph with a `gc.callbacks` hook in each worker that
   walks `gc.get_objects()` and `gc.get_referents()` now and then. It needs a
-  gcmon feature and a separate slow run, for numbers a preset needs only
-  roughly. It cannot see the objects refcounting frees, and the benchmarks are
+  gcmon feature and a separate slow run, for precision a fitted preset throws
+  away. It cannot see the objects refcounting frees, and the benchmarks are
   short scripts whose code shows what they build.
-- tracemalloc: bytes by allocation site, but no references between objects,
-  so no shapes.
+- tracemalloc: it counts bytes by allocation site and records no references
+  between objects, so it shows no shapes.
 - An optimiser over the workload parameters: a preset leaves few of them open,
   a run takes seconds, and a fit by hand keeps a reason for each number.
