@@ -25,7 +25,7 @@ def test_each_generations_collection_follows_the_reference_branch() -> None:
     heap.let_go_frame_root(a, leaves_unreachable=2)
 
     # Gen 0: old[0].count++, and the nursery's survivors go to aging[0].
-    collector.collect_generation0()
+    collector.collect()
 
     assert [heap.is_freed(x) for x in (a, b)] == [True, True]
     assert list(collector.aging) == [sys, held]
@@ -35,7 +35,8 @@ def test_each_generations_collection_follows_the_reference_branch() -> None:
     # Gen 1: the nursery joins aging[0], whose survivors go to old[0] and count as
     # long-lived objects awaiting a gen 2 collection.
     c = heap.allocate()
-    collector.collect_generation1()
+    collector.count0 = 11  # over threshold1, so select_generation picks gen 1
+    collector.collect()
 
     assert list(collector.old) == [sys, held, c]
     assert list(collector.aging) == list(collector.nursery) == []
@@ -46,11 +47,12 @@ def test_each_generations_collection_follows_the_reference_branch() -> None:
     heap.link(held, c)
     heap.link(c, held)
     x = heap.allocate()
-    collector.collect_generation0()
+    collector.collect()
     n = heap.allocate()
     heap.let_go_frame_root(held)
     heap.let_go_frame_root(c, leaves_unreachable=2)
-    collector.collect_generation2()
+    collector.count1 = 11  # over threshold2, with the long-lived ratio met
+    collector.collect()
 
     assert [heap.is_freed(x) for x in (held, c)] == [True, True]
     assert list(collector.old) == [sys, n, x]

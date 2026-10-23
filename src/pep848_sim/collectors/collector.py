@@ -102,6 +102,11 @@ class Space:
 
 
 class Collector:
+    """The base both collectors build on. It counts each collection as it runs:
+    collect_cycles adds the objects it saw survive and those it freed, an old
+    collection adds those it marked, and recording() turns what one collection
+    added into its counts and its record."""
+
     # The spaces a record reports, in the order a stacked chart draws them.
     SPACES: ClassVar[tuple[str, ...]] = ("nursery",)
 
@@ -110,6 +115,10 @@ class Collector:
         self.counts: list[CollectionCounts] = []
         self.records: list[Record] = []
         self.nursery = Space(self)
+        # How many objects the collections so far marked, saw survive and freed.
+        self.marked = 0
+        self.survived = 0
+        self.freed = 0
         # Each object's space, as CPython's PyGC_Head links an object into a list.
         # Only _place changes it, together with the spaces themselves.
         self._spaces: dict[int, Space] = {}
@@ -124,13 +133,21 @@ class Collector:
         collection with `recording()`."""
 
     @contextmanager
-    def recording(self) -> Iterator[None]:
-        """Record the collection run inside, with the heap before and after it."""
+    def recording(self, kind: str) -> Iterator[None]:
+        """Count and record the collection run inside, with the heap before and
+        after it."""
         heap = self._heap
         spaces_before = self.space_sizes()
         reachable_before = len(heap) - heap.uncollected_garbage
+        marked, survived, freed = self.marked, self.survived, self.freed
         yield
-        counts = self.counts[-1]
+        counts = CollectionCounts(
+            kind,
+            self.marked - marked,
+            self.survived - survived,
+            self.freed - freed,
+        )
+        self.counts.append(counts)
         self.records.append(
             Record(
                 heap.clock,
@@ -160,7 +177,7 @@ class Collector:
 
     def collect_cycles(self, objects: Iterable[int]) -> list[int]:
         """Free the cyclic garbage among `objects` and return the survivors in their
-        order, as the pseudocode's collect_cycles does."""
+        order, as the pseudocode's collect_cycles does, counting both."""
         heap = self._heap
         examined = list(objects)
         garbage = find_unreachable(heap, examined)
@@ -170,7 +187,10 @@ class Collector:
             if not heap.is_freed(x):
                 heap.clear(x)
         freed = set(garbage)
-        return [x for x in examined if x not in freed]
+        survivors = [x for x in examined if x not in freed]
+        self.survived += len(survivors)
+        self.freed += len(freed)
+        return survivors
 
     def add(self, x: int) -> None:
         self.nursery.append(x)

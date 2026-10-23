@@ -16,12 +16,7 @@ branch, sergey-miryanov/cpython@incremental-gc-update-2:
 
 from typing import override
 
-from pep848_sim.collectors.collector import (
-    CollectionCounts,
-    Collector,
-    CollectorSettings,
-    Space,
-)
+from pep848_sim.collectors.collector import Collector, CollectorSettings, Space
 
 
 class IncrementalCollector(Collector):
@@ -65,22 +60,17 @@ class IncrementalCollector(Collector):
 
     @override
     def collect(self) -> None:
-        with self.recording():
+        with self.recording("young" if self.young_next else "old"):
             self.young_collection() if self.young_next else self.old_collection()
             self.young_next = not self.young_next
 
     def young_collection(self) -> None:
         oldest = self.aging.pop()
-        candidates = len(oldest)
         survivors = self.collect_cycles(oldest)
         self.work_to_do += len(survivors)
         self.visited_space.extend(survivors)
         self.aging.insert(0, self.nursery)
         self.nursery = Space(self)
-        survived = len(survivors)
-        self.counts.append(
-            CollectionCounts("young", 0, survived, candidates - survived)
-        )
 
     def scan_reachable(self, limit: int) -> int:
         """Move some reachable objects from pending to reachable and from
@@ -98,12 +88,12 @@ class IncrementalCollector(Collector):
 
     def old_collection(self) -> None:
         """Collect an increment of the old generation."""
-        marked = survived = freed = 0
         while self.work_to_do > 0:
             if self.reachable:
                 moved = self.scan_reachable(self.work_to_do)
                 self.work_to_do -= moved
-                marked += moved
+                # The one count collect_cycles cannot see.
+                self.marked += moved
                 continue
             if not self.pending_space:
                 self.pending_space, self.visited_space = (
@@ -117,7 +107,7 @@ class IncrementalCollector(Collector):
                 self.reachable.append(sys)
                 self.work_to_do = 0
                 self.sweeps += 1
-                break  # the pseudocode returns; the counts below come first
+                return
             obj = self.pending_space.pop(0)
             # form transitive closure starting at obj, taking objects from pending
             increment = self.form_transitive_closure(obj)
@@ -130,9 +120,6 @@ class IncrementalCollector(Collector):
             # cycle garbage and we should sweep the heap faster to keep the amount
             # of garbage down
             self.work_to_do += 2 * collected
-            survived += len(survivors)
-            freed += collected
-        self.counts.append(CollectionCounts("old", marked, survived, freed))
 
     def form_transitive_closure(self, obj: int) -> list[int]:
         """An increment: obj, and every pending object it reaches through pending
