@@ -6,9 +6,9 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from pep848_sim.collectors.collector import CollectorSettings
-from pep848_sim.structures import Chains, Rings, Shape, Tree
+from pep848_sim.presets import CREATE_GC_CYCLES
 from pep848_sim.widget.controls import Control, controls
-from pep848_sim.widget.request import runs
+from pep848_sim.widget.request import Request, dump, runs
 from pep848_sim.workload import WorkloadParameters, geometric_thresholds
 from test_run import collector_settings, workloads
 from test_workload import exact_thresholds
@@ -153,52 +153,7 @@ def request(
     every: int,
 ) -> str:
     """The request a widget sends for these runs."""
-    churn = parameters.churn
-    return json.dumps(
-        {
-            "workload": {
-                "churn": {
-                    "cycle_share": str(churn.cycle_share),
-                    "cycle_size": churn.cycle_size,
-                    "lifetime_mean": churn.lifetime_mean,
-                    "long_share": str(churn.long_share),
-                    "long_lifetimes": list(churn.long_lifetimes),
-                },
-                "structures": [
-                    {
-                        "shape": shape(structure.shape),
-                        "size": structure.size,
-                        "root": structure.root,
-                        "lifetime": structure.lifetime,
-                        "rebuild_interval": structure.rebuild_interval,
-                        "build_churn": structure.build_churn,
-                        "full_collections": structure.full_collections,
-                    }
-                    for structure in parameters.structures
-                ],
-                "seed": parameters.seed,
-                "shutdown": parameters.shutdown,
-            },
-            "settings": {
-                "threshold0": settings.threshold0,
-                "threshold1": settings.threshold1,
-                "threshold2": settings.threshold2,
-            },
-            "run_length": run_length,
-            "every": every,
-        }
-    )
-
-
-def shape(shape: Shape) -> str | dict[str, int]:
-    """A shape as a request names it."""
-    match shape:
-        case Tree():
-            return "tree"
-        case Chains(width):
-            return {"chains": width}
-        case Rings(length):
-            return {"rings": length}
+    return dump(Request(parameters, settings, run_length, every))
 
 
 def paths(parameters: WorkloadParameters) -> list[str]:
@@ -250,3 +205,28 @@ def test_every_value_a_control_allows_makes_runs_that_start(
     for value in (control.min, between, control.max):
         for parts in runs(with_value(text, control, value)):
             next(parts, None)
+
+
+def test_a_control_reads_the_preset_a_request_names() -> None:
+    request = json.dumps(
+        {
+            "preset": "create_gc_cycles",
+            "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+            "every": 20,
+        }
+    )
+    rings = CREATE_GC_CYCLES.workload.structures[2]
+    assert rings.rebuild_interval is not None
+
+    [control] = controls(request, ["workload.structures.2.size"])
+
+    # A build without churn fits in the rebuild interval.
+    assert control == Control(
+        "workload.structures.2.size",
+        "Rings size",
+        "kB",
+        rings.size,
+        1,
+        rings.rebuild_interval,
+        1,
+    )
