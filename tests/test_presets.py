@@ -1,17 +1,16 @@
 import pytest
 
-from pep848_sim.collectors.collector import Collector, CollectorSettings, Record
+from benchmarks import Tally, load_data, mock
+from compare_presets import COLLECTORS, run_preset, tally
+from pep848_sim.collectors.collector import Collector
 from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.collectors.legacy import LegacyCollector
-from pep848_sim.presets import CREATE_GC_CYCLES, PRESETS, Preset
-from pep848_sim.run import run
-from test_run import digest, records
+from pep848_sim.presets import CREATE_GC_CYCLES, PRESETS
+from test_run import digest
 
-
-def preset_records(preset: Preset, collector: type[Collector]) -> list[Record]:
-    """A preset's records under a collector, at the PEP's default settings."""
-    settings = CollectorSettings()
-    return records(run(preset.workload, collector, settings, preset.run_length, 50))
+# Placeholder until the rerun's records settle it (#117): how far a preset's yield
+# may sit from its benchmark's, as a share of the objects examined.
+YIELD_TOLERANCE = 0.05
 
 
 def test_each_preset_is_named_for_its_benchmark() -> None:
@@ -31,7 +30,7 @@ def test_each_presets_records_keep_their_digest(
     name: str, collector: type[Collector], pinned: str
 ) -> None:
     """Pinned under CPython, which ADR 0007 makes Pyodide's digest too."""
-    assert digest(preset_records(PRESETS[name], collector)) == pinned
+    assert digest(run_preset(PRESETS[name], collector)) == pinned
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
@@ -41,7 +40,7 @@ def test_create_gc_cycles_runs_its_loops_between_start_up_and_shutdown(
     preset = CREATE_GC_CYCLES
     rings = preset.workload.structures[-1]
 
-    whole = preset_records(preset, collector)
+    whole = run_preset(preset, collector)
 
     kinds = [record.kind for record in whole]
     first_loop = kinds.index("full")
@@ -59,3 +58,20 @@ def test_create_gc_cycles_runs_its_loops_between_start_up_and_shutdown(
     first, second = shutdown
     assert sum(first.spaces_after) == first.reachable_after
     assert second.freed == 0
+
+
+@pytest.mark.skipif(mock(), reason="the records in data/ are mock until the rerun")
+@pytest.mark.parametrize("collector", COLLECTORS)
+@pytest.mark.parametrize("name", PRESETS)
+def test_each_presets_yields_match_its_benchmarks(name: str, collector: str) -> None:
+    """By generation and kind, wherever the benchmark's collections examined an
+    object (#117)."""
+    preset = PRESETS[name]
+    benchmark = load_data()[collector][preset.benchmark]
+
+    simulated = tally(run_preset(preset, COLLECTORS[collector]))
+
+    for key, target in sorted(benchmark.tallies.items()):
+        if target.yield_ is not None:
+            got = simulated.tallies.get(key, Tally()).yield_
+            assert got == pytest.approx(target.yield_, abs=YIELD_TOLERANCE), key

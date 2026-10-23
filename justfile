@@ -35,3 +35,7 @@ site:
 # run site, then serve _site/ on http://localhost:8000
 serve: site
     python -m http.server 8000 --bind 127.0.0.1 --directory _site
+
+# print each preset's collections beside its benchmark's
+compare:
+    python tools/compare_presets.py
