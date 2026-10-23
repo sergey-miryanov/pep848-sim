@@ -52,6 +52,11 @@ const BAR = 24;
 // past a chart's plot the pointer still reads it.
 const GAP = 12;
 const SLACK = 4;
+// How long, in ms, the pointer rests before a tooltip shows, so that a sweep
+// across a panel leaves its plot in view, and how far, in px, the pointer can
+// drift then before the tooltip goes.
+const DWELL = 350;
+const DRIFT = 3;
 // Counts of objects on an axis: 0, 500, 1K, 20K.
 const compact = new Intl.NumberFormat("en", { notation: "compact" }).format;
 
@@ -269,6 +274,14 @@ class GcWidget extends HTMLElement {
   /** The panel under the pointer, and where in it the pointer rests, in px. */
   /** @type {{ collector: Collector, panel: string, x: number, y: number } | null} */
   #pointer = null;
+  /**
+   * Where the pointer came to rest, once it has rested DWELL ms, and whether
+   * Escape has hidden the tooltip since; null while the pointer moves.
+   */
+  /** @type {{ x: number, y: number, hidden: boolean } | null} */
+  #rest = null;
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  #dwell = undefined;
 
   connectedCallback() {
     if (this.shadowRoot) return;
@@ -321,7 +334,8 @@ class GcWidget extends HTMLElement {
         full(key("full collections, faded", `color-mix(in srgb, var(--text-secondary) ${FADED * 100}%, transparent)`)),
       );
       // Each panel reads its values under the pointer: a crosshair on the heap and
-      // the budget, an outline round a bar of work, and a tooltip beside either.
+      // the budget, an outline round a bar of work, and, once the pointer rests,
+      // a tooltip beside either.
       for (const plot of column.querySelectorAll(".plot")) {
         const panel = /** @type {string} */ (/** @type {HTMLElement} */ (plot.closest("figure")).dataset.panel);
         const mark = document.createElement("div");
@@ -333,15 +347,33 @@ class GcWidget extends HTMLElement {
         plot.addEventListener("pointermove", (event) => {
           const box = plot.getBoundingClientRect();
           const { clientX, clientY } = /** @type {PointerEvent} */ (event);
-          this.#pointer = { collector, panel, x: clientX - box.left, y: clientY - box.top };
+          const x = clientX - box.left, y = clientY - box.top;
+          this.#pointer = { collector, panel, x, y };
+          // A move past DRIFT hides the tooltip until the pointer rests again.
+          const rest = this.#rest;
+          if (!rest || Math.hypot(x - rest.x, y - rest.y) > DRIFT) {
+            this.#rest = null;
+            clearTimeout(this.#dwell);
+            this.#dwell = setTimeout(() => {
+              this.#rest = { x, y, hidden: false };
+              this.#hover();
+            }, DWELL);
+          }
           this.#hover();
         });
         plot.addEventListener("pointerleave", () => {
-          this.#pointer = null;
+          this.#pointer = this.#rest = null;
+          clearTimeout(this.#dwell);
           this.#hover();
         });
       }
     }
+    // Escape hides the tooltip until the pointer moves on.
+    addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !this.#rest || this.#rest.hidden) return;
+      this.#rest.hidden = true;
+      this.#hover();
+    });
     this.#name = this.id || `gc-widget-${widgets++}`;
     if (this.#entries.length > 1) {
       const label = /** @type {HTMLElement} */ (root.querySelector(".entries"));
@@ -654,7 +686,8 @@ class GcWidget extends HTMLElement {
   /**
    * Show what the panel under the pointer reads there, from the records drawn so
    * far: the heap or the budget at the nearest collection, or the work of the bin
-   * under it. A redraw leaves the marks alone and calls this again, so they hold
+   * under it. The tooltip shows only once the pointer rests, and not after
+   * Escape. A redraw leaves the marks alone and calls this again, so they hold
    * while runs stream.
    */
   #hover() {
@@ -675,6 +708,9 @@ class GcWidget extends HTMLElement {
     const records = this.#records[collector];
     // The span the tooltip stands beside: a crosshair's x, or a bar's two edges.
     let left, right;
+    // What the tooltip reads, built only when it shows.
+    /** @type {() => Node[]} */
+    let content;
     if (panel === "work") {
       const at = workAt(records, binKb, kb);
       const total = [...at.automatic, ...at.full].reduce((sum, part) => sum + part, 0);
@@ -684,11 +720,11 @@ class GcWidget extends HTMLElement {
       Object.assign(mark.style, { left: `${left}px`, width: `${right - left}px`, top: `${top}px`, height: `${HEIGHTS.work - marginBottom - top}px` });
       mark.hidden = !total;
       const fulls = at.full.some(Boolean);
-      tip.replaceChildren(...readout(
+      content = () => readout(
         `${megabytes(at.x1)}–${megabytes(at.x2)} MB allocated`,
         fulls ? ["objects", "automatic", "full"] : ["objects"],
         PARTS.map((part, i) => [part, `var(--${part})`, (fulls ? [at.automatic[i], at.full[i]] : [at.automatic[i]]).map(whole)]),
-      ));
+      );
     } else {
       const at = panel === "heap" ? heapAt(records, kb) : budgetAt(records, kb);
       if (!at) return;
@@ -697,20 +733,22 @@ class GcWidget extends HTMLElement {
       mark.hidden = false;
       const where = `${collections(at.kinds)} at ${megabytes(at.clock / 1000)} MB`;
       if ("budget" in at) {
-        tip.replaceChildren(...readout(where, ["objects"], [["work budget", "var(--text-primary)", [whole(at.budget)]]]));
+        content = () => readout(where, ["objects"], [["work budget", "var(--text-primary)", [whole(at.budget)]]]);
       } else {
         const { before, after } = at;
         /** @returns {[string, string, string[]]} */
         const row = (/** @type {string} */ name, /** @type {string} */ color, /** @type {(read: typeof before) => number} */ value) =>
           [name, color, [hundredths(value(before)), hundredths(value(after))]];
-        tip.replaceChildren(...readout(where, ["MB", "before", "after"], [
+        content = () => readout(where, ["MB", "before", "after"], [
           row("heap", "var(--text-muted)", (read) => read.heap),
           row("reachable", "var(--text-primary)", (read) => read.reachable),
           row("uncollected garbage", "transparent", (read) => read.garbage),
           ...SPACES[collector].map((space, i) => row(space, `var(--${space})`, (read) => read.spaces[i])),
-        ]));
+        ]);
       }
     }
+    if (!this.#rest || this.#rest.hidden) return;
+    tip.replaceChildren(...content());
     tip.hidden = false;
     // Right of the mark, or left of it where the chart ends; level with the
     // pointer, inside the panel.
