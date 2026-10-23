@@ -48,12 +48,15 @@ the work budget, a crosshair snaps to the collection nearest the pointer,
 across all four of the heap's lanes, and a tooltip gives the heap before that
 collection and after it, or the budget it left. On the work panel, an outline
 marks the bar under the pointer, and a tooltip gives its work, the full
-collections' apart from the runtime's own. The widget draws the crosshair, the
-outline and the tooltip in an overlay of its own above Plot's charts, and
-keeps where the pointer rests. A pointer move redraws no chart: it took about
-0.65 ms at 1,028 collections. Each redraw while runs stream draws the overlay
-again from the records so far, so the tooltip holds and its values follow the
-run.
+collections' apart from the runtime's own. The crosshair and the outline
+follow the pointer at once, and the tooltip waits until the pointer has rested
+350 ms, so a sweep across a panel leaves its plot in view (#143). A move of
+more than 3 px hides the tooltip again, and so does Escape. The widget draws
+the crosshair, the outline and the tooltip in an overlay of its own above
+Plot's charts, and keeps where the pointer rests. A pointer move redraws no
+chart: it took about 0.65 ms at 1,028 collections. Each redraw while runs
+stream draws the overlay again from the records so far, so the tooltip holds
+and its values follow the run.
 
 ## Considered Options
 
@@ -79,3 +82,12 @@ run.
   run takes after every slider release.
 - A crosshair at the pointer's own clock: between two collections it would
   read the straight line drawn between their records, a value no record holds.
+- The tooltip at once, as #115 first drew it: it covered the plot while the
+  pointer swept across it.
+- The values in each panel's legend row, with no tooltip: the plot stayed
+  clear, but each legend had to keep two lines' height so its readings never
+  pushed the charts under the pointer, and the readings shifted sideways as
+  their widths changed. A prototype on the `prototype/hover-readout` branch
+  compared it with the rest delay and the tooltip at once.
+- A tooltip only while a key is held: no reader would find it, and touch has
+  no keys.
