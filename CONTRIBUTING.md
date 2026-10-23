@@ -57,7 +57,8 @@ coverage gate out: `poetry run just test tests/test_smoke.py --no-cov`.
 ## Checks
 
 - ruff checks and formats the Python.
-- mypy and pyrefly both run in strict mode, and both have to pass.
+- mypy and pyrefly both run in strict mode, and both have to pass. A pyrefly
+  warning fails the check as an error does.
 - tsc checks the site's JavaScript from its JSDoc, in strict mode: the page's
   scripts against the DOM (`tsconfig.json`), and the worker against a web
   worker's globals (`tsconfig.worker.json`).

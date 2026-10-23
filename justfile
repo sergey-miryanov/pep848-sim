@@ -26,7 +26,7 @@ lint:
 # mypy and pyrefly, both strict
 typecheck:
     mypy
-    pyrefly check
+    pyrefly check --min-severity=warn
 
 # assemble _site/: copy site/, zip src/pep848_sim into _site/sim.zip
 site:
