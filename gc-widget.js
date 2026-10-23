@@ -14,7 +14,9 @@
 
 // @ts-expect-error: an editor cannot fetch Plot's types from jsDelivr.
 import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+esm";
-import { CLOCK, FADED, FULL, KIND, LANES, PARTS, SPACES, WORK_TO_DO, ceiling, heap, work } from "./panels.js";
+import {
+  CLOCK, FADED, FULL, KIND, LANES, PARTS, SPACES, WORK_TO_DO, budgetAt, ceiling, collections, heap, heapAt, work, workAt,
+} from "./panels.js";
 import { requestRuns } from "./runs.js";
 
 /** @typedef {import("./runs.js").Record} Record */
@@ -46,6 +48,10 @@ const LANE_MARGIN = 12;
 const LANE_TICKS = 3;
 // The widest a bar of work grows, in px. A wider bin pads its bar on both sides.
 const BAR = 24;
+// How far, in px, a tooltip stands off the crosshair or bar it reads, and how far
+// past a chart's plot the pointer still reads it.
+const GAP = 12;
+const SLACK = 4;
 // Counts of objects on an axis: 0, 500, 1K, 20K.
 const compact = new Intl.NumberFormat("en", { notation: "compact" }).format;
 
@@ -54,6 +60,10 @@ const compact = new Intl.NumberFormat("en", { notation: "compact" }).format;
 const whole = new Intl.NumberFormat("en", { maximumFractionDigits: 0 }).format;
 const tenths = new Intl.NumberFormat("en", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format;
 const percent = new Intl.NumberFormat("en", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 }).format;
+// A tooltip's values: MB to two decimals, so that 0.13 MB of nursery shows, and
+// clocks to at most two.
+const hundredths = new Intl.NumberFormat("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format;
+const megabytes = new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format;
 /**
  * A count, whole below 10,000 and in thousands above, as 1,284 and 12.9K. Both
  * runs' counts take the form the larger needs, so that 16.1K stands beside 4.0K
@@ -183,6 +193,20 @@ const TEMPLATE = `
   .key { display: inline-block; width: 10px; height: 10px; margin-right: 4px; border-radius: 2px; vertical-align: -1px; }
   .key.line { height: 2px; width: 14px; border-radius: 1px; vertical-align: 3px; }
   .none { margin: 8px 0 0; color: var(--text-secondary); font-size: 13px; }
+  .plot { position: relative; }
+  .crosshair, .outline, .tip { position: absolute; pointer-events: none; }
+  .crosshair { width: 1px; background: var(--text-secondary); }
+  .outline { box-sizing: border-box; border: 1.5px solid var(--text-secondary); border-radius: 5px 5px 0 0; border-bottom: 0; }
+  .tip {
+    z-index: 1; padding: 6px 8px; white-space: nowrap; font-size: 12px;
+    background: var(--surface); border: 1px solid var(--grid); border-radius: 4px;
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--text-primary) 12%, transparent);
+  }
+  .tip p { margin: 0 0 4px; color: var(--text-secondary); }
+  .tip table { border-collapse: collapse; }
+  .tip th { padding: 0; font-weight: 400; text-align: left; color: var(--text-secondary); }
+  .tip thead th:not(:first-child) { text-align: right; padding-left: 12px; }
+  .tip td { padding: 0 0 0 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); }
   .error { color: var(--text-primary); }
 </style>
 <p class="error" hidden></p>
@@ -192,16 +216,16 @@ const TEMPLATE = `
 <div class="columns">
   <section data-collector="legacy">
     <h2>Legacy collector</h2>
-    <figure data-panel="heap"><figcaption>Heap by space</figcaption><div class="legend"></div><div class="chart"></div></figure>
-    <figure data-panel="work"><figcaption></figcaption><div class="legend"></div><div class="chart"></div></figure>
+    <figure data-panel="heap"><figcaption>Heap by space</figcaption><div class="legend"></div><div class="plot"><div class="chart"></div></div></figure>
+    <figure data-panel="work"><figcaption></figcaption><div class="legend"></div><div class="plot"><div class="chart"></div></div></figure>
     <figure data-panel="budget"><figcaption>Work budget</figcaption>
       <p class="none">The legacy collector keeps no work budget. A gen 2 collection takes the whole heap in one go.</p></figure>
   </section>
   <section data-collector="incremental">
     <h2>Incremental collector</h2>
-    <figure data-panel="heap"><figcaption>Heap by space</figcaption><div class="legend"></div><div class="chart"></div></figure>
-    <figure data-panel="work"><figcaption></figcaption><div class="legend"></div><div class="chart"></div></figure>
-    <figure data-panel="budget"><figcaption>Work budget</figcaption><div class="chart"></div></figure>
+    <figure data-panel="heap"><figcaption>Heap by space</figcaption><div class="legend"></div><div class="plot"><div class="chart"></div></div></figure>
+    <figure data-panel="work"><figcaption></figcaption><div class="legend"></div><div class="plot"><div class="chart"></div></div></figure>
+    <figure data-panel="budget"><figcaption>Work budget</figcaption><div class="plot"><div class="chart"></div></div></figure>
   </section>
 </div>`;
 
@@ -239,6 +263,12 @@ class GcWidget extends HTMLElement {
   /** @type {Map<string, { input: HTMLInputElement, read: (value: number) => void, moving: boolean }>} */
   #sliders = new Map();
   #frame = 0;
+  /** What the last redraw laid out, which the pointer's marks follow; null before the clock has a length. */
+  /** @type {{ xMax: number, width: number, runLength: number, binKb: number, workMax: number } | null} */
+  #layout = null;
+  /** The panel under the pointer, and where in it the pointer rests, in px. */
+  /** @type {{ collector: Collector, panel: string, x: number, y: number } | null} */
+  #pointer = null;
 
   connectedCallback() {
     if (this.shadowRoot) return;
@@ -290,6 +320,27 @@ class GcWidget extends HTMLElement {
         ...PARTS.map((part) => key(part, `var(--${part})`)),
         full(key("full collections, faded", `color-mix(in srgb, var(--text-secondary) ${FADED * 100}%, transparent)`)),
       );
+      // Each panel reads its values under the pointer: a crosshair on the heap and
+      // the budget, an outline round a bar of work, and a tooltip beside either.
+      for (const plot of column.querySelectorAll(".plot")) {
+        const panel = /** @type {string} */ (/** @type {HTMLElement} */ (plot.closest("figure")).dataset.panel);
+        const mark = document.createElement("div");
+        mark.className = panel === "work" ? "outline" : "crosshair";
+        const tip = document.createElement("div");
+        tip.className = "tip";
+        mark.hidden = tip.hidden = true;
+        plot.append(mark, tip);
+        plot.addEventListener("pointermove", (event) => {
+          const box = plot.getBoundingClientRect();
+          const { clientX, clientY } = /** @type {PointerEvent} */ (event);
+          this.#pointer = { collector, panel, x: clientX - box.left, y: clientY - box.top };
+          this.#hover();
+        });
+        plot.addEventListener("pointerleave", () => {
+          this.#pointer = null;
+          this.#hover();
+        });
+      }
     }
     this.#name = this.id || `gc-widget-${widgets++}`;
     if (this.#entries.length > 1) {
@@ -461,7 +512,11 @@ class GcWidget extends HTMLElement {
 
     // A request that names a preset has no run length until the worker spells it
     // out, and the charts' clock needs one.
-    if ("preset" in this.#drawn) return;
+    if ("preset" in this.#drawn) {
+      this.#layout = null;
+      this.#hover();
+      return;
+    }
     const { run_length: runLength, settings: { threshold0 } } = this.#drawn;
     const style = getComputedStyle(this);
     const token = (/** @type {string} */ name) => style.getPropertyValue(`--${name}`).trim();
@@ -592,7 +647,106 @@ class GcWidget extends HTMLElement {
         }));
       }
     }
+    this.#layout = { xMax, width, runLength, binKb, workMax };
+    this.#hover();
   }
+
+  /**
+   * Show what the panel under the pointer reads there, from the records drawn so
+   * far: the heap or the budget at the nearest collection, or the work of the bin
+   * under it. A redraw leaves the marks alone and calls this again, so they hold
+   * while runs stream.
+   */
+  #hover() {
+    const root = /** @type {ShadowRoot} */ (this.shadowRoot);
+    for (const mark of root.querySelectorAll(".crosshair, .outline, .tip")) /** @type {HTMLElement} */ (mark).hidden = true;
+    const pointer = this.#pointer, layout = this.#layout;
+    if (!pointer || !layout) return;
+    const { collector, panel, x, y } = pointer;
+    const { xMax, width, runLength, binKb, workMax } = layout;
+    const { marginLeft, marginRight, marginTop, marginBottom } = MARGINS;
+    if (x < marginLeft - SLACK || x > width - marginRight + SLACK) return;
+    const inner = width - marginLeft - marginRight;
+    const kb = Math.min(Math.max(0, ((x - marginLeft) / inner) * runLength), runLength - 1);
+    const px = (/** @type {number} */ mb) => marginLeft + (mb / xMax) * inner;
+    const plot = /** @type {HTMLElement} */ (this.#column(collector).querySelector(`[data-panel="${panel}"] .plot`));
+    const mark = /** @type {HTMLElement} */ (plot.querySelector(".crosshair, .outline"));
+    const tip = /** @type {HTMLElement} */ (plot.querySelector(".tip"));
+    const records = this.#records[collector];
+    // The span the tooltip stands beside: a crosshair's x, or a bar's two edges.
+    let left, right;
+    if (panel === "work") {
+      const at = workAt(records, binKb, kb);
+      const total = [...at.automatic, ...at.full].reduce((sum, part) => sum + part, 0);
+      const inset = Math.max(1, (px(at.x2) - px(at.x1) - BAR) / 2);
+      [left, right] = [px(at.x1) + inset - 2, px(at.x2) - inset + 2];
+      const top = marginTop + (1 - total / workMax) * (HEIGHTS.work - marginTop - marginBottom) - 2;
+      Object.assign(mark.style, { left: `${left}px`, width: `${right - left}px`, top: `${top}px`, height: `${HEIGHTS.work - marginBottom - top}px` });
+      mark.hidden = !total;
+      const fulls = at.full.some(Boolean);
+      tip.replaceChildren(...readout(
+        `${megabytes(at.x1)}–${megabytes(at.x2)} MB allocated`,
+        fulls ? ["objects", "automatic", "full"] : ["objects"],
+        PARTS.map((part, i) => [part, `var(--${part})`, (fulls ? [at.automatic[i], at.full[i]] : [at.automatic[i]]).map(whole)]),
+      ));
+    } else {
+      const at = panel === "heap" ? heapAt(records, kb) : budgetAt(records, kb);
+      if (!at) return;
+      left = right = px(at.clock / 1000);
+      Object.assign(mark.style, { left: `${left}px`, top: `${marginTop}px`, height: `${plot.clientHeight - marginTop - marginBottom}px` });
+      mark.hidden = false;
+      const where = `${collections(at.kinds)} at ${megabytes(at.clock / 1000)} MB`;
+      if ("budget" in at) {
+        tip.replaceChildren(...readout(where, ["objects"], [["work budget", "var(--text-primary)", [whole(at.budget)]]]));
+      } else {
+        const { before, after } = at;
+        /** @returns {[string, string, string[]]} */
+        const row = (/** @type {string} */ name, /** @type {string} */ color, /** @type {(read: typeof before) => number} */ value) =>
+          [name, color, [hundredths(value(before)), hundredths(value(after))]];
+        tip.replaceChildren(...readout(where, ["MB", "before", "after"], [
+          row("heap", "var(--text-muted)", (read) => read.heap),
+          row("reachable", "var(--text-primary)", (read) => read.reachable),
+          row("uncollected garbage", "transparent", (read) => read.garbage),
+          ...SPACES[collector].map((space, i) => row(space, `var(--${space})`, (read) => read.spaces[i])),
+        ]));
+      }
+    }
+    tip.hidden = false;
+    // Right of the mark, or left of it where the chart ends; level with the
+    // pointer, inside the panel.
+    const toRight = right + GAP + tip.offsetWidth <= width;
+    tip.style.left = `${toRight ? right + GAP : left - GAP - tip.offsetWidth}px`;
+    tip.style.top = `${Math.min(Math.max(0, y - tip.offsetHeight / 2), plot.clientHeight - tip.offsetHeight)}px`;
+  }
+}
+
+/**
+ * A tooltip's readout: where it reads, then a table with a row a quantity, keyed
+ * with its mark's color, and a value under each column.
+ * @param {string} where
+ * @param {string[]} columns the unit, over the quantities, then each column's head
+ * @param {[string, string, string[]][]} rows each quantity's name, color and values
+ */
+function readout(where, columns, rows) {
+  const caption = document.createElement("p");
+  caption.textContent = where;
+  const table = document.createElement("table");
+  const head = table.createTHead().insertRow();
+  for (const column of columns) {
+    const cell = document.createElement("th");
+    cell.textContent = column;
+    head.append(cell);
+  }
+  const body = table.createTBody();
+  for (const [name, color, values] of rows) {
+    const row = body.insertRow();
+    const label = document.createElement("th");
+    label.scope = "row";
+    label.append(key(name, color, true));
+    row.append(label);
+    for (const value of values) row.insertCell().textContent = value;
+  }
+  return [caption, table];
 }
 
 /** Put freshly drawn charts in their panel, in place of the ones before. */
