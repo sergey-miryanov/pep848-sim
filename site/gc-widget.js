@@ -42,8 +42,17 @@ const LANES = {
 };
 const PARTS = ["marked", "survived", "freed"];
 // The fields of a record, by position.
-const CLOCK = 0, MARKED = 2, WORK_TO_DO = 5;
+const CLOCK = 0, KIND = 1, MARKED = 2, WORK_TO_DO = 5;
 const SPACES_BEFORE = 7, SPACES_AFTER = 8, REACHABLE_BEFORE = 9, REACHABLE_AFTER = 10;
+
+// The kinds of a full collection's record: the workload's gc.collect() calls,
+// and shutdown's two (ADR 0012).
+const FULL = ["full", "shutdown"];
+// How opaque a full collection's work stands beside the runtime's own collections'.
+const FADED = 0.45;
+// How far below the top lane's baseline, in px, a tick at each gc.collect()
+// reaches: into the margin, clear of the heap.
+const TICK = 6;
 
 // About this many bins of work a run, each a whole number of collection intervals.
 const BINS = 40;
@@ -86,7 +95,7 @@ const count = (value, values) => (values.some((n) => n >= 10_000) ? `${tenths(va
  * }[]}
  */
 const FIGURES = [
-  { label: "Peak work", read: (figures) => figures[0], show: count },
+  { label: "Peak work (automatic)", read: (figures) => figures[0], show: count },
   { label: "Peak uncollected garbage (MB)", read: (figures) => figures[1] / 1000, show: tenths },
   { label: "Work per MB", read: (figures) => figures[2], show: count },
   { label: "Yield", read: (figures) => figures[3], show: percent },
@@ -309,6 +318,7 @@ class GcWidget extends HTMLElement {
       );
       /** @type {HTMLElement} */ (column.querySelector('[data-panel="work"] .legend')).append(
         ...PARTS.map((part) => key(part, `var(--${part})`)),
+        full(key("full collections, faded", `color-mix(in srgb, var(--text-secondary) ${FADED * 100}%, transparent)`)),
       );
     }
     this.#name = this.id || `gc-widget-${widgets++}`;
@@ -493,7 +503,12 @@ class GcWidget extends HTMLElement {
     // same MB in any lane.
     const heapMax = ceiling(Math.max(...COLLECTORS.flatMap((c) => heaps[c].whole.map((point) => point.heap))));
     const binKb = Math.ceil(runLength / BINS / threshold0) * threshold0;
-    const works = { legacy: work(this.#records.legacy, threshold0, binKb), incremental: work(this.#records.incremental, threshold0, binKb) };
+    const works = { legacy: work(this.#records.legacy, binKb), incremental: work(this.#records.incremental, binKb) };
+    // The legend names the full collections' marks only for runs that make some.
+    const fulls = COLLECTORS.some((c) => this.#records[c].some((record) => FULL.includes(record[KIND])));
+    for (const entry of /** @type {ShadowRoot} */ (this.shadowRoot).querySelectorAll(".legend [data-full]")) {
+      /** @type {HTMLElement} */ (entry).hidden = !fulls;
+    }
     const workMax = ceiling(Math.max(0, ...COLLECTORS.flatMap((c) => works[c].map((segment) => segment.y2))));
     const budgets = this.#records.incremental.map((record) => ({ mb: record[CLOCK] / 1000, budget: record[WORK_TO_DO] }));
     const lowest = Math.min(0, ...budgets.map((d) => d.budget));
@@ -514,6 +529,16 @@ class GcWidget extends HTMLElement {
         `Work per ${binKb / 1000} MB allocated`;
       const { whole, lanes } = heaps[collector];
       const colors = { domain: SPACES[collector], range: SPACES[collector].map((space) => token(space)) };
+      // Both runs call gc.collect() and shut down at the same clocks. A tick below
+      // the top lane marks each call, one to a pixel at most, and a dashed rule
+      // across every panel marks shutdown. Each says what it marks in the chart,
+      // so the legends keep their length.
+      const records = this.#records[collector];
+      const pxPerMb = (width - MARGINS.marginLeft - MARGINS.marginRight) / xMax;
+      const calls = [...new Set(records.filter((record) => record[KIND] === "full")
+        .map((record) => Math.round((record[CLOCK] / 1000) * pxPerMb)))].map((px) => px / pxPerMb);
+      const shutdown = records.filter((record) => record[KIND] === "shutdown").slice(0, 1).map((record) => record[CLOCK] / 1000);
+      const ending = [Plot.ruleX(shutdown, { stroke: token("text-secondary"), strokeDasharray: "3,3" })];
       // The lanes share the clock, whose axis only the bottom one draws, and the
       // y-scale, whose unit only the top one names. Each lane's colors name what
       // it shows.
@@ -527,7 +552,7 @@ class GcWidget extends HTMLElement {
           ariaLabel: `${TITLES[collector]}: ${shows}`,
           y: { domain: [0, heapMax], label: top ? "heap (MB)" : null, ticks: LANE_TICKS },
           color: colors,
-          marks: [laneGridY, ...marks, Plot.ruleY([0], { stroke: token("baseline") })],
+          marks: [laneGridY, ...marks, ...ending, Plot.ruleY([0], { stroke: token("baseline") })],
         });
       };
       chart(column, "heap",
@@ -535,6 +560,15 @@ class GcWidget extends HTMLElement {
           Plot.areaY(whole, { x: "mb", y1: "reachable", y2: "heap", fill: token("text-muted"), fillOpacity: 0.18 }),
           Plot.lineY(whole, { x: "mb", y: "heap", stroke: token("text-muted"), strokeWidth: 2 }),
           Plot.lineY(whole, { x: "mb", y: "reachable", stroke: token("text-primary"), strokeWidth: 2 }),
+          Plot.ruleX(calls, { y1: 0, y2: (-heapMax * TICK) / LANE_HEIGHT, stroke: token("text-secondary") }),
+          Plot.text(calls.slice(0, 1), {
+            x: (/** @type {number} */ mb) => mb, y: 0, text: () => "gc.collect()",
+            textAnchor: "start", lineAnchor: "bottom", dx: 2, dy: -2, fill: token("text-secondary"),
+          }),
+          Plot.text(shutdown, {
+            x: (/** @type {number} */ mb) => mb, frameAnchor: "top", text: () => "shutdown",
+            textAnchor: "end", dx: -4, fill: token("text-secondary"),
+          }),
         ]),
         ...lanes.map((bands, i) => lane(i + 1, LANES[collector][i].join(" and "), LANES[collector][i].length > 1
           // Spaces that share a lane stack as fills alone: a line along a band's
@@ -551,20 +585,21 @@ class GcWidget extends HTMLElement {
       const inset = Math.max(1, (binPx - BAR) / 2);
       chart(column, "work", Plot.plot({
         ...frame(HEIGHTS.work),
-        ariaLabel: `${TITLES[collector]}: work per bin, as marked, survived and freed`,
+        ariaLabel: `${TITLES[collector]}: work per bin, as marked, survived and freed, full collections' faded above`,
         y: { domain: [0, workMax], label: "work (objects)", tickFormat: compact },
         color: { domain: PARTS, range: PARTS.map((part) => token(part)) },
         marks: [
           gridY,
           // A 2 px gap between segments and between bars, and rounded ends on top.
           Plot.rect(segments.filter((s) => !s.top), {
-            x1: "x1", x2: "x2", y1: "y1", y2: "y2", fill: "part",
+            x1: "x1", x2: "x2", y1: "y1", y2: "y2", fill: "part", fillOpacity: "opacity",
             insetLeft: inset, insetRight: inset, insetTop: 1, insetBottom: 1,
           }),
           Plot.rect(segments.filter((s) => s.top), {
-            x1: "x1", x2: "x2", y1: "y1", y2: "y2", fill: "part",
+            x1: "x1", x2: "x2", y1: "y1", y2: "y2", fill: "part", fillOpacity: "opacity",
             insetLeft: inset, insetRight: inset, insetTop: 1, insetBottom: 1, ry2: 4,
           }),
+          ...ending,
           Plot.ruleY([0], { stroke: token("baseline") }),
         ],
       }));
@@ -582,6 +617,7 @@ class GcWidget extends HTMLElement {
             }),
             Plot.ruleY([0], { stroke: token("text-secondary"), strokeWidth: 2 }),
             Plot.lineY(budgets, { x: "mb", y: "budget", curve: "step-after", stroke: token("text-primary"), strokeWidth: 2 }),
+            ...ending,
           ],
         }));
       }
@@ -625,32 +661,45 @@ function heap(collector, records) {
 }
 
 /**
- * The work panel's data: each bin's work, stacked as marked, survived and freed.
- * A collection at clock c covers the threshold0 kB before it, so it falls in the
- * bin that holds clock c - threshold0.
+ * The work panel's data: each bin's work, stacked as marked, survived and freed,
+ * the runtime's own collections' first and the full collections' faded above
+ * them. A collection falls in the bin of the kB it ran after: an automatic one
+ * ends the threshold0 kB it covers, a full one the kB the workload called it in.
  * @param {Record[]} records
- * @param {number} threshold0
  * @param {number} binKb
  */
-function work(records, threshold0, binKb) {
+function work(records, binKb) {
   /** @type {Map<number, number[]>} */
   const bins = new Map();
   for (const record of records) {
-    const bin = Math.floor((record[CLOCK] - threshold0) / binKb);
-    const sums = bins.get(bin) ?? [0, 0, 0];
-    for (let part = 0; part < PARTS.length; part++) sums[part] += /** @type {number} */ (record[MARKED + part]);
+    // A gc.collect() can come before the first allocation, at clock 0.
+    const bin = Math.max(0, Math.floor((record[CLOCK] - 1) / binKb));
+    const sums = bins.get(bin) ?? [0, 0, 0, 0, 0, 0];
+    const first = FULL.includes(/** @type {string} */ (record[KIND])) ? PARTS.length : 0;
+    for (let part = 0; part < PARTS.length; part++) sums[first + part] += /** @type {number} */ (record[MARKED + part]);
     bins.set(bin, sums);
   }
   return [...bins].flatMap(([bin, sums]) => {
     const top = sums.findLastIndex((sum) => sum > 0);
     let y = 0;
-    return sums.flatMap((sum, part) => {
+    return sums.flatMap((sum, i) => {
       if (!sum) return [];
       const y1 = y;
       y += sum;
-      return [{ x1: (bin * binKb) / 1000, x2: ((bin + 1) * binKb) / 1000, y1, y2: y, part: PARTS[part], top: part === top }];
+      const faded = i >= PARTS.length;
+      return [{
+        x1: (bin * binKb) / 1000, x2: ((bin + 1) * binKb) / 1000, y1, y2: y,
+        part: PARTS[i % PARTS.length], opacity: faded ? FADED : 1, top: i === top,
+      }];
     });
   });
+}
+
+/** Mark a legend entry as one for full collections, hidden until a run makes some. */
+function full(/** @type {HTMLElement} */ entry) {
+  entry.dataset.full = "";
+  entry.hidden = true;
+  return entry;
 }
 
 customElements.define("gc-widget", GcWidget);

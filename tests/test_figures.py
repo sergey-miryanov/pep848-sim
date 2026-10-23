@@ -48,6 +48,17 @@ def test_peak_work_is_the_most_work_one_collection_did() -> None:
     assert Figures().add(records).peak_work == 50
 
 
+def test_peak_work_leaves_the_full_collections_out() -> None:
+    records = [
+        record(kind="young", survived=7),
+        record(kind="full", marked=900, survived=40),
+        record(kind="old", marked=12),
+        record(kind="shutdown", freed=500),
+    ]
+
+    assert Figures().add(records).peak_work == 12
+
+
 def test_peak_uncollected_garbage_is_the_most_a_collection_started_with() -> None:
     # The first collection starts with 60 - 45 = 15 kB of uncollected garbage and
     # frees 13. The second starts with 9 and frees none, so it ends with more
