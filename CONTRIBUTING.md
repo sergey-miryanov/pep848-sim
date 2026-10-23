@@ -31,7 +31,8 @@ the interpreter. If a `.venv` on another Python is already there, delete it
 first: Poetry reuses an in-project `.venv` whatever its version.
 
 `npm ci` installs tsc into `node_modules`, at the version `package-lock.json`
-locks. It needs Node 24, the version CI runs.
+locks. It needs Node 24, the version CI runs. Node's own test runner runs the
+widget's tests, so they take no package.
 
 ## Commands
 
@@ -41,9 +42,10 @@ lists them.
 
 | Recipe | What it does |
 |---|---|
-| `check` | `check-py` and `check-ts`: what CI gates on |
+| `check` | `check-py`, `check-ts` and `test-js`: what CI gates on |
 | `check-py` | `lint`, `typecheck` and `test`: the Python |
-| `check-ts` | tsc over the site's JavaScript |
+| `check-ts` | tsc over the site's JavaScript and its tests |
+| `test-js` | Node's test runner over the widget's JavaScript |
 | `test` | pytest, Hypothesis invariants included, with the coverage gate |
 | `lint` | ruff's checker and formatter |
 | `typecheck` | mypy and pyrefly, both strict |
@@ -60,8 +62,12 @@ coverage gate out: `poetry run just test tests/test_smoke.py --no-cov`.
 - mypy and pyrefly both run in strict mode, and both have to pass. A pyrefly
   warning fails the check as an error does.
 - tsc checks the site's JavaScript from its JSDoc, in strict mode: the page's
-  scripts against the DOM (`tsconfig.json`), and the worker against a web
-  worker's globals (`tsconfig.worker.json`).
+  scripts and the tests against the DOM (`tsconfig.json`), and the worker
+  against a web worker's globals (`tsconfig.worker.json`).
+- Node's test runner runs `tests/*.test.js` against `site/panels.js`, which
+  turns a run's records into what each panel draws. `panels.js` imports neither
+  Plot nor the DOM, so Node can load it. The tests stay out of `site/`, which
+  `just site` publishes whole.
 - pytest runs the example tests and the Hypothesis invariants: no reachable
   object is ever freed, every alive object sits in exactly one space, the work
   budget moves by exactly what the counters say, and cyclic garbage wholly in

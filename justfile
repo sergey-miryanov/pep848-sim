@@ -3,16 +3,20 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
 _default:
     @just --list
 
-# check-py and check-ts: what CI gates on
-check: check-py check-ts
+# check-py, check-ts and test-js: what CI gates on
+check: check-py check-ts test-js
 
 # lint, typecheck and test: the Python
 check-py: lint typecheck test
 
-# tsc over the site's JavaScript: the page's scripts, then the worker
+# tsc over the site's JavaScript: the page's scripts and the tests, then the worker
 check-ts:
     node node_modules/typescript/bin/tsc -p tsconfig.json
     node node_modules/typescript/bin/tsc -p tsconfig.worker.json
+
+# Node's test runner over the widget's JavaScript
+test-js:
+    node --test "tests/*.test.js"
 
 # pytest, Hypothesis invariants included, with the coverage gate
 test *args:
