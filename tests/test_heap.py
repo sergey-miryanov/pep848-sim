@@ -300,6 +300,35 @@ def test_letting_go_of_every_frame_root_frees_what_frames_alone_held() -> None:
     assert heap.uncollected_garbage == 2
 
 
+def test_letting_go_of_the_modules_frees_what_lies_on_no_cycle() -> None:
+    heap = new_heap()
+    sys = heap.module_root
+    chain_a, chain_b = heap.allocate(), heap.allocate()
+    heap.link(sys, chain_a)
+    heap.link(chain_a, chain_b)
+    a, b = heap.allocate(), heap.allocate()
+    heap.link(sys, a)
+    heap.link(a, b)
+    heap.link(b, a)
+    held = heap.allocate()
+    heap.link(sys, held)
+    for x in (chain_a, chain_b, a, b):
+        heap.let_go_frame_root(x)
+
+    heap.let_go_of_the_modules()
+
+    assert heap.references(sys) == ()
+    assert [heap.is_freed(x) for x in (chain_a, chain_b, a, b, held)] == [
+        True,
+        True,
+        False,
+        False,
+        False,
+    ]
+    # The cycle stays for a collection to free, and a frame still holds `held`.
+    assert heap.uncollected_garbage == 2
+
+
 def test_a_new_heap_has_the_module_root_held_by_the_interpreter() -> None:
     heap = new_heap()
 

@@ -20,8 +20,17 @@ n of them allocates n × `threshold0` kB. `gc.collect()` resets the budget too.
 A loop that allocates less than `threshold0` kB between two calls leaves no
 automatic collection to count, so we take its length from the code's counts.
 
+A preset runs for its worker's own length on the clock: start-up, the
+benchmark's loops as many times as the records show, and shutdown. A target of
+so many sweeps fails for a benchmark that calls `gc.collect()` more often than
+every `threshold0` kB, as create_gc_cycles does. Each call resets the budget,
+so no automatic collection comes during its loops, and no sweep ends.
+
 Some parameters neither source fixes, such as the start-up heap's shape or the
-churn inside a library. A script in `tools/` prints a preset's yields,
+churn inside a library. The start-up heap hangs off the module root as two
+structures: a tree, which shutdown leaves as cyclic garbage, and chains, which
+refcounting frees. Their sizes set the share of it that shutdown's collections
+find. A script in `tools/` prints a preset's yields,
 collections and heap sizes beside its benchmark's. We change the open
 parameters until the two agree within #117's tolerance, and leave the rest as
 the code and the records set them. Each parameter's comment names its source:
@@ -39,3 +48,7 @@ we fitted it to.
   between objects, so it shows no shapes.
 - An optimiser over the workload parameters: a preset leaves few of them open,
   a run takes seconds, and a fit by hand keeps a reason for each number.
+- About three sweeps for every preset, as CONTEXT.md first had it:
+  create_gc_cycles never ends one.
+- A start-up structure with a fitted share of cycles of its own: it needs a
+  new shape, where two structures need none.
