@@ -21,7 +21,9 @@ Two things call a full collection. A structure can ask for one before each
 build and one after each drop, as create_gc_cycles calls `gc.collect()`
 around each loop. A run can end in shutdown, as a worker does. By the time
 `finalize_modules` runs, the worker's frames have returned, so the heap lets
-go of every frame root and two full collections follow. The record names the
+go of every frame root. `finalize_modules` takes each module out of
+`sys.modules`, so sys lets go of everything it holds, and two full
+collections follow. The record names the
 kind: `full` for `gc.collect()` and `shutdown` for the last two, in both
 collectors. `gen 2` stays the legacy collector's automatic collection, so a
 preset's records split into automatic and explicit collections the way #117

@@ -264,10 +264,11 @@ class Workload:
                 heap.collect_full("full")
 
     def shut_down(self) -> None:
-        """End as a worker does: its frames have returned, and finalize_modules runs
-        two full collections."""
+        """End as a worker does: its frames have returned, and finalize_modules lets
+        go of the modules and runs two full collections."""
         heap = self._heap
         heap.let_go_every_frame_root()
+        heap.let_go_of_the_modules()
         for _ in range(2):
             heap.collect_full("shutdown")
 

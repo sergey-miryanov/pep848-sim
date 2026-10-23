@@ -107,22 +107,22 @@ class Heap:
 
     def let_go_every_frame_root(self) -> None:
         """Let go of every frame root, as a worker's frames have all returned by the
-        time it shuts down. The workload no longer knows what that leaves
-        unreachable, so a walk from sys counts the uncollected garbage again."""
+        time it shuts down."""
         for x, held in self.frame_roots().items():
             # Its own frame roots keep x alive until now.
             self._objects[x].frame_roots = 0
             self._let_go([x] * held)
-        reached = {self._module_root}
-        stack = [self._module_root]
-        while stack:
-            for target in self._objects[stack.pop()].references:
-                if target not in reached:
-                    reached.add(target)
-                    stack.append(target)
-        self._count_garbage(
-            len(self._objects) - len(reached) - self._uncollected_garbage
-        )
+        self._count_unreachable()
+
+    def let_go_of_the_modules(self) -> None:
+        """Cut every reference sys holds, as finalize_modules takes each module out
+        of sys.modules at shutdown. Refcounting frees what lies on no cycle, and the
+        rest stays as cyclic garbage."""
+        sys = self._objects[self._module_root]
+        held = sys.references
+        sys.references = []
+        self._let_go(held)
+        self._count_unreachable()
 
     def is_freed(self, x: int) -> bool:
         return x not in self._objects
@@ -191,6 +191,20 @@ class Heap:
         if record is None:
             raise ValueError(f"object {x} is freed")
         return record
+
+    def _count_unreachable(self) -> None:
+        """Count the uncollected garbage again with a walk from the roots, after a
+        let-go at shutdown that the workload cannot count."""
+        roots = [self._module_root, *self.frame_roots()]
+        reached = set(roots)
+        while roots:
+            for target in self._objects[roots.pop()].references:
+                if target not in reached:
+                    reached.add(target)
+                    roots.append(target)
+        self._count_garbage(
+            len(self._objects) - len(reached) - self._uncollected_garbage
+        )
 
     def _count_garbage(self, change: int) -> None:
         self._uncollected_garbage += change

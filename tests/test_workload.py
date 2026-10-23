@@ -474,23 +474,33 @@ def test_a_structure_that_asks_gets_a_full_collection_around_each_build() -> Non
     ]
 
 
-def test_shutdown_lets_go_of_the_frames_and_runs_two_full_collections() -> None:
+def test_shutdown_lets_go_of_frames_and_modules_then_collects_twice() -> None:
     collector = Recording(threshold0=1_000)
     heap = Heap(collector)
-    tree = StructureParameters(
-        shape=Tree(),
-        size=3,
-        root="frame",
-        lifetime=None,
-        rebuild_interval=None,
-        build_churn=0,
+
+    def long_lived(shape: Chains | Tree, size: int, root: Root) -> StructureParameters:
+        return StructureParameters(
+            shape=shape,
+            size=size,
+            root=root,
+            lifetime=None,
+            rebuild_interval=None,
+            build_churn=0,
+        )
+
+    structures = (
+        long_lived(Tree(), 3, "frame"),
+        long_lived(Tree(), 2, "module"),
+        long_lived(Chains(width=1), 2, "module"),
     )
-    workload = Workload(heap, WorkloadParameters(QUIET, (tree,), seed=848))
-    workload.run_to(5)
+    workload = Workload(heap, WorkloadParameters(QUIET, structures, seed=848))
+    workload.run_to(9)
 
     workload.shut_down()
 
-    # The tree's frame let go of it, which left the tree as cyclic garbage.
+    # Both trees stay as cyclic garbage, and refcounting frees the chain.
     assert heap.frame_roots() == {}
-    assert heap.uncollected_garbage == 3
-    assert collector.full == [(5, "shutdown"), (5, "shutdown")]
+    assert heap.references(heap.module_root) == ()
+    assert heap.uncollected_garbage == 5
+    assert len(heap) == 6
+    assert collector.full == [(9, "shutdown"), (9, "shutdown")]

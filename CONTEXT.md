@@ -24,8 +24,8 @@ _Avoid_: benchmark, program, test case
 A named workload with every workload parameter chosen by hand to model one
 worker of a pyperformance benchmark, from interpreter start-up to shutdown.
 Every preset has a benchmark behind it: there are no made-up workloads. Each
-carries its own seed and a run length chosen by hand, which aims at about
-three sweeps and stops sooner when sweeps run long.
+carries its own seed, and runs for its worker's own length on the allocation
+clock, shutdown included.
 _Avoid_: benchmark (that is the real program it is modelled on), scenario,
 example, template
 
