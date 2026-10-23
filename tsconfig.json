@@ -1,5 +1,6 @@
-// tsc checks the site's JavaScript from its JSDoc and emits nothing: the page's
-// scripts here, against the DOM, and the worker in tsconfig.worker.json.
+// tsc checks the site's JavaScript and its tests from their JSDoc and emits
+// nothing: the page's scripts and the tests here, against the DOM, and the
+// worker in tsconfig.worker.json.
 {
   "compilerOptions": {
     "allowJs": true,
@@ -11,6 +12,6 @@
     "moduleResolution": "bundler",
     "lib": ["es2023", "dom"]
   },
-  "include": ["site/**/*.js"],
+  "include": ["site/**/*.js", "tests/**/*.js"],
   "exclude": ["site/worker.js"]
 }

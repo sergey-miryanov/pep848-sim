@@ -1,6 +1,7 @@
 {
   "name": "pep848-sim",
   "private": true,
+  "type": "module",
   "description": "tsc, which checks the site's JavaScript: see CONTRIBUTING.md",
   "devDependencies": {
     "typescript": "7.0.2"
