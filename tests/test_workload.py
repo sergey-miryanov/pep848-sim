@@ -9,7 +9,14 @@ from pep848_sim.collectors.collector import Collector, CollectorSettings
 from pep848_sim.collectors.heap import Heap
 from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.collectors.legacy import LegacyCollector
-from pep848_sim.structures import Chains, Rings, Root, StructureParameters, Tree
+from pep848_sim.structures import (
+    Chains,
+    Hierarchy,
+    Rings,
+    Root,
+    StructureParameters,
+    Tree,
+)
 from pep848_sim.workload import (
     Churn,
     ChurnLifetimes,
@@ -71,6 +78,7 @@ def structure_parameters(draw: st.DrawFn) -> StructureParameters:
             st.one_of(
                 st.builds(Chains, st.integers(1, 4)),
                 st.just(Tree()),
+                st.builds(Hierarchy, st.integers(1, 4)),
                 st.builds(Rings, st.integers(1, 4)),
             )
         ),
