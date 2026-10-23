@@ -210,12 +210,8 @@ class Collector:
         self.add(x)
 
     def remove(self, x: int) -> None:
-        """Take x out of its space, as the heap asks when it frees x. An old
-        collection takes objects out of pending before it frees some of them, so x
-        may have none."""
-        space = self.space_of.get(x)
-        if space is not None:
-            space.remove(x)
+        """Take x out of its space, as the heap asks when it frees x."""
+        self.space_of[x].remove(x)
 
 
 def find_unreachable(heap: Heap, examined: Iterable[int]) -> list[int]:

@@ -121,13 +121,17 @@ class IncrementalCollector(Collector):
             # of garbage down
             self.work_to_do += 2 * collected
 
-    def form_transitive_closure(self, obj: int) -> list[int]:
+    def form_transitive_closure(self, obj: int) -> Space:
         """An increment: obj, and every pending object it reaches through pending
-        objects, each taken out of pending_space."""
-        increment = [obj]
-        for x in increment:
+        objects, each taken out of pending_space. It holds them in a space of its
+        own, as the branch's gc_collect_incremental_old does."""
+        increment = Space(self)
+        increment.append(obj)
+        # The walk's order, since a space cannot grow while it is iterated.
+        reached = [obj]
+        for x in reached:
             for target in self._heap.references(x):
                 if target in self.pending_space:
-                    self.pending_space.remove(target)
                     increment.append(target)
+                    reached.append(target)
         return increment
