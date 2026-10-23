@@ -1,7 +1,8 @@
 // @ts-check
-// What the widget's panels draw, from a run's records: the heap by space, work in
-// bins, and where each y-scale ends. It imports neither Plot nor the DOM, so
-// Node's test runner can load it: see tests/panels.test.js.
+// What the widget's panels draw from a run's records: the heap by space, work in
+// bins and where each y-scale ends. Also what each panel reads under the pointer.
+// The module imports neither Plot nor the DOM, so Node's test runner can load it:
+// see tests/panels.test.js.
 
 /** @typedef {import("./runs.js").Record} Record */
 /** @typedef {"legacy" | "incremental"} Collector */
@@ -70,25 +71,36 @@ export function heap(collector, records) {
 }
 
 /**
+ * Each bin's work, by the bin's index: marked, survived and freed by the
+ * runtime's own collections, then by the full collections. A collection falls in
+ * the bin of the kB it ran after: an automatic one ends the threshold0 kB it
+ * covers, a full one the kB the workload called it in.
+ * @param {Record[]} records
+ * @param {number} binKb
+ */
+function bins(records, binKb) {
+  /** @type {Map<number, number[]>} */
+  const byBin = new Map();
+  for (const record of records) {
+    // A gc.collect() can come before the first allocation, at clock 0.
+    const bin = Math.max(0, Math.floor((record[CLOCK] - 1) / binKb));
+    const sums = byBin.get(bin) ?? [0, 0, 0, 0, 0, 0];
+    const first = FULL.includes(/** @type {string} */ (record[KIND])) ? PARTS.length : 0;
+    for (let part = 0; part < PARTS.length; part++) sums[first + part] += /** @type {number} */ (record[MARKED + part]);
+    byBin.set(bin, sums);
+  }
+  return byBin;
+}
+
+/**
  * The work panel's data: each bin's work, stacked as marked, survived and freed,
  * the runtime's own collections' first and the full collections' faded above
- * them. A collection falls in the bin of the kB it ran after: an automatic one
- * ends the threshold0 kB it covers, a full one the kB the workload called it in.
+ * them.
  * @param {Record[]} records
  * @param {number} binKb
  */
 export function work(records, binKb) {
-  /** @type {Map<number, number[]>} */
-  const bins = new Map();
-  for (const record of records) {
-    // A gc.collect() can come before the first allocation, at clock 0.
-    const bin = Math.max(0, Math.floor((record[CLOCK] - 1) / binKb));
-    const sums = bins.get(bin) ?? [0, 0, 0, 0, 0, 0];
-    const first = FULL.includes(/** @type {string} */ (record[KIND])) ? PARTS.length : 0;
-    for (let part = 0; part < PARTS.length; part++) sums[first + part] += /** @type {number} */ (record[MARKED + part]);
-    bins.set(bin, sums);
-  }
-  return [...bins].flatMap(([bin, sums]) => {
+  return [...bins(records, binKb)].flatMap(([bin, sums]) => {
     const top = sums.findLastIndex((sum) => sum > 0);
     let y = 0;
     return sums.flatMap((sum, i) => {
@@ -102,4 +114,83 @@ export function work(records, binKb) {
       }];
     });
   });
+}
+
+/**
+ * The records at the collection clock nearest `kb`, the earlier of two as near.
+ * Several collections can share a clock, as shutdown's two do.
+ * @param {Record[]} records
+ * @param {number} kb
+ */
+function nearest(records, kb) {
+  let clock = -Infinity;
+  for (const record of records) {
+    if (Math.abs(record[CLOCK] - kb) < Math.abs(clock - kb)) clock = record[CLOCK];
+  }
+  return records.filter((record) => record[CLOCK] === clock);
+}
+
+/** The collections at one clock, by kind: "young collection", "2 shutdown collections". */
+export function collections(/** @type {string[]} */ kinds) {
+  /** @type {Map<string, number>} */
+  const counts = new Map();
+  for (const kind of kinds) counts.set(kind, (counts.get(kind) ?? 0) + 1);
+  const names = [...counts].map(([kind, n]) => (n > 1 ? `${n} ${kind}` : kind));
+  const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+  return `${list} ${kinds.length > 1 ? "collections" : "collection"}`;
+}
+
+/**
+ * What the heap panel reads under the pointer: the collections at the clock
+ * nearest `kb`, and the heap before the first of them and after the last, in MB.
+ * Null until the run's first record arrives.
+ * @param {Record[]} records
+ * @param {number} kb
+ */
+export function heapAt(records, kb) {
+  const at = nearest(records, kb);
+  if (!at.length) return null;
+  const read = (/** @type {number[]} */ sizes, /** @type {number} */ reachable) => {
+    const heap = sizes.reduce((sum, size) => sum + size, 0);
+    return { heap: heap / 1000, reachable: reachable / 1000, garbage: (heap - reachable) / 1000, spaces: sizes.map((size) => size / 1000) };
+  };
+  const first = at[0], last = at[at.length - 1];
+  return {
+    clock: first[CLOCK],
+    kinds: at.map((record) => record[KIND]),
+    before: read(first[SPACES_BEFORE], first[REACHABLE_BEFORE]),
+    after: read(last[SPACES_AFTER], last[REACHABLE_AFTER]),
+  };
+}
+
+/**
+ * What the work budget reads under the pointer: the collections at the clock
+ * nearest `kb`, and the budget the last of them left. Null until the run's first
+ * record arrives.
+ * @param {Record[]} records
+ * @param {number} kb
+ */
+export function budgetAt(records, kb) {
+  const at = nearest(records, kb);
+  if (!at.length) return null;
+  return { clock: at[0][CLOCK], kinds: at.map((record) => record[KIND]), budget: at[at.length - 1][WORK_TO_DO] };
+}
+
+/**
+ * What the work panel reads under the pointer: the bin that holds `kb`, its
+ * clocks in MB, and its work as the runtime's own collections and the full
+ * collections did it, each as marked, survived and freed.
+ * @param {Record[]} records
+ * @param {number} binKb
+ * @param {number} kb
+ */
+export function workAt(records, binKb, kb) {
+  const bin = Math.max(0, Math.floor(kb / binKb));
+  const sums = bins(records, binKb).get(bin) ?? [0, 0, 0, 0, 0, 0];
+  return {
+    x1: (bin * binKb) / 1000,
+    x2: ((bin + 1) * binKb) / 1000,
+    automatic: sums.slice(0, PARTS.length),
+    full: sums.slice(PARTS.length),
+  };
 }
