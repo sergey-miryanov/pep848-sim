@@ -16,13 +16,16 @@ const REQUEST = {
       {
         shape: { chains: 16 }, size: 1000, root: "module",
         lifetime: null, rebuild_interval: null, build_churn: 0,
+        full_collections: false,
       },
       {
         shape: "tree", size: 100, root: "frame",
         lifetime: 400, rebuild_interval: 1000, build_churn: 1,
+        full_collections: false,
       },
     ],
     seed: 848,
+    shutdown: false,
   },
   settings: { threshold0: 20, threshold1: 10, threshold2: 10 },
   run_length: 20000,
