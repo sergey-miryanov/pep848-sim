@@ -42,6 +42,7 @@ def test_a_request_runs_the_legacy_collector_then_the_incremental_one() -> None:
         (',\n    "every": 50', "", "request lacks 'every'"),
         (',\n        "shutdown": false', "", "workload lacks 'shutdown'"),
         ('"tree"', '"list"', "no shape 'list'"),
+        ('"tree"', '{"rings": 0}', "a ring of 0 objects holds none"),
         ('"module"', '"global"', "no root 'global'"),
     ],
 )

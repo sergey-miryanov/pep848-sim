@@ -9,6 +9,7 @@ from pep848_sim.collectors.heap import Heap
 from pep848_sim.structures import (
     Build,
     Chains,
+    Rings,
     Root,
     Shape,
     StructureParameters,
@@ -115,6 +116,56 @@ def test_a_tree_links_each_object_and_its_parent_both_ways() -> None:
     assert heap.clock == 5
 
 
+def test_rings_link_each_object_to_the_next_and_back_and_close() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+
+    built(heap, long_lived(Rings(length=3), 7, "frame"))
+
+    root, a, b, c, d, e, f = list(collector.nursery)[1:]
+    assert [heap.references(x) for x in (root, a, b, c, d, e, f)] == [
+        (a, d),
+        (b, c),
+        (a, c),
+        (b, a),
+        (e, f),
+        (d, f),
+        (e, d),
+    ]
+    assert heap.frame_roots() == {root: 1}
+    assert heap.clock == 7
+
+
+def test_a_ring_of_one_object_links_it_to_itself_both_ways() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+
+    built(heap, long_lived(Rings(length=1), 3, "frame"))
+
+    root, a, b = list(collector.nursery)[1:]
+    assert [heap.references(x) for x in (root, a, b)] == [(a, b), (a, a), (b, b)]
+
+
+@pytest.mark.parametrize(("size", "garbage"), [(1, 0), (2, 0), (4, 3), (5, 3), (6, 5)])
+def test_dropped_rings_stay_as_cyclic_garbage_but_a_lone_first_object(
+    size: int, garbage: int
+) -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    build = built(heap, long_lived(Rings(length=3), size, "frame"))
+
+    build.drop()
+
+    # The list goes on the spot. A last ring of two links both ways and stays.
+    assert heap.uncollected_garbage == garbage
+    assert len(collector.nursery) == 1 + garbage
+
+
+def test_a_ring_of_no_objects_is_refused() -> None:
+    with pytest.raises(ValueError, match="a ring of 0 objects holds none"):
+        Rings(length=0)
+
+
 def test_a_build_that_outlasts_its_rebuild_interval_is_refused() -> None:
     def repeating(rebuild_interval: int) -> StructureParameters:
         # Ten objects, each followed by two churn allocations: a 30 kB build.
@@ -133,7 +184,11 @@ def test_a_build_that_outlasts_its_rebuild_interval_is_refused() -> None:
 
 
 @given(
-    st.one_of(st.builds(Chains, width=st.integers(1, 8)), st.just(Tree())),
+    st.one_of(
+        st.builds(Chains, width=st.integers(1, 8)),
+        st.just(Tree()),
+        st.builds(Rings, length=st.integers(1, 8)),
+    ),
     st.integers(min_value=1, max_value=40),
     st.sampled_from(["module", "frame"]),
     st.data(),

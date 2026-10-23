@@ -6,7 +6,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from pep848_sim.collectors.collector import CollectorSettings
-from pep848_sim.structures import Tree
+from pep848_sim.structures import Chains, Rings, Shape, Tree
 from pep848_sim.widget.controls import Control, controls
 from pep848_sim.widget.request import runs
 from pep848_sim.workload import WorkloadParameters, geometric_thresholds
@@ -166,11 +166,7 @@ def request(
                 },
                 "structures": [
                     {
-                        "shape": (
-                            "tree"
-                            if isinstance(structure.shape, Tree)
-                            else {"chains": structure.shape.width}
-                        ),
+                        "shape": shape(structure.shape),
                         "size": structure.size,
                         "root": structure.root,
                         "lifetime": structure.lifetime,
@@ -192,6 +188,17 @@ def request(
             "every": every,
         }
     )
+
+
+def shape(shape: Shape) -> str | dict[str, int]:
+    """A shape as a request names it."""
+    match shape:
+        case Tree():
+            return "tree"
+        case Chains(width):
+            return {"chains": width}
+        case Rings(length):
+            return {"rings": length}
 
 
 def paths(parameters: WorkloadParameters) -> list[str]:
