@@ -66,10 +66,12 @@ class Record(NamedTuple):
 
 class Space:
     """Objects in the order they entered, held as the pseudocode's lists hold them.
-    Each change goes through the collector, which keeps every object in one space."""
+    An object sits in one space at a time, as CPython's PyGC_Head links it into one
+    list: putting it in a space takes it out of the one it was in."""
 
     def __init__(self, collector: Collector) -> None:
-        self._collector = collector
+        # The collector's map from each object to its space, which its spaces share.
+        self._space_of = collector.space_of
         self._objects: dict[int, None] = {}
 
     def __iter__(self) -> Iterator[int]:
@@ -83,7 +85,9 @@ class Space:
 
     def append(self, x: int) -> None:
         """Put x last, taking it out of the space it was in."""
-        self._collector._place(x, self)
+        self._take_out(x)
+        self._objects[x] = None
+        self._space_of[x] = self
 
     def extend(self, objects: Iterable[int]) -> None:
         # A copy first, so that another space can move here whole.
@@ -93,12 +97,18 @@ class Space:
     def pop(self, index: Literal[0, -1] = -1) -> int:
         """Take out the first object or the last, and return it."""
         x = next(iter(self._objects) if index == 0 else reversed(self._objects))
-        self._collector._place(x, None)
+        self._take_out(x)
         return x
 
     def remove(self, x: int) -> None:
         assert x in self._objects, f"object {x} is not in the space"
-        self._collector._place(x, None)
+        self._take_out(x)
+
+    def _take_out(self, x: int) -> None:
+        """Take x out of its space, this one or another, if it has one."""
+        space = self._space_of.pop(x, None)
+        if space is not None:
+            del space._objects[x]
 
 
 class Collector:
@@ -114,14 +124,14 @@ class Collector:
         self.settings = CollectorSettings() if settings is None else settings
         self.counts: list[CollectionCounts] = []
         self.records: list[Record] = []
+        # Each object's space, as CPython's PyGC_Head links an object into a list.
+        # Only the spaces write it, as they take objects in and out.
+        self.space_of: dict[int, Space] = {}
         self.nursery = Space(self)
         # How many objects the collections so far marked, saw survive and freed.
         self.marked = 0
         self.survived = 0
         self.freed = 0
-        # Each object's space, as CPython's PyGC_Head links an object into a list.
-        # Only _place changes it, together with the spaces themselves.
-        self._spaces: dict[int, Space] = {}
 
     def attach(self, heap: Heap) -> None:
         """Take the heap to collect, which hands itself over as it starts."""
@@ -200,16 +210,12 @@ class Collector:
         self.add(x)
 
     def remove(self, x: int) -> None:
-        self._place(x, None)
-
-    def _place(self, x: int, space: Space | None) -> None:
-        """Take x out of its space, if it has one, and put it last in `space`."""
-        old = self._spaces.pop(x, None)
-        if old is not None:
-            del old._objects[x]
+        """Take x out of its space, as the heap asks when it frees x. An old
+        collection takes objects out of pending before it frees some of them, so x
+        may have none."""
+        space = self.space_of.get(x)
         if space is not None:
-            space._objects[x] = None
-            self._spaces[x] = space
+            space.remove(x)
 
 
 def find_unreachable(heap: Heap, examined: Iterable[int]) -> list[int]:
