@@ -50,6 +50,7 @@ def test_a_request_runs_the_legacy_collector_then_the_incremental_one() -> None:
         (',\n        "shutdown": false', "", "workload lacks 'shutdown'"),
         ('"tree"', '"list"', "no shape 'list'"),
         ('"tree"', '{"rings": 0}', "a ring of 0 objects holds none"),
+        ('"tree"', '{"hierarchy": 0}', "a hierarchy of 0 branches ends at its root"),
         ('"module"', '"global"', "no root 'global'"),
     ],
 )

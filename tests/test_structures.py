@@ -9,6 +9,7 @@ from pep848_sim.collectors.heap import Heap
 from pep848_sim.structures import (
     Build,
     Chains,
+    Hierarchy,
     Rings,
     Root,
     Shape,
@@ -61,11 +62,14 @@ def test_a_lone_tree_root_lies_on_no_cycle_and_goes_on_the_spot() -> None:
     assert list(collector.nursery) == [heap.module_root]
 
 
+@pytest.mark.parametrize("shape", [Chains(width=3), Hierarchy(branches=3)])
 @pytest.mark.parametrize("root", ["module", "frame"])
-def test_refcounting_frees_dropped_chains_on_the_spot(root: Root) -> None:
+def test_refcounting_frees_a_dropped_shape_without_cycles_on_the_spot(
+    shape: Shape, root: Root
+) -> None:
     collector = Collector()
     heap = Heap(collector)
-    build = built(heap, long_lived(Chains(width=3), 10, root))
+    build = built(heap, long_lived(shape, 10, root))
 
     build.drop()
 
@@ -114,6 +118,31 @@ def test_a_tree_links_each_object_and_its_parent_both_ways() -> None:
     assert heap.references(heap.module_root) == ()
     assert heap.frame_roots() == {root: 1}
     assert heap.clock == 5
+
+
+def test_a_hierarchy_links_each_object_from_its_parent_alone() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+
+    built(heap, long_lived(Hierarchy(branches=3), 6, "frame"))
+
+    root, a, b, c, d, e = list(collector.nursery)[1:]
+    assert [heap.references(x) for x in (root, a, b, c, d, e)] == [
+        (a, b, c),
+        (d, e),
+        (),
+        (),
+        (),
+        (),
+    ]
+    assert heap.references(heap.module_root) == ()
+    assert heap.frame_roots() == {root: 1}
+    assert heap.clock == 6
+
+
+def test_a_hierarchy_without_branches_is_refused() -> None:
+    with pytest.raises(ValueError, match="ends at its root"):
+        Hierarchy(branches=0)
 
 
 def test_rings_link_each_object_to_the_next_and_back_and_close() -> None:
@@ -187,6 +216,7 @@ def test_a_build_that_outlasts_its_rebuild_interval_is_refused() -> None:
     st.one_of(
         st.builds(Chains, width=st.integers(1, 8)),
         st.just(Tree()),
+        st.builds(Hierarchy, branches=st.integers(1, 8)),
         st.builds(Rings, length=st.integers(1, 8)),
     ),
     st.integers(min_value=1, max_value=40),

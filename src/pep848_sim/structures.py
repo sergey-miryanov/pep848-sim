@@ -49,6 +49,31 @@ class Tree:
 
 
 @dataclass(frozen=True)
+class Hierarchy:
+    """A tree whose objects hold their children and nothing links back up, as an
+    ElementTree holds its elements or a TaskGroup its tasks. Each object holds up to
+    `branches` children, and the objects come a level at a time, as `Tree`'s do."""
+
+    branches: int
+
+    def __post_init__(self) -> None:
+        if self.branches < 1:
+            raise ValueError(
+                f"a hierarchy of {self.branches} branches ends at its root"
+            )
+
+    def cyclic_garbage(self, size: int) -> int:
+        """How many objects of a dropped structure of this size stay as cyclic
+        garbage."""
+        return 0
+
+    def links(self, i: int) -> list[tuple[int, int]]:
+        if not i:
+            return []
+        return [((i - 1) // self.branches, i)]
+
+
+@dataclass(frozen=True)
 class Rings:
     """Rings in a list, as create_gc_cycles builds them: the root, a list, holds
     each ring's first object, and each object links to the next in its ring and
@@ -80,7 +105,7 @@ class Rings:
         return links
 
 
-type Shape = Chains | Tree | Rings
+type Shape = Chains | Tree | Hierarchy | Rings
 
 
 @dataclass(frozen=True)

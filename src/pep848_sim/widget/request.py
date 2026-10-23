@@ -18,6 +18,7 @@ from pep848_sim.presets import PRESETS
 from pep848_sim.run import run
 from pep848_sim.structures import (
     Chains,
+    Hierarchy,
     Rings,
     Root,
     Shape,
@@ -156,15 +157,20 @@ def _named(shape: Shape) -> str | dict[str, int]:
         return "tree"
     if isinstance(shape, Chains):
         return {"chains": shape.width}
+    if isinstance(shape, Hierarchy):
+        return {"hierarchy": shape.branches}
     return {"rings": shape.length}
 
 
 def _shape(shape: Any) -> Shape:
-    """A shape: "tree", {"chains": width} or {"rings": length}."""
+    """A shape: "tree", {"chains": width}, {"hierarchy": branches} or
+    {"rings": length}."""
     if shape == "tree":
         return Tree()
     if isinstance(shape, dict) and list(shape) == ["chains"]:
         return Chains(shape["chains"])
+    if isinstance(shape, dict) and list(shape) == ["hierarchy"]:
+        return Hierarchy(shape["hierarchy"])
     if isinstance(shape, dict) and list(shape) == ["rings"]:
         return Rings(shape["rings"])
     raise ValueError(f"no shape {shape!r}")
