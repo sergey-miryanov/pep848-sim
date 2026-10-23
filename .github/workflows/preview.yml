@@ -32,9 +32,14 @@ jobs:
       - if: github.event.action != 'closed'
         uses: $/.github/actions/setup
 
+      # The .nojekyll at the branch's root covers the previews. One in a
+      # preview's folder would outlive the preview, since the deploy action
+      # keeps a .nojekyll when it clears a folder.
       - if: github.event.action != 'closed'
         name: Assemble the site
-        run: poetry run just site
+        run: |
+          poetry run just site
+          rm _site/.nojekyll
 
       - uses: rossjrw/pr-preview-action@ffa7509e91a3ec8dfc2e5536c4d5c1acdf7a6de9 # v1.8.1
         with:
