@@ -1,15 +1,20 @@
 """The row of figures a widget leads with (ADR 0008), from a run's records alone."""
 
 from collections.abc import Iterable
-from typing import NamedTuple
+from typing import NamedTuple, get_args
 
-from pep848_sim.collectors.collector import Record
+from pep848_sim.collectors.collector import FullKind, Record
+
+# The kinds of a full collection's record, which `gc.collect()` or shutdown ran.
+_FULL = get_args(FullKind.__value__)
 
 
 class Figures(NamedTuple):
     """The figures of a run's records so far. `add` takes the records that come
     next, so the figures grow as the run streams (ADR 0006)."""
 
+    # Of the collections the runtime started: a full collection takes the whole
+    # heap in either collector by design (ADR 0012).
     peak_work: int = 0
     # As a collection starts, when it peaks (ADR 0010).
     peak_uncollected_garbage: int = 0
@@ -55,8 +60,10 @@ class Figures(NamedTuple):
         for record in records:
             work = record.marked + record.survived + record.freed
             uncollected = sum(record.spaces_before) - record.reachable_before
+            automatic = record.kind not in _FULL
+            peak_work = max(figures.peak_work, work) if automatic else figures.peak_work
             figures = Figures(
-                peak_work=max(figures.peak_work, work),
+                peak_work=peak_work,
                 peak_uncollected_garbage=max(
                     figures.peak_uncollected_garbage, uncollected
                 ),

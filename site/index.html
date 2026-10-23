@@ -109,8 +109,8 @@ shown, so a link opens it.</dd>
 <dd>Move a slider to pick a value, and release it to run both collectors
 again with it.</dd>
 <dt>Figures</dt>
-<dd>Each run's peak work, the most work one collection did, which stands in
-for the worst pause; its peak uncollected garbage; its work per MB, which
+<dd>Each run's peak work, the most work one collection the runtime started
+did, which stands in for the worst pause; its peak uncollected garbage; its work per MB, which
 stands in for the collector's overhead; its yield, the share of the objects
 it examined that were cyclic garbage; its collections; and its gen 2
 collections or sweeps.</dd>
@@ -119,10 +119,14 @@ collections or sweeps.</dd>
 whole heap and its reachable part, and shades the gap between them, the
 uncollected garbage. The lanes below draw the nursery, the aging generation
 and the old generation. In the incremental collector's column, the old
-generation's lane stacks its pending and visited spaces.</dd>
+generation's lane stacks its pending and visited spaces. A tick at the foot of
+the top lane marks each <code>gc.collect()</code> call, and a dashed rule
+across the panels marks shutdown.</dd>
 <dt>Work</dt>
 <dd>The objects each run's collections marked, saw survive and freed, summed
-over stretches of a few MB.</dd>
+over stretches of a few MB. The work of full collections, which
+<code>gc.collect()</code> and shutdown run, stacks faded above the
+runtime's own.</dd>
 <dt>Work budget</dt>
 <dd>The scanning the incremental collector owes, <code>work_to_do</code> in
 the PEP. Young collections add to it and old collections spend it; at zero
@@ -139,8 +143,7 @@ pyperformance benchmark of that name. After start-up, each of its 512 loops
 calls <code>gc.collect()</code>, builds 100 rings of 21 objects, drops them
 and calls <code>gc.collect()</code> again, and shutdown ends the run. The
 calls reset the countdown to the next collection so often that the runtime
-starts none of its own once the loops begin. The charts don't yet tell those
-calls apart from the collections the runtime starts. Until the benchmark runs
+starts none of its own once the loops begin. Until the benchmark runs
 again under gcmon, the start-up heap, the churn and the number of loops are
 placeholders.</p>
 

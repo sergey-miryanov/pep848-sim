@@ -220,8 +220,9 @@ _Avoid_: floating garbage (the literature's word for garbage that dies during
 a collection), leak, dead objects
 
 **Peak work**:
-The largest work any single collection did in a run: the simulator's
-stand-in for the worst pause.
+The largest work any single collection the runtime started did in a run: the
+simulator's stand-in for the worst pause. A full collection takes the whole
+heap in either collector by design, so peak work leaves it out.
 _Avoid_: worst pause, max pause, `max_pause` (the C stat, in seconds)
 
 **Work per MB**:
