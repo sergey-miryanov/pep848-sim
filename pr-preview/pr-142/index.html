@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PEP 848 cycle collector</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    color-scheme: light;
+    --surface: #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface: #1a1a19;
+      --text-primary: #f0efec;
+      --text-secondary: #c3c2b7;
+    }
+  }
+  body {
+    margin: 0;
+    background: var(--surface);
+    color: var(--text-primary);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 28px; margin: 0 0 12px; }
+  h2 { font-size: 20px; margin: 32px 0 12px; }
+  p, dl { max-width: 70ch; }
+  dt { font-weight: 600; }
+  dd { margin: 0 0 12px; color: var(--text-secondary); }
+  a { color: inherit; }
+  gc-widget { margin: 24px -16px 0; }
+</style>
+<script type="module" src="gc-widget.js"></script>
+</head>
+<body>
+<main>
+<h1>PEP 848: the incremental cycle collector</h1>
+<p><a href="https://peps.python.org/pep-0848/">PEP 848</a> proposes a
+generational incremental cycle collector for CPython. This page runs a small
+Python simulator of it, and of the legacy collector beside it, in your
+browser: the widget below runs the workload you pick under both collectors
+and draws what each does. A guide built on such widgets comes later.</p>
+<p>The first runs wait a few seconds while Pyodide, the Python that runs in
+the browser, downloads and starts.</p>
+
+<gc-widget id="home-widget">
+<script type="application/json">
+{
+  "entries": [
+    {
+      "name": "stand-in",
+      "title": "Stand-in",
+      "controls": ["settings.threshold0", "workload.churn.cycle_share",
+                   "workload.churn.lifetime_mean", "workload.structures.1.size",
+                   "workload.structures.1.rebuild_interval"],
+      "request": {
+        "workload": {
+          "churn": {
+            "cycle_share": "3/100", "cycle_size": 3, "lifetime_mean": 5,
+            "long_share": "1/20", "long_lifetimes": [100, 1000]
+          },
+          "structures": [
+            {"shape": {"chains": 16}, "size": 8000, "root": "module",
+             "lifetime": null, "rebuild_interval": null, "build_churn": 0,
+             "full_collections": false},
+            {"shape": "tree", "size": 20000, "root": "frame",
+             "lifetime": 40000, "rebuild_interval": 80000, "build_churn": 1,
+             "full_collections": false}
+          ],
+          "seed": 848,
+          "shutdown": false
+        },
+        "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+        "run_length": 150000,
+        "every": 5
+      }
+    },
+    {
+      "name": "create_gc_cycles",
+      "title": "create_gc_cycles",
+      "controls": ["workload.structures.2.size"],
+      "request": {
+        "preset": "create_gc_cycles",
+        "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+        "every": 20
+      }
+    }
+  ]
+}
+</script>
+</gc-widget>
+
+<h2>Reading the widget</h2>
+<p>Both runs allocate the same objects in the same order: the legacy collector
+on the left, the incremental collector on the right. Each simulated object
+stands for 1 kB of real objects, and the allocation clock along the bottom
+counts the MB a run has allocated.</p>
+<p>Rest the pointer on a panel to read its values: the heap before and after
+the nearest collection, the work budget that collection left, or the work in
+the bar under the pointer.</p>
+<dl>
+<dt>Workload</dt>
+<dd>Pick the workload both runs share. Each keeps the values you gave its
+controls while the page stays open, and the page's address names the one
+shown, so a link opens it.</dd>
+<dt>Controls</dt>
+<dd>Move a slider to pick a value, and release it to run both collectors
+again with it.</dd>
+<dt>Figures</dt>
+<dd>Each run's peak work, the most work one collection the runtime started
+did, which stands in for the worst pause; its peak uncollected garbage; its work per MB, which
+stands in for the collector's overhead; its yield, the share of the objects
+it examined that were cyclic garbage; its collections; and its gen 2
+collections or sweeps.</dd>
+<dt>Heap by space</dt>
+<dd>The heap in MB, in lanes on the allocation clock. The top lane draws the
+whole heap and its reachable part, and shades the gap between them, the
+uncollected garbage. The lanes below draw the nursery, the aging generation
+and the old generation. In the incremental collector's column, the old
+generation's lane stacks its pending and visited spaces. A tick at the foot of
+the top lane marks each <code>gc.collect()</code> call, and a dashed rule
+across the panels marks shutdown.</dd>
+<dt>Work</dt>
+<dd>The objects each run's collections marked, saw survive and freed, summed
+over stretches of a few MB. The work of full collections, which
+<code>gc.collect()</code> and shutdown run, stacks faded above the
+runtime's own.</dd>
+<dt>Work budget</dt>
+<dd>The scanning the incremental collector owes, <code>work_to_do</code> in
+the PEP. Young collections add to it and old collections spend it; at zero
+or below, old collections do no work until young ones raise it again.</dd>
+</dl>
+
+<h2>The workloads</h2>
+<p>The stand-in has 8 MB of module globals, a 20 MB tree rebuilt every 80 MB,
+and churn with 3% of its allocations in cycles. Presets will replace it, each
+modelled on a pyperformance benchmark and checked against that benchmark's
+yield. The guide comes after them.</p>
+<p>create_gc_cycles, the first preset, models one worker of the
+pyperformance benchmark of that name. After start-up, each of its 512 loops
+calls <code>gc.collect()</code>, builds 100 rings of 21 objects, drops them
+and calls <code>gc.collect()</code> again, and shutdown ends the run. The
+calls reset the countdown to the next collection so often that the runtime
+starts none of its own once the loops begin. Until the benchmark runs
+again under gcmon, the start-up heap, the churn and the number of loops are
+placeholders.</p>
+
+<h2>More</h2>
+<p><a href="widget.html">The stand-in page</a> holds a second widget, on the
+workload the tests pin, and the digests they check. The source is
+<a href="https://github.com/sergey-miryanov/pep848-sim">on GitHub</a>.</p>
+</main>
+</body>
+</html>
