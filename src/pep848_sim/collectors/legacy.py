@@ -15,12 +15,7 @@ Each name stands for a field of `struct _gc_runtime_state`:
 
 from typing import override
 
-from pep848_sim.collectors.collector import (
-    CollectionCounts,
-    Collector,
-    CollectorSettings,
-    Space,
-)
+from pep848_sim.collectors.collector import Collector, CollectorSettings, Space
 
 
 class LegacyCollector(Collector):
@@ -52,8 +47,9 @@ class LegacyCollector(Collector):
             self.collect_generation1,
             self.collect_generation2,
         )
-        with self.recording():
-            collections[self.select_generation()]()
+        generation = self.select_generation()
+        with self.recording(f"gen {generation}"):
+            collections[generation]()
 
     def select_generation(self) -> int:
         """gc_select_generation, as the legacy collector reads it: the oldest
@@ -73,7 +69,7 @@ class LegacyCollector(Collector):
     def collect_generation0(self) -> None:
         """gc_collect_legacy_generation0: the nursery, into aging."""
         self.count0 += 1
-        survivors = self._collect("gen 0", self.nursery)
+        survivors = self.collect_cycles(self.nursery)
         self.aging.extend(survivors)
 
     def collect_generation1(self) -> None:
@@ -81,7 +77,7 @@ class LegacyCollector(Collector):
         self.count0 = 0
         self.count1 += 1
         self.aging.extend(self.nursery)
-        survivors = self._collect("gen 1", self.aging)
+        survivors = self.collect_cycles(self.aging)
         self.old.extend(survivors)
         self.long_lived_pending += len(survivors)
 
@@ -91,15 +87,6 @@ class LegacyCollector(Collector):
         self.count1 = 0
         self.old.extend(self.nursery)
         self.old.extend(self.aging)
-        survivors = self._collect("gen 2", self.old)
+        survivors = self.collect_cycles(self.old)
         self.long_lived_pending = 0
         self.long_lived_total = len(survivors)
-
-    def _collect(self, kind: str, space: Space) -> list[int]:
-        """As gc_collect_region does: free the cyclic garbage in space, count the
-        collection, and return the survivors."""
-        candidates = len(space)
-        survivors = self.collect_cycles(space)
-        survived = len(survivors)
-        self.counts.append(CollectionCounts(kind, 0, survived, candidates - survived))
-        return survivors

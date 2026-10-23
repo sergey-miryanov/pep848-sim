@@ -184,7 +184,7 @@ def test_an_old_collection_follows_the_pseudocode_line_by_line() -> None:
     collector.pending_space.extend([m1, m2, held, a, b])
     collector.work_to_do = 10
 
-    collector.old_collection()
+    collector.collect()  # a new collector's first collection is an old one
 
     # scan_reachable(10) marks sys and the chain it holds: 10 - 3.
     # The increment [held] survives: 7 - 1.
@@ -235,7 +235,7 @@ def test_the_next_old_collection_resumes_where_the_budget_ran_out() -> None:
     collector.pending_space.extend([p, q, r])
     collector.work_to_do = 2
 
-    collector.old_collection()
+    collector.collect()
 
     # Marking takes sys, and an increment takes the least recently scanned
     # pending object.
@@ -243,13 +243,15 @@ def test_the_next_old_collection_resumes_where_the_budget_ran_out() -> None:
     assert list(collector.pending_space) == [q, r]
     assert collector.work_to_do == 0
 
+    collector.collect()  # a young collection, with nothing to collect
     collector.work_to_do = 1
-    collector.old_collection()
+    collector.collect()
 
     assert list(collector.visited_space) == [sys, p, q]
     assert list(collector.pending_space) == [r]
     assert collector.counts == [
         CollectionCounts("old", 1, 1, 0),
+        CollectionCounts("young", 0, 0, 0),
         CollectionCounts("old", 0, 1, 0),
     ]
 
@@ -261,7 +263,7 @@ def test_an_old_collection_without_a_positive_budget_is_idle() -> None:
     collector.pending_space.append(x)
     collector.work_to_do = 0
 
-    collector.old_collection()
+    collector.collect()
 
     assert list(collector.reachable) == [heap.module_root]
     assert list(collector.pending_space) == [x]
