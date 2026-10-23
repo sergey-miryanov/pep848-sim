@@ -1,9 +1,10 @@
 // @ts-check
 // The page's worker. It starts Pyodide as soon as the page makes it (ADR 0009),
 // and makes every widget's runs, a part of one run at a time, in turn (ADR 0006).
-// It answers each request with the controls the widget asked for and the ranges
-// the request allows, then posts records as the runs yield them (ADR 0007), each
-// part with its run's figures so far.
+// It answers each request with the controls the widget asked for, the ranges the
+// request allows and the request with any preset it names spelled out, then posts
+// records as the runs yield them (ADR 0007), each part with its run's figures so
+// far.
 
 // @ts-expect-error: an editor cannot fetch Pyodide's types from jsDelivr.
 import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.mjs";
@@ -56,7 +57,7 @@ function drop(widget) {
 }
 
 self.onmessage = async ({ data: { id, widget, request, controls: paths } }) => {
-  let started, controls, runs;
+  let started, controls, expanded, runs;
   try {
     started = await simulator;
     // After the wait, so requests that arrive while Pyodide starts replace each
@@ -65,12 +66,13 @@ self.onmessage = async ({ data: { id, widget, request, controls: paths } }) => {
     const ranged = started.controls.controls(request, paths);
     controls = ranged.toJs({ depth: 2 });
     ranged.destroy();
+    expanded = started.request.expand(request);
     runs = started.request.runs(request);
   } catch (error) {
     self.postMessage({ id, kind: "error", message: lastLine(error) });
     return;
   }
-  self.postMessage({ id, kind: "controls", controls });
+  self.postMessage({ id, kind: "controls", controls, request: expanded });
   const [legacy, incremental] = runs.toJs({ depth: 1 });
   runs.destroy();
   turns.push(

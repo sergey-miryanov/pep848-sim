@@ -281,11 +281,20 @@ class GcWidget extends HTMLElement {
    * records arrive.
    */
   #start() {
-    const request = structuredClone(this.#request);
+    let request = structuredClone(this.#request);
     let fresh = true;
     /** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".error")).hidden = true;
     requestRuns(this.#name, request, {
-      controls: (controls) => this.#show(controls),
+      controls: (controls, expanded) => {
+        // A request that names a preset comes back spelled out: the preset's
+        // workload and run length, which the controls edit from then on.
+        if ("preset" in request) {
+          request = expanded;
+          this.#request = structuredClone(expanded);
+          if ("preset" in this.#drawn) this.#drawn = request;
+        }
+        this.#show(controls);
+      },
       records: (collector, records, figures) => {
         if (fresh) {
           fresh = false;
@@ -388,6 +397,9 @@ class GcWidget extends HTMLElement {
       });
     });
 
+    // A request that names a preset has no run length until the worker spells it
+    // out, and the charts' clock needs one.
+    if ("preset" in this.#drawn) return;
     const { run_length: runLength, settings: { threshold0 } } = this.#drawn;
     const style = getComputedStyle(this);
     const token = (/** @type {string} */ name) => style.getPropertyValue(`--${name}`).trim();
