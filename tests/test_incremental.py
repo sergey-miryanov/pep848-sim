@@ -165,6 +165,59 @@ def test_a_run_keeps_the_incremental_collectors_invariants(
     assert [left for left in collector.left_by_sweeps if left] == []
 
 
+def test_a_full_collection_marks_what_sys_reaches_and_examines_the_rest() -> None:
+    settings = CollectorSettings(threshold0=1_000, threshold1=2)
+    collector = IncrementalCollector(settings)
+    heap = Heap(collector)
+    sys = heap.module_root
+    m = heap.allocate()
+    heap.link(sys, m)
+    heap.let_go_frame_root(m)
+    held = heap.allocate()  # its allocating frame holds it
+    a, b, c, d = (heap.allocate() for _ in range(4))
+    for x, y in [(a, b), (b, a), (c, d), (d, c)]:
+        heap.link(x, y)
+    for x in (b, a, d, c):
+        heap.let_go_frame_root(x, leaves_unreachable=2 * (x in (a, c)))
+    # One cycle across the old spaces, and one across the young generation.
+    collector.pending_space.extend([m, a])
+    collector.visited_space.extend([held, b])
+    collector.aging[0].extend([c])
+    collector.work_to_do = 5
+    collector.young_next = True
+
+    collector.collect_full("full")
+
+    # sys and m are marked, held survives, and both cycles are freed.
+    assert collector.counts == [CollectionCounts("full", 2, 1, 4)]
+    assert [heap.is_freed(x) for x in (a, b, c, d)] == [True] * 4
+    assert heap.uncollected_garbage == 0
+    assert list(collector.visited_space) == [sys, m, held]
+    young = [collector.nursery, *collector.aging]
+    old = [collector.pending_space, collector.reachable]
+    assert [list(space) for space in young + old] == [[]] * 4
+    assert collector.work_to_do == 0
+    # Collections alternate as before, and the sweep has not ended yet.
+    assert collector.young_next
+    assert collector.sweeps == 0
+
+
+def test_after_a_full_collection_the_next_old_collection_starts_a_sweep() -> None:
+    collector = IncrementalCollector(CollectorSettings(threshold0=1_000))
+    heap = Heap(collector)
+    sys = heap.module_root
+    held = heap.allocate()
+    collector.collect_full("full")
+    collector.work_to_do = 3
+
+    collector.old_collection()
+
+    assert list(collector.pending_space) == [held]
+    assert list(collector.reachable) == [sys]
+    assert collector.work_to_do == 0
+    assert collector.sweeps == 1
+
+
 def test_an_old_collection_follows_the_pseudocode_line_by_line() -> None:
     collector = IncrementalCollector(CollectorSettings(threshold0=1_000))
     heap = Heap(collector)

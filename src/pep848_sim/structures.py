@@ -63,6 +63,9 @@ class StructureParameters:
     rebuild_interval: int | None
     # The churn allocations after each built object.
     build_churn: int
+    # Whether the workload calls `gc.collect()` before each build and after each
+    # drop, as create_gc_cycles does.
+    full_collections: bool = False
 
     def __post_init__(self) -> None:
         build = self.size * (1 + self.build_churn)

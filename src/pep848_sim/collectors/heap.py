@@ -15,7 +15,7 @@ off.
 
 from collections.abc import Iterable
 
-from pep848_sim.collectors.collector import Collector
+from pep848_sim.collectors.collector import Collector, FullKind
 
 
 class SimulatedObject:
@@ -45,6 +45,10 @@ class Heap:
         collector.attach(self)
         collector.add_module_root(self._module_root)
         self._clock = 0
+        # When the next automatic collection comes: threshold0 kB after the last
+        # collection of any kind, as every collection on the branch resets its budget
+        # (ADR 0011).
+        self._due = self.threshold0
 
     def __len__(self) -> int:
         """The alive objects, sys among them."""
@@ -101,6 +105,25 @@ class Heap:
         self._let_go(references)
         self._count_garbage(len(self._objects) - alive_before)
 
+    def let_go_every_frame_root(self) -> None:
+        """Let go of every frame root, as a worker's frames have all returned by the
+        time it shuts down. The workload no longer knows what that leaves
+        unreachable, so a walk from sys counts the uncollected garbage again."""
+        for x, held in self.frame_roots().items():
+            # Its own frame roots keep x alive until now.
+            self._objects[x].frame_roots = 0
+            self._let_go([x] * held)
+        reached = {self._module_root}
+        stack = [self._module_root]
+        while stack:
+            for target in self._objects[stack.pop()].references:
+                if target not in reached:
+                    reached.add(target)
+                    stack.append(target)
+        self._count_garbage(
+            len(self._objects) - len(reached) - self._uncollected_garbage
+        )
+
     def is_freed(self, x: int) -> bool:
         return x not in self._objects
 
@@ -143,13 +166,25 @@ class Heap:
         record = self._objects.get(x)
         return 0 if record is None else record.reference_count
 
+    def next_collection(self) -> int:
+        """The clock of the first automatic collection an object allocated now can
+        meet, unless a full collection comes first."""
+        return self._due if self._due > self._clock else self._clock + self.threshold0
+
     def collect_if_due(self) -> None:
-        """Collect if the clock sits on a multiple of threshold0, the start aside.
-        Each allocation calls it first, so the collection follows the let-gos of the
-        kB before it (ADR 0005). A run that ends on a boundary calls it once more,
-        as its next allocation would."""
-        if self._clock and not self._clock % self.threshold0:
+        """Collect if threshold0 kB have passed since the last collection, or since
+        the start. Each allocation calls it first, so the collection follows the
+        let-gos of the kB before it (ADR 0005). A run that ends on a boundary calls
+        it once more, as its next allocation would."""
+        if self._clock == self._due:
             self._collector.collect()
+            self._due = self._clock + self.threshold0
+
+    def collect_full(self, kind: FullKind) -> None:
+        """Collect the whole heap now, as `gc.collect()` or shutdown does. The next
+        automatic collection comes threshold0 kB after it (ADR 0011)."""
+        self._collector.collect_full(kind)
+        self._due = self._clock + self.threshold0
 
     def _alive(self, x: int) -> SimulatedObject:
         record = self._objects.get(x)

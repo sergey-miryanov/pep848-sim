@@ -3,8 +3,9 @@ objects in, how they find and free the cyclic garbage among the objects a
 collection examines, and the record each collection leaves.
 
 The collector owns every space, the nursery included, as CPython's collector owns
-its generation lists. The heap hands it each new object, and calls for a
-collection at each multiple of threshold0.
+its generation lists. The heap hands it each new object, calls for a collection
+threshold0 kB after the last one, and calls for a full collection whenever the
+workload or its shutdown asks.
 """
 
 from collections.abc import Generator, Iterable, Iterator
@@ -15,13 +16,18 @@ from typing import TYPE_CHECKING, ClassVar, Literal, NamedTuple
 if TYPE_CHECKING:
     from pep848_sim.collectors.heap import Heap
 
+# What started a full collection, which its record names as its kind: the
+# workload's `gc.collect()`, or a worker's shutdown (ADR 0012).
+type FullKind = Literal["full", "shutdown"]
+
 
 @dataclass(frozen=True)
 class CollectorSettings:
     """The three thresholds of one `gc.set_threshold()` call, which both collectors
     share and each reads its own way. The defaults are the PEP's."""
 
-    # kB allocated between collections: both collectors collect at its multiples.
+    # kB allocated between collections: both collectors collect when this many have
+    # passed since the last collection of any kind.
     threshold0: int = 2000
     threshold1: int = 10
     threshold2: int = 10
@@ -138,9 +144,14 @@ class Collector:
         self._heap = heap
 
     def collect(self) -> None:
-        """Run one collection, as the heap asks at each multiple of threshold0. The
-        base collects nothing; each collector says how it collects, and records the
-        collection with `recording()`."""
+        """Run one collection, as the heap asks threshold0 kB after the last one.
+        The base collects nothing; each collector says how it collects, and records
+        the collection with `recording()`."""
+
+    def collect_full(self, kind: FullKind) -> None:
+        """Collect the whole heap, as `gc.collect()` does, and record it under
+        `kind`. The base collects nothing; each collector says how it collects the
+        whole heap (ADR 0012)."""
 
     @contextmanager
     def recording(self, kind: str) -> Generator[None]:

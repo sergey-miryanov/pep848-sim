@@ -7,6 +7,8 @@ from hypothesis import strategies as st
 
 from pep848_sim.collectors.collector import Collector, CollectorSettings
 from pep848_sim.collectors.heap import Heap
+from pep848_sim.collectors.incremental import IncrementalCollector
+from pep848_sim.collectors.legacy import LegacyCollector
 from pep848_sim.structures import Chains, Root, StructureParameters, Tree
 from pep848_sim.workload import (
     Churn,
@@ -73,6 +75,7 @@ def structure_parameters(draw: st.DrawFn) -> StructureParameters:
             draw(st.integers(build, build + 40)) if kind == "repeating" else None
         ),
         build_churn=build_churn,
+        full_collections=draw(st.booleans()),
     )
 
 
@@ -230,6 +233,39 @@ def test_at_every_boundary_the_heap_matches_a_run_that_makes_every_transient(
         eager_churn.run_to(boundary)
 
         assert renamed(lazy, lazy_collector) == renamed(eager, eager_collector)
+
+
+@given(
+    st.sampled_from([IncrementalCollector, LegacyCollector]),
+    churn_parameters(),
+    st.lists(structure_parameters(), max_size=2),
+    st.integers(min_value=0, max_value=2**32),
+    st.integers(min_value=1, max_value=20),
+    st.integers(min_value=0, max_value=400),
+    st.booleans(),
+)
+def test_every_collection_matches_a_run_that_makes_every_transient(
+    collector: type[IncrementalCollector | LegacyCollector],
+    churn: ChurnParameters,
+    structures: list[StructureParameters],
+    seed: int,
+    threshold0: int,
+    run_kb: int,
+    shutdown: bool,
+) -> None:
+    """Full collections and shutdown's included (ADR 0005)."""
+    settings = CollectorSettings(threshold0=threshold0)
+    parameters = WorkloadParameters(churn, tuple(structures), seed)
+    lazy_collector, eager_collector = collector(settings), collector(settings)
+    lazy = Workload(Heap(lazy_collector), parameters)
+    eager = Workload(Heap(eager_collector), parameters, make_every_transient=True)
+
+    for workload in (lazy, eager):
+        workload.run_to(run_kb)
+        if shutdown:
+            workload.shut_down()
+
+    assert lazy_collector.records == eager_collector.records
 
 
 def test_a_repeating_structure_builds_where_its_rebuild_interval_puts_it() -> None:
@@ -403,3 +439,52 @@ def test_a_collection_follows_the_let_gos_of_the_kb_before_it() -> None:
 
     # The tree's build ends in kB 3, and its lifetime in kB 6, on the boundary.
     assert collector.garbage == [3]
+
+
+def test_a_structure_that_asks_gets_a_full_collection_around_each_build() -> None:
+    collector = Recording(threshold0=1_000)
+    heap = Heap(collector)
+    tree = StructureParameters(
+        shape=Tree(),
+        size=3,
+        root="frame",
+        lifetime=4,
+        rebuild_interval=10,
+        build_churn=0,
+        full_collections=True,
+    )
+    parameters = WorkloadParameters(churn=QUIET, structures=(tree,), seed=848)
+
+    Workload(heap, parameters).run_to(25)
+
+    # Builds start after kB 0, 10 and 20 and take three kB each. The first two
+    # drops come four kB after their builds end, and the third would at 27.
+    assert collector.full == [
+        (0, "full"),
+        (7, "full"),
+        (10, "full"),
+        (17, "full"),
+        (20, "full"),
+    ]
+
+
+def test_shutdown_lets_go_of_the_frames_and_runs_two_full_collections() -> None:
+    collector = Recording(threshold0=1_000)
+    heap = Heap(collector)
+    tree = StructureParameters(
+        shape=Tree(),
+        size=3,
+        root="frame",
+        lifetime=None,
+        rebuild_interval=None,
+        build_churn=0,
+    )
+    workload = Workload(heap, WorkloadParameters(QUIET, (tree,), seed=848))
+    workload.run_to(5)
+
+    workload.shut_down()
+
+    # The tree's frame let go of it, which left the tree as cyclic garbage.
+    assert heap.frame_roots() == {}
+    assert heap.uncollected_garbage == 3
+    assert collector.full == [(5, "shutdown"), (5, "shutdown")]

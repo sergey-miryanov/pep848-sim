@@ -12,11 +12,14 @@ FIXED = """{
         },
         "structures": [
             {"shape": {"chains": 16}, "size": 1000, "root": "module",
-             "lifetime": null, "rebuild_interval": null, "build_churn": 0},
+             "lifetime": null, "rebuild_interval": null, "build_churn": 0,
+             "full_collections": false},
             {"shape": "tree", "size": 100, "root": "frame",
-             "lifetime": 400, "rebuild_interval": 1000, "build_churn": 1}
+             "lifetime": 400, "rebuild_interval": 1000, "build_churn": 1,
+             "full_collections": false}
         ],
-        "seed": 848
+        "seed": 848,
+        "shutdown": false
     },
     "settings": {"threshold0": 20, "threshold1": 10, "threshold2": 10},
     "run_length": 20000,
@@ -37,6 +40,7 @@ def test_a_request_runs_the_legacy_collector_then_the_incremental_one() -> None:
     [
         ('"seed": 848', '"seed": 848, "seeds": 1', "workload has no field 'seeds'"),
         (',\n    "every": 50', "", "request lacks 'every'"),
+        (',\n        "shutdown": false', "", "workload lacks 'shutdown'"),
         ('"tree"', '"list"', "no shape 'list'"),
         ('"module"', '"global"', "no root 'global'"),
     ],

@@ -8,6 +8,7 @@ from hypothesis import strategies as st
 from pep848_sim.collectors.collector import (
     Collector,
     CollectorSettings,
+    FullKind,
     Record,
     Space,
     find_unreachable,
@@ -275,6 +276,12 @@ class WalkingIncremental(IncrementalCollector):
         super().collect()
         self.walks.append((*before, len(self.heap), len(reachable(self.heap))))
 
+    @override
+    def collect_full(self, kind: FullKind) -> None:
+        before = len(self.heap), len(reachable(self.heap))
+        super().collect_full(kind)
+        self.walks.append((*before, len(self.heap), len(reachable(self.heap))))
+
 
 class WalkingLegacy(LegacyCollector):
     def __init__(self, settings: CollectorSettings) -> None:
@@ -290,6 +297,12 @@ class WalkingLegacy(LegacyCollector):
     def collect(self) -> None:
         before = len(self.heap), len(reachable(self.heap))
         super().collect()
+        self.walks.append((*before, len(self.heap), len(reachable(self.heap))))
+
+    @override
+    def collect_full(self, kind: FullKind) -> None:
+        before = len(self.heap), len(reachable(self.heap))
+        super().collect_full(kind)
         self.walks.append((*before, len(self.heap), len(reachable(self.heap))))
 
 

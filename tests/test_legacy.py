@@ -100,6 +100,29 @@ def test_with_the_default_thresholds_gen_1_comes_12th_and_gen_2_133rd() -> None:
     assert [counts.kind for counts in collector.counts] == [*rounds, "gen 2"]
 
 
+def test_a_full_collection_is_a_gen_2_collection_under_its_own_kind() -> None:
+    collector = LegacyCollector(CollectorSettings(threshold0=1_000))
+    heap = Heap(collector)
+    sys = heap.module_root
+    young, aging, old = heap.allocate(), heap.allocate(), heap.allocate()
+    collector.aging.append(aging)
+    collector.old.append(old)
+    a, b = heap.allocate(), heap.allocate()
+    heap.link(a, b)
+    heap.link(b, a)
+    heap.let_go_frame_root(b)
+    heap.let_go_frame_root(a, leaves_unreachable=2)
+    collector.count0, collector.count1, collector.long_lived_pending = 5, 3, 7
+
+    collector.collect_full("shutdown")
+
+    assert collector.counts == [CollectionCounts("shutdown", 0, 4, 2)]
+    assert [list(collector.nursery), list(collector.aging)] == [[], []]
+    assert list(collector.old) == [old, sys, young, aging]
+    assert (collector.count0, collector.count1) == (0, 0)
+    assert (collector.long_lived_pending, collector.long_lived_total) == (0, 4)
+
+
 class Recorded(LegacyCollector):
     """A legacy collector that notes the uncollected garbage each gen 2 leaves."""
 

@@ -122,6 +122,20 @@ def test_sweeps_are_the_sweeps_the_incremental_run_has_ended() -> None:
     assert Figures().add(records).sweeps == 2
 
 
+def test_full_collections_count_as_collections_and_never_as_gen_2_ones() -> None:
+    records = [
+        record(kind="gen 0"),
+        record(kind="full", freed=5),
+        record(kind="gen 2"),
+        record(kind="shutdown", survived=3),
+    ]
+
+    figures = Figures().add(records)
+
+    assert (figures.collections, figures.gen2_collections) == (4, 1)
+    assert (figures.freed, figures.survived) == (5, 3)
+
+
 def test_gen_2_collections_are_the_legacy_runs_collections_of_the_whole_heap() -> None:
     records = [
         record(kind="gen 0"),
