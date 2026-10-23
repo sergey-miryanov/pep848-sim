@@ -11,8 +11,8 @@ uncollected garbage would come out low. A reading before each collection alone
 would hide what the collection left.
 
 The record stays in ints and strings (ADR 0007). Each collector names the
-spaces it reports, in the order a stacked chart draws them, and the
-uncollected garbage is the heap less its reachable part.
+spaces it reports, young to old, and the uncollected garbage is the heap less
+its reachable part.
 
 ## Considered Options
 

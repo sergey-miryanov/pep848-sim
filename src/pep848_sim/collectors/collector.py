@@ -117,7 +117,7 @@ class Collector:
     collection adds those it marked, and recording() turns what one collection
     added into its counts and its record."""
 
-    # The spaces a record reports, in the order a stacked chart draws them.
+    # The spaces a record reports, young to old.
     SPACES: ClassVar[tuple[str, ...]] = ("nursery",)
 
     def __init__(self, settings: CollectorSettings | None = None) -> None:

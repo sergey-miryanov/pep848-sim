@@ -19,15 +19,16 @@ import { requestRuns } from "./runs.js";
 /** @type {Collector[]} */
 const COLLECTORS = ["legacy", "incremental"];
 const TITLES = { legacy: "Legacy collector", incremental: "Incremental collector" };
-// Each collector's spaces in the order its records hold them, and the order the
-// heap panel stacks them in, the old generation at the bottom.
+// Each collector's spaces in the order its records hold them.
 const SPACES = {
   legacy: ["nursery", "aging", "old"],
   incremental: ["nursery", "aging", "pending", "visited"],
 };
-const STACKED = {
-  legacy: ["old", "aging", "nursery"],
-  incremental: ["visited", "pending", "aging", "nursery"],
+// The heap panel's lanes below the whole heap's, each with the spaces it stacks:
+// the incremental collector's old generation is two.
+const LANES = {
+  legacy: [["nursery"], ["aging"], ["old"]],
+  incremental: [["nursery"], ["aging"], ["pending", "visited"]],
 };
 const PARTS = ["marked", "survived", "freed"];
 // The fields of a record, by position.
@@ -38,10 +39,16 @@ const SPACES_BEFORE = 7, SPACES_AFTER = 8, REACHABLE_BEFORE = 9, REACHABLE_AFTER
 const BINS = 40;
 // Each y-scale grows to the next of these times a power of ten (ADR 0008).
 const STEPS = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
-const HEIGHTS = { heap: 220, work: 160, budget: 130 };
+const HEIGHTS = { work: 160, budget: 130 };
 const MARGINS = { marginLeft: 48, marginRight: 72, marginTop: 16, marginBottom: 32 };
-// The tallest a bar of work grows, and the least a band of the heap needs for a label.
-const BAR = 24, LABEL = 14;
+// A lane of the heap panel: its plot, without its margins, and the margin above
+// and below it that neither axis's labels take.
+const LANE_HEIGHT = 64;
+const LANE_MARGIN = 12;
+// About how many ticks a lane's y-axis takes.
+const LANE_TICKS = 3;
+// The tallest a bar of work grows.
+const BAR = 24;
 // Counts of objects on an axis: 0, 500, 1K, 20K.
 const compact = new Intl.NumberFormat("en", { notation: "compact" }).format;
 
@@ -249,9 +256,12 @@ class GcWidget extends HTMLElement {
     });
     for (const collector of COLLECTORS) {
       const column = this.#column(collector);
+      // In the lanes' order, top to bottom.
       /** @type {HTMLElement} */ (column.querySelector('[data-panel="heap"] .legend')).append(
-        ...SPACES[collector].map((space) => key(space, `var(--${space})`)),
+        key("heap", "var(--text-muted)", true),
         key("reachable", "var(--text-primary)", true),
+        key("uncollected garbage", "color-mix(in srgb, var(--text-muted) 18%, transparent)"),
+        ...SPACES[collector].map((space) => key(space, `var(--${space})`)),
       );
       /** @type {HTMLElement} */ (column.querySelector('[data-panel="work"] .legend')).append(
         ...PARTS.map((part) => key(part, `var(--${part})`)),
@@ -385,7 +395,9 @@ class GcWidget extends HTMLElement {
     const width = this.#column("legacy").clientWidth;
 
     const heaps = { legacy: heap("legacy", this.#records.legacy), incremental: heap("incremental", this.#records.incremental) };
-    const heapMax = ceiling(Math.max(...COLLECTORS.flatMap((c) => heaps[c].bands.map((band) => band.y2))));
+    // One y-scale for every lane in both columns, so that a height reads as the
+    // same MB in any lane.
+    const heapMax = ceiling(Math.max(...COLLECTORS.flatMap((c) => heaps[c].whole.map((point) => point.heap))));
     const binKb = Math.ceil(runLength / BINS / threshold0) * threshold0;
     const works = { legacy: work(this.#records.legacy, threshold0, binKb), incremental: work(this.#records.incremental, threshold0, binKb) };
     const workMax = ceiling(Math.max(0, ...COLLECTORS.flatMap((c) => works[c].map((segment) => segment.y2))));
@@ -399,34 +411,46 @@ class GcWidget extends HTMLElement {
       x: { domain: [0, xMax], label: "allocation clock (MB)" },
     });
     const gridY = Plot.gridY({ stroke: token("grid"), strokeOpacity: 1 });
-    const inner = (/** @type {number} */ height) => height - MARGINS.marginTop - MARGINS.marginBottom;
+    // A lane is too short for the ticks Plot picks, so its grid takes its axis's.
+    const laneGridY = Plot.gridY({ stroke: token("grid"), strokeOpacity: 1, ticks: LANE_TICKS });
 
     for (const collector of COLLECTORS) {
       const column = this.#column(collector);
       /** @type {HTMLElement} */ (column.querySelector('[data-panel="work"] figcaption')).textContent =
         `Work per ${binKb / 1000} MB allocated`;
-      const { bands, points } = heaps[collector];
-      const colors = { domain: STACKED[collector], range: STACKED[collector].map((space) => token(space)) };
-      // Name each band at the run's edge where it is tall enough to hold its name.
-      const last = bands.slice(-STACKED[collector].length);
-      const labels = last.filter((band) => ((band.y2 - band.y1) / heapMax) * inner(HEIGHTS.heap) >= LABEL);
-      chart(column, "heap", Plot.plot({
-        ...frame(HEIGHTS.heap),
-        ariaLabel: `${TITLES[collector]}: heap by space`,
-        y: { domain: [0, heapMax], label: "heap (MB)" },
-        color: colors,
-        marks: [
-          gridY,
-          Plot.areaY(bands, { x: "mb", y1: "y1", y2: "y2", z: "space", fill: "space", fillOpacity: 0.1 }),
-          Plot.lineY(bands, { x: "mb", y: "y2", z: "space", stroke: "space", strokeWidth: 2 }),
-          Plot.lineY(points, { x: "mb", y: "reachable", stroke: token("text-primary"), strokeWidth: 2 }),
-          Plot.text(labels, {
-            x: "mb", y: (/** @type {{ y1: number, y2: number }} */ band) => (band.y1 + band.y2) / 2, text: "space",
-            textAnchor: "start", dx: 6, fill: token("text-secondary"),
-          }),
-          Plot.ruleY([0], { stroke: token("baseline") }),
-        ],
-      }));
+      const { whole, lanes } = heaps[collector];
+      const colors = { domain: SPACES[collector], range: SPACES[collector].map((space) => token(space)) };
+      // The lanes share the clock, whose axis only the bottom one draws, and the
+      // y-scale, whose unit only the top one names. Each lane's colors name what
+      // it shows.
+      const lane = (/** @type {number} */ i, /** @type {string} */ shows, /** @type {unknown[]} */ marks) => {
+        const top = i === 0, bottom = i === LANES[collector].length;
+        const margins = { marginTop: top ? MARGINS.marginTop : LANE_MARGIN, marginBottom: bottom ? MARGINS.marginBottom : LANE_MARGIN };
+        return Plot.plot({
+          ...frame(LANE_HEIGHT + margins.marginTop + margins.marginBottom),
+          ...margins,
+          x: { domain: [0, xMax], label: "allocation clock (MB)", axis: bottom ? "bottom" : null },
+          ariaLabel: `${TITLES[collector]}: ${shows}`,
+          y: { domain: [0, heapMax], label: top ? "heap (MB)" : null, ticks: LANE_TICKS },
+          color: colors,
+          marks: [laneGridY, ...marks, Plot.ruleY([0], { stroke: token("baseline") })],
+        });
+      };
+      chart(column, "heap",
+        lane(0, "heap, its reachable part and the uncollected garbage between them", [
+          Plot.areaY(whole, { x: "mb", y1: "reachable", y2: "heap", fill: token("text-muted"), fillOpacity: 0.18 }),
+          Plot.lineY(whole, { x: "mb", y: "heap", stroke: token("text-muted"), strokeWidth: 2 }),
+          Plot.lineY(whole, { x: "mb", y: "reachable", stroke: token("text-primary"), strokeWidth: 2 }),
+        ]),
+        ...lanes.map((bands, i) => lane(i + 1, LANES[collector][i].join(" and "), LANES[collector][i].length > 1
+          // Spaces that share a lane stack as fills alone: a line along a band's
+          // top would trace the spaces below it too.
+          ? [Plot.areaY(bands, { x: "mb", y1: "y1", y2: "y2", z: "space", fill: "space", fillOpacity: 0.55, stroke: token("surface"), strokeWidth: 1 })]
+          : [
+            Plot.areaY(bands, { x: "mb", y1: "y1", y2: "y2", fill: "space", fillOpacity: 0.1 }),
+            Plot.lineY(bands, { x: "mb", y: "y2", stroke: "space", strokeWidth: 2 }),
+          ])),
+      );
 
       const segments = works[collector];
       const binPx = ((width - MARGINS.marginLeft - MARGINS.marginRight) * binKb) / runLength;
@@ -471,15 +495,16 @@ class GcWidget extends HTMLElement {
   }
 }
 
-/** Put a freshly drawn chart in its panel, in place of the one before. */
-function chart(/** @type {HTMLElement} */ column, /** @type {string} */ panel, /** @type {Element} */ svg) {
-  /** @type {HTMLElement} */ (column.querySelector(`[data-panel="${panel}"] .chart`)).replaceChildren(svg);
+/** Put freshly drawn charts in their panel, in place of the ones before. */
+function chart(/** @type {HTMLElement} */ column, /** @type {string} */ panel, /** @type {Element[]} */ ...svgs) {
+  /** @type {HTMLElement} */ (column.querySelector(`[data-panel="${panel}"] .chart`)).replaceChildren(...svgs);
 }
 
 /**
  * The heap panel's data: each record reads the heap before its collection and
- * after it, at the same clock (ADR 0010), so the stack rises between collections
- * and drops at each. The run starts from an empty heap.
+ * after it, at the same clock (ADR 0010), so each lane rises between collections
+ * and drops at each. The run starts from an empty heap. `whole` is the whole
+ * heap and its reachable part, and `lanes` the bands each lane below it stacks.
  * @param {Collector} collector
  * @param {Record[]} records
  */
@@ -493,15 +518,16 @@ function heap(collector, records) {
       { mb, sizes: record[SPACES_AFTER], reachable: record[REACHABLE_AFTER] / 1000 },
     );
   }
-  const bands = points.flatMap((point) => {
+  const whole = points.map(({ mb, sizes, reachable }) => ({ mb, heap: sizes.reduce((sum, size) => sum + size, 0) / 1000, reachable }));
+  const lanes = LANES[collector].map((spaces) => points.flatMap((point) => {
     let y = 0;
-    return STACKED[collector].map((space) => {
+    return spaces.map((space) => {
       const y1 = y;
       y += point.sizes[names.indexOf(space)] / 1000;
       return { mb: point.mb, space, y1, y2: y };
     });
-  });
-  return { bands, points };
+  }));
+  return { whole, lanes };
 }
 
 /**
