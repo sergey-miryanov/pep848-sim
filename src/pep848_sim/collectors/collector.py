@@ -7,7 +7,7 @@ its generation lists. The heap hands it each new object, and calls for a
 collection at each multiple of threshold0.
 """
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Generator, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Literal, NamedTuple
@@ -143,7 +143,7 @@ class Collector:
         collection with `recording()`."""
 
     @contextmanager
-    def recording(self, kind: str) -> Iterator[None]:
+    def recording(self, kind: str) -> Generator[None]:
         """Count and record the collection run inside, with the heap before and
         after it."""
         heap = self._heap
