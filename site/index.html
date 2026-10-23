@@ -87,9 +87,11 @@ stands in for the collector's overhead; its yield, the share of the objects
 it examined that were cyclic garbage; its collections; and its gen 2
 collections or sweeps.</dd>
 <dt>Heap by space</dt>
-<dd>The heap in MB, stacked by space. A line marks its reachable part, and
-the gap between that line and the top of the stack is uncollected
-garbage.</dd>
+<dd>The heap in MB, in lanes on the allocation clock. The top lane draws the
+whole heap and its reachable part, and shades the gap between them, the
+uncollected garbage. The lanes below draw the nursery, the aging generation
+and the old generation. In the incremental collector's column, the old
+generation's lane stacks its pending and visited spaces.</dd>
 <dt>Work</dt>
 <dd>The objects each run's collections marked, saw survive and freed, summed
 over stretches of a few MB.</dd>
