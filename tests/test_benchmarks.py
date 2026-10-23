@@ -1,8 +1,9 @@
+import json
 from pathlib import Path
 
 import pytest
 
-from benchmarks import Benchmark, Tally, load, load_data
+from benchmarks import Benchmark, Tally, load, load_data, mock
 
 HEADER = ",".join(
     (
@@ -120,6 +121,46 @@ def test_keeps_each_benchmark_apart(tmp_path: Path) -> None:
         "create_gc_cycles": Benchmark(1, {(2, "explicit"): Tally(1, 300, 30)}),
         "xml_etree_parse": Benchmark(1, {(0, "automatic"): Tally(1, 100, 10)}),
     }
+
+
+def test_the_first_heap_is_each_workers_first_heap_size_averaged(
+    tmp_path: Path,
+) -> None:
+    csv = tmp_path / "trace.csv"
+    csv.write_text(
+        "benchmark,worker,calibration,ts,generation,auto_collect,collections,"
+        "candidates,collected,heap_size\n"
+        "json_loads,7,0,200,0,1,2,250,40,1500\n"
+        "json_loads,7,0,100,0,1,1,100,10,1000\n"
+        "json_loads,8,0,150,0,1,1,300,30,2000\n",
+        newline="",
+    )
+
+    [benchmark] = load(csv).values()
+
+    assert benchmark.first_heap == 1500
+
+
+def test_without_heap_sizes_there_is_no_first_heap(tmp_path: Path) -> None:
+    csv = write(tmp_path / "trace.csv", "json_loads,7,0,100,0,1,1,100,10")
+
+    [benchmark] = load(csv).values()
+
+    assert benchmark.first_heap is None
+
+
+@pytest.mark.parametrize(
+    ("marks", "mocked"),
+    [((True, True), True), ((False, True), True), ((False, False), False)],
+)
+def test_the_data_is_mock_if_any_metadata_says_so(
+    tmp_path: Path, marks: tuple[bool, bool], mocked: bool
+) -> None:
+    for name, mark in zip(("incremental", "legacy"), marks, strict=True):
+        metadata = {"collector": name} | ({"mock": True} if mark else {})
+        (tmp_path / f"{name}.json").write_text(json.dumps(metadata), newline="")
+
+    assert mock(tmp_path) is mocked
 
 
 def test_running_totals_that_fall_are_an_error(tmp_path: Path) -> None:

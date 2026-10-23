@@ -49,6 +49,7 @@ lists them.
 | `typecheck` | mypy and pyrefly, both strict |
 | `site` | assembles `_site/`: copies `site/`, zips `src/pep848_sim` into `_site/sim.zip` |
 | `serve` | runs `site`, then serves `_site/` on `http://localhost:8000` |
+| `compare` | runs each preset under both collectors and prints its collections beside its benchmark's in `data/` |
 
 `test` passes its arguments to pytest. To run one test file, leave the
 coverage gate out: `poetry run just test tests/test_smoke.py --no-cov`.

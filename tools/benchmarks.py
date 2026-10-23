@@ -6,6 +6,7 @@ imports, the benchmark's loops, pyperf's bookkeeping and shutdown alike.
 """
 
 import csv
+import json
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Literal, NamedTuple
@@ -56,6 +57,9 @@ class Benchmark(NamedTuple):
 
     workers: int
     tallies: dict[tuple[int, Kind], Tally]
+    # Real objects in the heap as each worker's first collection read began,
+    # averaged over the workers whose rows report it.
+    first_heap: float | None = None
 
     def per_worker(self, generation: int, kind: Kind) -> float:
         """How many collections of a generation and kind a worker makes: for
@@ -74,14 +78,19 @@ def load(path: Path) -> dict[str, Benchmark]:
 
     counts: Counter[str] = Counter()
     tallies: defaultdict[str, dict[tuple[int, Kind], Tally]] = defaultdict(dict)
+    first_heaps: defaultdict[str, list[int]] = defaultdict(list)
     for (benchmark, worker), rows in workers.items():
         counts[benchmark] += 1
+        rows.sort(key=lambda row: int(row["ts"]))
+        # heap_size is a column the loader can do without.
+        if first_heap := rows[0].get("heap_size"):
+            first_heaps[benchmark].append(int(first_heap))
         # The runtime keeps running totals per worker and generation. A row
         # counts what they gained since the last row read them, so a record gcmon
         # lost folds into the next one it read. A record lost after a worker's
         # last row has nothing to fold into, and no total counts it.
         read: dict[int, Tally] = {}
-        for row in sorted(rows, key=lambda row: int(row["ts"])):
+        for row in rows:
             generation = int(row["generation"])
             totals = Tally(
                 int(row["collections"]), int(row["candidates"]), int(row["collected"])
@@ -97,9 +106,27 @@ def load(path: Path) -> dict[str, Benchmark]:
             key = (generation, kind)
             tallies[benchmark][key] = tallies[benchmark].get(key, Tally()).add(gained)
 
-    return {name: Benchmark(counts[name], tallies[name]) for name in sorted(counts)}
+    return {
+        name: Benchmark(counts[name], tallies[name], _mean(first_heaps[name]))
+        for name in sorted(counts)
+    }
+
+
+def _mean(values: list[int]) -> float | None:
+    return sum(values) / len(values) if values else None
 
 
 def load_data(directory: Path = DATA) -> dict[str, dict[str, Benchmark]]:
     """Each collector's benchmarks, from the files the rerun left in data/."""
     return {name: load(directory / f"{name}.csv") for name in COLLECTORS}
+
+
+def mock(directory: Path = DATA) -> bool:
+    """Whether the metadata beside any collector's file says its records are
+    mock, as tools/mock_data.py writes them until the rerun."""
+    return any(
+        json.loads((directory / f"{name}.json").read_text(encoding="utf-8")).get(
+            "mock", False
+        )
+        for name in COLLECTORS
+    )
