@@ -24,6 +24,11 @@ import { requestRuns } from "./runs.js";
 /** @typedef {import("./runs.js").Control} Control */
 /** @typedef {import("./panels.js").Collector} Collector */
 /**
+ * What a redraw laid out, in MB and px: the clock's length, the charts' width,
+ * the run's length and a bin's in kB, and the work panel's y-scale end.
+ * @typedef {{ xMax: number, width: number, runLength: number, binKb: number, workMax: number }} Layout
+ */
+/**
  * A workload a widget offers: its name in the URL fragment, its title in the
  * select, its request as the controls have set it, and the paths of its controls.
  * @typedef {{ name: string, title: string, request: any, controls: string[] }} Entry
@@ -269,10 +274,10 @@ class GcWidget extends HTMLElement {
   #sliders = new Map();
   #frame = 0;
   /** What the last redraw laid out, which the pointer's marks follow; null before the clock has a length. */
-  /** @type {{ xMax: number, width: number, runLength: number, binKb: number, workMax: number } | null} */
+  /** @type {Layout | null} */
   #layout = null;
   /** The panel under the pointer, and where in it the pointer rests, in px. */
-  /** @type {{ collector: Collector, panel: string, x: number, y: number } | null} */
+  /** @type {{ panel: string, x: number, y: number } | null} */
   #pointer = null;
   /**
    * Where the pointer came to rest, once it has rested DWELL ms, and whether
@@ -348,7 +353,7 @@ class GcWidget extends HTMLElement {
           const box = plot.getBoundingClientRect();
           const { clientX, clientY } = /** @type {PointerEvent} */ (event);
           const x = clientX - box.left, y = clientY - box.top;
-          this.#pointer = { collector, panel, x, y };
+          this.#pointer = { panel, x, y };
           // A move past DRIFT hides the tooltip until the pointer rests again.
           const rest = this.#rest;
           if (!rest || Math.hypot(x - rest.x, y - rest.y) > DRIFT) {
@@ -684,25 +689,47 @@ class GcWidget extends HTMLElement {
   }
 
   /**
-   * Show what the panel under the pointer reads there, from the records drawn so
-   * far: the heap or the budget at the nearest collection, or the work of the bin
-   * under it. The tooltip shows only once the pointer rests, and not after
-   * Escape. A redraw leaves the marks alone and calls this again, so they hold
-   * while runs stream.
+   * Mark the clock under the pointer in every panel of both columns, from the
+   * records drawn so far: both runs share the clock. The panel the pointer is in
+   * shows its tooltip in both columns, once the pointer rests and until Escape. A
+   * redraw leaves the marks alone and calls this again, so they hold while runs
+   * stream.
    */
   #hover() {
     const root = /** @type {ShadowRoot} */ (this.shadowRoot);
     for (const mark of root.querySelectorAll(".crosshair, .outline, .tip")) /** @type {HTMLElement} */ (mark).hidden = true;
     const pointer = this.#pointer, layout = this.#layout;
     if (!pointer || !layout) return;
-    const { collector, panel, x, y } = pointer;
-    const { xMax, width, runLength, binKb, workMax } = layout;
-    const { marginLeft, marginRight, marginTop, marginBottom } = MARGINS;
+    const { panel: hovered, x, y } = pointer;
+    const { width, runLength } = layout;
+    const { marginLeft, marginRight } = MARGINS;
     if (x < marginLeft - SLACK || x > width - marginRight + SLACK) return;
+    const kb = Math.min(Math.max(0, ((x - marginLeft) / (width - marginLeft - marginRight)) * runLength), runLength - 1);
+    const resting = this.#rest !== null && !this.#rest.hidden;
+    for (const collector of COLLECTORS) {
+      for (const plot of this.#column(collector).querySelectorAll(".plot")) {
+        const panel = /** @type {string} */ (/** @type {HTMLElement} */ (plot.closest("figure")).dataset.panel);
+        this.#mark(collector, panel, /** @type {HTMLElement} */ (plot), kb, resting && panel === hovered ? y : null);
+      }
+    }
+  }
+
+  /**
+   * Mark what one panel reads at clock `kb`, in kB: the heap or the budget at the
+   * nearest collection, with a crosshair, or the work of the bin that holds it,
+   * with an outline round its bar. Given a height `y`, in px, show its tooltip
+   * there too.
+   * @param {Collector} collector
+   * @param {string} panel
+   * @param {HTMLElement} plot
+   * @param {number} kb
+   * @param {number | null} y
+   */
+  #mark(collector, panel, plot, kb, y) {
+    const { xMax, width, binKb, workMax } = /** @type {Layout} */ (this.#layout);
+    const { marginLeft, marginRight, marginTop, marginBottom } = MARGINS;
     const inner = width - marginLeft - marginRight;
-    const kb = Math.min(Math.max(0, ((x - marginLeft) / inner) * runLength), runLength - 1);
     const px = (/** @type {number} */ mb) => marginLeft + (mb / xMax) * inner;
-    const plot = /** @type {HTMLElement} */ (this.#column(collector).querySelector(`[data-panel="${panel}"] .plot`));
     const mark = /** @type {HTMLElement} */ (plot.querySelector(".crosshair, .outline"));
     const tip = /** @type {HTMLElement} */ (plot.querySelector(".tip"));
     const records = this.#records[collector];
@@ -747,7 +774,7 @@ class GcWidget extends HTMLElement {
         ]);
       }
     }
-    if (!this.#rest || this.#rest.hidden) return;
+    if (y === null) return;
     tip.replaceChildren(...content());
     tip.hidden = false;
     // Right of the mark, or left of it where the chart ends; level with the
