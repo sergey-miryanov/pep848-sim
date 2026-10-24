@@ -12,8 +12,8 @@ remove it. A shape can be the reader's own, written in Python (ADR 0014).
 The churn's line and a line for the run open theirs, and a button under the
 list adds a structure. A last line, under a heading that says no Python API
 changes them, opens the collector constants and the real object's size
-(#154). A page asks for the editor with the widget's
-`editor` attribute. The home page's widget keeps its legend and its sliders.
+(#154). A page asks for the editor with the widget's `editor` attribute. The
+home page's widget keeps its legend and its sliders.
 
 Each change runs both collectors again, as a control's release does, and the
 charts keep the last runs until the new ones send their first records. A
@@ -21,9 +21,11 @@ change of a value leaves the fields in place, so the reader can tab on to the
 next field while the runs start again. With each request the worker sends a
 fresh sample of the object graph, and the structures' lines take their words
 from it, the shapes' names included, so the names live in one place, the
-Python. The editor words the churn's line and the run's line itself.
+Python. The editor words the churn's, the run's and the constants' lines
+itself.
 
-The browser checks each field against its least value before anything runs.
+The browser checks each field against the values it allows before anything
+runs.
 The simulator refuses the rest, such as a build that outlasts its rebuild
 interval, and the playground shows its words under the field the reader
 changed last, while the charts keep the last runs. It refuses every value

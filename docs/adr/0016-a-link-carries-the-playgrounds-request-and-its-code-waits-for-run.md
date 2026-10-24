@@ -2,8 +2,8 @@
 
 A reader who finds a workload worth showing sends its link (#156). After each
 run the simulator takes, the playground writes the request into the URL
-fragment, beside the name of the entry it belongs to, as a
-`playground.request` pair: the widget's id and `.request`. A button beside the
+fragment, beside the name of the entry it belongs to, under the widget's id
+and `.request`: `playground.request` on the playground. A button beside the
 Edit switch copies the address. Opening the link, in this browser or another,
 opens that entry with that request and runs it. A browser never sends a
 fragment to the server, so the site's host never sees a reader's workload.
@@ -18,27 +18,29 @@ request opens the same runs for as long as the simulator stays the same (ADR
 browser's `CompressionStream` and written in base64url. The stand-in's link
 takes 435 characters where its JSON, escaped for a URL, takes 997. With the
 doubly linked list the editor offers as a shape of the reader's own, the link
-takes 676 and the JSON 1,595. Opening a link refuses text that opens to more
-than 1 MB, or to anything but a request in that form.
+takes 676 and the JSON 1,595. The page refuses a link whose text opens to
+more than 1 MB, or to anything but a request in that form.
 
-A link holds the request, not the source's text. A reader who sends a link
-from the source sends the workload the source made, and the source the link
-opens comes written afresh from it, without the sender's loops and comments.
+A link holds the request, not the workload source's text. A reader who sends
+a link from the workload source sends the workload their text made, and the
+link opens a workload source written afresh from the request, without the
+sender's loops and comments.
 
 The simulator runs a shape's code as soon as it reads a request (ADR 0014),
 in the page's worker, where Python can fetch from the site's origin and post
 to the page. A link that ran its code on opening would let anyone who sends a
-link run a script on the site's origin. So a link whose request holds a shape
-of the reader's own, or a shape that is not plainly a named one, opens in the
-source with a note and waits for the reader to press Run. Until then the
-switch to the legend stays shut, and picking another workload and coming back
-waits again. The playground cannot tell a reader's own link from another's,
-so a reload of a page whose address holds code waits too.
+link run code on the site's origin. So a link whose request holds a shape of
+the reader's own, or a shape that is not plainly a named one, opens in the
+workload source with a note and waits for the reader to press Run. Until then
+the switch to the legend stays shut, and picking another workload and coming
+back waits again. The playground cannot tell a reader's own link from
+another's, so a reload of a page whose address holds code waits too.
 
-A link the playground cannot open leaves the entry as the page gives it and
-says why. Picking another workload drops the link from the address until that
-workload's runs write their own. Only a widget with the `editor` attribute and
-an id writes a link, so the home page's address names its entry alone.
+When the playground cannot open a link, it shows the entry as the page gives
+it and says why. Picking another workload drops the link from the address
+until that workload's runs write their own. Only a widget with the `editor`
+attribute and an id writes a link, so the home page's address names its entry
+alone.
 
 ## Considered Options
 
@@ -46,9 +48,9 @@ an id writes a link, so the home page's address names its entry alone.
   escapes to three characters, and a link more than doubles.
 - The preset's name and the fields the reader changed: a shorter link that
   follows the preset's numbers when they change, as above.
-- The source's text in the link: it keeps the sender's loops and comments,
-  but a link would then come in two forms, and opening one would run more
-  code than its shapes.
+- The workload source's text in the link: it keeps the sender's loops and
+  comments, but a link would then come in two forms, and opening one would
+  run more code than its shapes.
 - A query string in place of the fragment: the server would receive every
   workload with each page load.
 - Writing the address only when the reader presses Copy link: the address

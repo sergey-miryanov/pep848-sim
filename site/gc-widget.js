@@ -162,7 +162,7 @@ function entriesOf(json, controls) {
 const fragment = () => new URLSearchParams(location.hash.slice(1));
 /** The key of a widget's link's request in the URL fragment. */
 const linkKey = (/** @type {string} */ id) => `${id}.request`;
-// What the source of a link's request says while it waits for Run.
+// What the workload source says while a link's code waits for Run.
 const HELD = "This link carries Python, which runs in your browser once you press Run. Read it first.";
 
 // The colors come from the dataviz skill's reference palette, assigned so that
@@ -466,8 +466,8 @@ class GcWidget extends HTMLElement {
       const style = document.createElement("style");
       style.textContent = EDITOR_STYLE + SOURCE_STYLE + LINK_STYLE;
       root.append(style);
-      // The legend's editor takes the place of the plain legend, which the
-      // source shows beside it.
+      // The legend's editor takes the place of the plain legend, which comes
+      // back beside the workload source.
       const editing = document.createElement("div");
       editing.className = "editing";
       /** @type {HTMLElement} */ (root.querySelector(".key-list")).append(editing);
@@ -507,9 +507,9 @@ class GcWidget extends HTMLElement {
 
   /**
    * Open a link: the entry it names, with the request it holds, run at once
-   * unless the request holds code, which waits in the source for Run. A link
-   * the widget cannot read leaves the entry as the page gives it, with the
-   * reason.
+   * unless the request holds code, which waits in the workload source for Run.
+   * When the widget cannot read a link, it shows the entry as the page gives
+   * it, with the reason.
    * @param {string} link the link's request, as the URL fragment holds it
    */
   async #open(link) {
@@ -555,10 +555,10 @@ class GcWidget extends HTMLElement {
 
   /**
    * Show the entry and start its runs, or, if a link with code brought its
-   * request, show its source and wait for the reader to press Run, with the
-   * switch to the legend shut until then. The last entry's controls, figures
-   * and charts go at once, and its request keeps the values its controls set,
-   * for when it is shown again.
+   * request, show its workload source and wait for the reader to press Run,
+   * with the switch to the legend shut until then. The last entry's controls,
+   * figures and charts go at once, and its request keeps the values its
+   * controls set, for when it is shown again.
    * @param {Entry} entry
    */
   #enter(entry) {
@@ -611,7 +611,7 @@ class GcWidget extends HTMLElement {
     /** @type {HTMLElement} */ (root.querySelector(".error")).hidden = true;
     requestRuns(this.#name, request, {
       controls: (controls, expanded, graph) => {
-        // A request that names a preset, carries a workload's source or leaves
+        // A request that names a preset, carries a workload source or leaves
         // out the constants comes back spelled out: its workload, run length and
         // constants, which the controls and the editors edit from then on.
         const preset = "preset" in request;
@@ -824,7 +824,8 @@ class GcWidget extends HTMLElement {
     frame.hidden = !nodes.length;
     // The editor stays, so that a workload without structures can gain one.
     keys.hidden = !nodes.length && !this.#editor;
-    // The plain legend, which the source shows beside it on the playground.
+    // The plain legend, which comes back beside the workload source on the
+    // playground.
     const list = /** @type {HTMLElement} */ (keys.querySelector(".plain ol"));
     list.replaceChildren(...graph.structures.map((structure, i) => {
       const item = document.createElement("li");

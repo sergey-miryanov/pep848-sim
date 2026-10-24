@@ -1,14 +1,15 @@
 # The playground's source writes the workload as Python
 
-The playground's second editor shows the workload, the run length and the
-collector settings as Python source beside the widget (#157), the prototype's
-third layout. A switch beside the Workload select picks the legend's editor
-(ADR 0013), the default, or the source. The source uses the prototype's names:
-`Structure`, `Churn`, `Settings`, a class for each shape, and `Own` for a shape
-of the reader's own, and `Constants` for the collector constants and the real
-object's size (#154). It sets `churn`, `structures` and `run_length`, and may
-set `settings`, `constants`, `seed` and `shutdown`. A reader can compute a size, build the
-structures in a loop, or keep several shapes of their own in one place.
+The playground's second editor, the workload source, shows the workload, the
+run length and the collector settings as Python beside the widget (#157), the
+prototype's third layout, and since #154 the collector constants and the real
+object's size too. A switch beside the Workload select picks the legend's
+editor (ADR 0013), the default, or the source. The source uses the
+prototype's names: `Structure`, `Churn`, `Settings`, a class for each shape,
+`Own` for a shape of the reader's own, and `Constants`. It sets `churn`,
+`structures` and `run_length`, and may set `settings`, `constants`, `seed`
+and `shutdown`. A reader can compute a size, build the structures in a loop,
+or keep several shapes of their own in one place.
 
 The source runs when the reader presses Run or Ctrl+Enter, not on each change
 as the legend does, since half-typed Python fails at most keystrokes. The
@@ -16,7 +17,8 @@ request carries the text as `{"source": text, "every": n}`. The simulator runs
 it in the page's worker, as it runs a shape of the reader's own (ADR 0014),
 and the worker sends the request back spelled out, as it does for one that
 names a preset. The page keeps the spelled-out workload, which the legend then
-edits. A refusal or an error shows under the box with its line. The worker
+edits. A refusal or an error shows under the box, with its line where it has
+one. The worker
 reads each request four times, for its controls, its spelled-out form, its
 object graph and its runs, and the parser keeps the last 16 it read. So the
 source runs once for all four, and a source that draws random numbers still

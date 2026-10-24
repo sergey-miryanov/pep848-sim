@@ -11,7 +11,7 @@ The simulator checks every link the code gives before the heap makes it: two
 ints from 0 to i, one of them from an earlier object that holds object i. An
 object that nothing earlier holds would turn into garbage as soon as it was
 built, and the heap counts uncollected garbage only at a drop. Before a run
-starts, a request calls links(i) twice on each of a structure's first 1,024
+starts, the simulator calls links(i) twice on each of a structure's first 1,024
 objects. So most faults show as the reader leaves the box, with the line of
 their code, and so does an answer that changes from one call to the next. The
 simulator calls links(i) again to sample the object graph and to count the
@@ -19,11 +19,11 @@ cyclic garbage a drop leaves, and an answer that changes would draw one graph
 and count another. A run depends only on its inputs (ADR 0007) as long as the
 code does.
 
-The workload's source (ADR 0015) gives a shape as a function by any name, and
+The workload source (ADR 0015) gives a shape as a function by any name, and
 the request carries its text alone. So the code may define one function in
 place of links(i), and the simulator calls that. A message names the function
 it called, and counts lines from where the code starts in the reader's text:
-the box's first line, or the function's own line in the source.
+the box's first line, or the function's own line in the workload source.
 
 A built-in shape declares the cyclic garbage a drop leaves. For a reader's
 shape the simulator counts it by refcounting the structure's own links. The
@@ -35,9 +35,9 @@ tree.
 
 The code runs in the worker, which has no page to change. It can fetch and
 post messages, and the page reads what the worker posts as data. A link can
-carry another reader's code, and it waits for the reader to press Run (ADR
-0016). Code that never returns holds the worker. The Stop button
-ends the worker and starts another (ADR 0009).
+carry another reader's code, and such a link waits for the reader to press
+Run (ADR 0016). Code that never returns holds the worker. The Stop button ends
+the worker and starts another (ADR 0009).
 
 ## Considered Options
 

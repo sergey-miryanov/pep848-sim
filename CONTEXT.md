@@ -226,9 +226,10 @@ meant)
 
 **Workload source**:
 The playground's other editor: the workload, the run length, the collector
-settings and the collector constants as Python beside the widget. The reader runs it with a button, and the
-legend then shows the workload it made.
-_Avoid_: script, program, code view, source (bare: a link has a source too)
+settings and the collector constants as Python beside the widget. The reader
+runs it with a button, and the legend then shows the workload it made.
+_Avoid_: script, program, code view, source (bare, where the site's own source
+code could be meant)
 
 **Run**:
 One simulation of one workload by one collector under one set of collector

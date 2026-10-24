@@ -45,7 +45,7 @@ _OPTIONAL = ("constants",)
 # The fields of a request that names a preset, which brings its workload and run
 # length.
 _PRESET_FIELDS = ("preset", "settings", "every", *_OPTIONAL)
-# The fields of a request that carries a workload's source, which sets its
+# The fields of a request that carries a workload source, which sets its
 # workload, collector settings, run length and constants.
 _SOURCE_FIELDS = ("source", "every")
 
