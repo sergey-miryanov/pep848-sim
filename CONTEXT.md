@@ -204,8 +204,9 @@ embedding a widget with its preset and one or two controls.
 _Avoid_: tutorial, article, docs
 
 **Playground**:
-The page with one widget and every control unlocked, for readers who want to
-try anything.
+The page with one widget whose legend edits the whole workload, the run length
+and the collector settings, for readers who want to try anything. Each change
+starts the widget's two runs again, as a control's release does.
 _Avoid_: sandbox, lab, explorer
 
 **Run**:

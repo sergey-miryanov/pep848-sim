@@ -20,6 +20,10 @@ class Chains:
 
     width: int
 
+    def __post_init__(self) -> None:
+        if self.width < 1:
+            raise ValueError(f"{self.width} chains hold no objects")
+
     def cyclic_garbage(self, size: int) -> int:
         """How many objects of a dropped structure of this size stay as cyclic
         garbage."""
@@ -162,6 +166,15 @@ class StructureParameters:
     full_collections: bool = False
 
     def __post_init__(self) -> None:
+        if self.size < 1:
+            raise ValueError(f"a structure of {self.size} objects builds nothing")
+        if self.lifetime is not None and self.lifetime < 0:
+            raise ValueError(f"a structure cannot live {self.lifetime} kB")
+        if self.build_churn < 0:
+            raise ValueError(
+                f"a build cannot follow each object with {self.build_churn} churn"
+                " allocations"
+            )
         build = self.size * (1 + self.build_churn)
         if self.rebuild_interval is not None and build > self.rebuild_interval:
             raise ValueError(

@@ -35,8 +35,6 @@ class Sample(NamedTuple):
 def sample(structure: StructureParameters) -> Sample:
     """The structure's first object, then the first children of each object the
     sample keeps, a level at a time, as far as its shape's extent allows."""
-    if not structure.size:
-        return Sample([], [])
     shape = structure.shape
     links = [
         link for i in range(min(structure.size, _REACH)) for link in shape.links(i)

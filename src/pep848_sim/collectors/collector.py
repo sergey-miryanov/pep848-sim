@@ -32,6 +32,10 @@ class CollectorSettings:
     threshold1: int = 10
     threshold2: int = 10
 
+    def __post_init__(self) -> None:
+        if self.threshold0 < 1:
+            raise ValueError(f"a threshold0 of {self.threshold0} kB falls under 1 kB")
+
 
 @dataclass(frozen=True)
 class CollectionCounts:

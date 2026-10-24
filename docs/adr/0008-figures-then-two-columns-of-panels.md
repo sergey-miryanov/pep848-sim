@@ -72,7 +72,8 @@ graph's nodes, and ten rings. A force layout places the sample with sys and
 the frames pinned along the top, and fits it into its frame. The objects keep
 to ink, and a number on each structure's first object points to its line in
 the legend under the controls, since the panels below take all eight of the
-palette's hues. The graph moves the figures down about 150 px.
+palette's hues. The graph moves the figures down about 150 px. On the
+playground the legend edits the workload (ADR 0013).
 
 ## Considered Options
 

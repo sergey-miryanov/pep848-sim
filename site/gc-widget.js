@@ -6,7 +6,9 @@
 // budget, on y-scales the two columns share. Above the figures it shows the
 // controls its `controls` attribute names, and releasing one asks for both runs
 // again. Beside them it draws a sample of the request's object graph, each
-// structure under sys or its frame, with a legend under the controls.
+// structure under sys or its frame, with a legend under the controls. With an
+// `editor` attribute, as on the playground, the legend edits the request, and
+// each change asks for both runs again (ADR 0013).
 //
 // The JSON can list entries in place of one request, each with a name, a title,
 // its own request and its own controls. The widget then shows a select of their
@@ -19,6 +21,7 @@ import {
   forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY,
   // @ts-expect-error: an editor cannot fetch d3's types from jsDelivr.
 } from "https://cdn.jsdelivr.net/npm/d3-force@3.0.0/+esm";
+import { Editor, EDITOR_STYLE } from "./editor.js";
 import { describe, describeChurn, fit, network } from "./graph.js";
 import {
   CLOCK, FADED, FULL, KIND, LANES, PARTS, SPACES, WORK_TO_DO, budgetAt, ceiling, collections, heap, heapAt, work, workAt,
@@ -329,6 +332,9 @@ class GcWidget extends HTMLElement {
   #rest = null;
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   #dwell = undefined;
+  /** The legend's editor, on a widget with the `editor` attribute. */
+  /** @type {Editor | null} */
+  #editor = null;
 
   connectedCallback() {
     if (this.shadowRoot) return;
@@ -422,6 +428,12 @@ class GcWidget extends HTMLElement {
       this.#hover();
     });
     this.#name = this.id || `gc-widget-${widgets++}`;
+    if (this.hasAttribute("editor")) {
+      const style = document.createElement("style");
+      style.textContent = EDITOR_STYLE;
+      root.append(style);
+      this.#editor = new Editor(/** @type {HTMLElement} */ (root.querySelector(".key-list")), () => this.#start());
+    }
     if (this.#entries.length > 1) {
       const label = /** @type {HTMLElement} */ (root.querySelector(".entries"));
       const select = /** @type {HTMLSelectElement} */ (label.querySelector("select"));
@@ -486,6 +498,7 @@ class GcWidget extends HTMLElement {
           entry.request = structuredClone(expanded);
           if ("preset" in this.#drawn) this.#drawn = request;
         }
+        this.#editor?.edit(entry.request);
         this.#show(controls);
         this.#graph(graph);
       },
@@ -501,7 +514,8 @@ class GcWidget extends HTMLElement {
         this.#schedule();
       },
       done: () => {},
-      error: (message) => this.#fail(message),
+      // The editor shows a refusal beside the field the reader changed.
+      error: (message) => this.#editor?.fail(message) || this.#fail(message),
     }, entry.controls);
   }
 
@@ -566,7 +580,23 @@ class GcWidget extends HTMLElement {
     const frame = /** @type {HTMLElement} */ (root.querySelector(".graph"));
     const keys = /** @type {HTMLElement} */ (root.querySelector(".key-list"));
     const { nodes, links } = network(graph);
-    frame.hidden = keys.hidden = !nodes.length;
+    frame.hidden = !nodes.length;
+    // The editor stays, so that a workload without structures can gain one.
+    keys.hidden = !nodes.length && !this.#editor;
+    if (this.#editor) {
+      this.#editor.describe(graph);
+    } else {
+      const list = /** @type {HTMLElement} */ (keys.querySelector("ol"));
+      list.replaceChildren(...graph.structures.map((structure, i) => {
+        const item = document.createElement("li");
+        const badge = document.createElement("span");
+        badge.className = "badge";
+        badge.textContent = String(i + 1);
+        item.append(badge, describe(structure));
+        return item;
+      }));
+      /** @type {HTMLElement} */ (keys.querySelector(".churn")).textContent = describeChurn(graph.churn);
+    }
     if (!nodes.length) return;
     // The layout's own copies, which the simulation moves and links in place. The
     // roots keep to a line along the top, and what they hold hangs below them.
@@ -577,7 +607,8 @@ class GcWidget extends HTMLElement {
       .force("link", forceLink(links.map((link) => ({ ...link }))).id(byKey)
         .distance((/** @type {{ kind: string }} */ link) => (link.kind === "held" ? 36 : 16)).strength(0.9))
       .force("charge", forceManyBody().strength(-22))
-      .force("collide", forceCollide(5))
+      // A root's box is 34 px wide, so roots keep apart further than dots do.
+      .force("collide", forceCollide((/** @type {{ root?: string }} */ node) => (node.root ? 20 : 5)))
       .force("x", forceX(0).strength(0.04))
       .force("y", forceY(GRAPH.height / 4).strength(0.1))
       .stop()
@@ -629,16 +660,6 @@ class GcWidget extends HTMLElement {
       }
     }
     frame.replaceChildren(svg);
-    const list = /** @type {HTMLElement} */ (keys.querySelector("ol"));
-    list.replaceChildren(...graph.structures.map((structure, i) => {
-      const item = document.createElement("li");
-      const badge = document.createElement("span");
-      badge.className = "badge";
-      badge.textContent = String(i + 1);
-      item.append(badge, describe(structure));
-      return item;
-    }));
-    /** @type {HTMLElement} */ (keys.querySelector(".churn")).textContent = describeChurn(graph.churn);
   }
 
   /** @param {Collector} collector */

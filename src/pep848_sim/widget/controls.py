@@ -32,9 +32,11 @@ def controls(request: str, paths: Iterable[str]) -> list[Control]:
 def _control(request: Request, path: str) -> Control:
     match path.split("."):
         case ["settings", "threshold0"]:
-            # A run makes between 10 and 1,000 collections.
+            # A run makes between 10 and 1,000 collections, and a collection waits
+            # for 1 kB at least.
             value = request.settings.threshold0
-            low, high = -(-request.run_length // 1000), request.run_length // 10
+            low = max(1, -(-request.run_length // 1000))
+            high = request.run_length // 10
             return _ranged(path, "threshold0", "kB", value, low, max(high, value))
         case ["workload", "churn", "cycle_share"]:
             # A share, in thousandths, up to half the churn or the request's own.
