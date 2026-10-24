@@ -36,11 +36,19 @@
   dd { margin: 0 0 12px; color: var(--text-secondary); }
   a { color: inherit; }
   gc-widget { margin: 24px -16px 0; }
+  nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 20px; font-size: 14px; color: var(--text-secondary); }
+  nav [aria-current] { color: var(--text-primary); font-weight: 600; text-decoration: none; }
 </style>
 <script type="module" src="gc-widget.js"></script>
 </head>
 <body>
 <main>
+<nav aria-label="Pages">
+<a href="./">PEP 848 simulator</a>
+<a href="playground.html" aria-current="page">Playground</a>
+<a href="widget.html">Stand-in page</a>
+<a href="https://github.com/sergey-miryanov/pep848-sim">GitHub</a>
+</nav>
 <h1>Playground</h1>
 <p>Pick a workload to start from, then change any part of it. The legend
 beside the object graph edits each structure, the churn, the run and the

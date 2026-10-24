@@ -6,8 +6,18 @@
 <title>Widget stand-in</title>
 <script type="module" src="gc-widget.js"></script>
 <script type="module" src="stand-in.js"></script>
+<style>
+  nav { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+  nav [aria-current] { font-weight: 600; text-decoration: none; color: inherit; }
+</style>
 </head>
 <body>
+<nav aria-label="Pages">
+<a href="./">PEP 848 simulator</a>
+<a href="playground.html">Playground</a>
+<a href="widget.html" aria-current="page">Stand-in page</a>
+<a href="https://github.com/sergey-miryanov/pep848-sim">GitHub</a>
+</nav>
 <h1>Widget stand-in</h1>
 <p>The first widget offers two workloads through its select. The stand-in,
 close to prototype #6's, runs both collectors at the PEP's thresholds over
