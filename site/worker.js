@@ -17,6 +17,9 @@ const simulator = (async () => {
   const zip = await (await fetch("sim.zip")).arrayBuffer();
   pyodide.unpackArchive(zip, "zip", { extractDir: "/home/pyodide" });
   pyodide.runPython("import sys; sys.path.insert(0, '/home/pyodide')");
+  // PROTOTYPE, not for main (#153, #155): shapes of the reader's own, and
+  // workloads written as Python source.
+  pyodide.pyimport("pep848_sim.widget.prototype_playground");
   return {
     request: pyodide.pyimport("pep848_sim.widget.request"),
     figures: pyodide.pyimport("pep848_sim.widget.figures"),

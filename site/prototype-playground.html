@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playground prototype</title>
+<link rel="icon" href="data:,">
+<!-- PROTOTYPE, not for main (#153, #155): four layouts for the playground,
+     switched by ?variant= and the bar at the bottom. -->
+<style>
+  :root {
+    color-scheme: light;
+    --surface: #fcfcfb;
+    --raised: #f3f2ee;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --grid: #e1e0d9;
+    --freed: #e34948;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface: #1a1a19;
+      --raised: #232322;
+      --text-primary: #f0efec;
+      --text-secondary: #c3c2b7;
+      --text-muted: #898781;
+      --grid: #2c2c2a;
+      --freed: #e66767;
+    }
+  }
+  body {
+    margin: 0;
+    background: var(--surface);
+    color: var(--text-primary);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 96px; }
+  main.wide { max-width: 1520px; }
+  h1 { font-size: 28px; margin: 0 0 12px; }
+  p { max-width: 70ch; }
+  a { color: inherit; }
+  .proto { color: var(--text-secondary); font-size: 14px; }
+  #state { margin-top: 32px; font-size: 13px; color: var(--text-secondary); }
+  #state pre { max-height: 320px; overflow: auto; background: var(--raised); padding: 8px; border-radius: 4px; }
+
+  /* Shared bits of every editor. */
+  .ed { font-size: 13px; color: var(--text-secondary); }
+  .ed h3 { margin: 16px 0 6px; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .ed label { display: grid; gap: 2px; }
+  .ed input, .ed select, .ed textarea, .ed button {
+    font: inherit; color: var(--text-primary); background: var(--surface);
+    border: 1px solid var(--grid); border-radius: 4px; padding: 3px 6px;
+  }
+  .ed input[type=number] { width: 100%; box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  .ed input[type=checkbox] { width: auto; }
+  .ed textarea { font: 12px/1.45 ui-monospace, "Cascadia Code", Consolas, monospace; tab-size: 4; resize: vertical; }
+  .ed button { cursor: pointer; }
+  .ed button.primary { background: var(--text-primary); color: var(--surface); border-color: var(--text-primary); padding: 5px 14px; font-weight: 600; }
+  .ed .check { display: flex; gap: 6px; align-items: center; }
+  .ed .start { display: flex; gap: 8px; align-items: center; }
+  .ed .hint { color: var(--text-muted); font-size: 12px; }
+  .ed .stale { color: var(--freed); }
+
+  /* A: the form beside the widget. */
+  .a-grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .a-editor { position: sticky; top: 8px; max-height: calc(100vh - 72px); overflow: auto; padding-right: 8px; }
+  .a-card { border: 1px solid var(--grid); border-radius: 6px; margin: 0 0 8px; padding: 6px 10px 10px; }
+  .a-card legend { padding: 0 4px; color: var(--text-primary); font-weight: 600; }
+  .a-card legend button { margin-left: 6px; padding: 0 6px; }
+  .a-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+  .a-fields .full { grid-column: 1 / -1; }
+  .a-run { position: sticky; bottom: 0; background: var(--surface); padding: 10px 0 4px; display: flex; gap: 10px; align-items: center; border-top: 1px solid var(--grid); margin-top: 12px; }
+  .a-grid gc-widget { padding: 0; }
+
+  /* B: a table above the widget. */
+  .b-bar { display: flex; gap: 16px; align-items: center; margin: 0 0 8px; }
+  .b-table { border-collapse: collapse; width: 100%; }
+  .b-table th { text-align: left; font-weight: 600; color: var(--text-primary); padding: 4px 6px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  .b-table td { padding: 3px 6px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  .b-table td.n { color: var(--text-primary); font-weight: 600; }
+  .b-table input[type=number] { width: 92px; }
+  .b-table textarea { width: 100%; box-sizing: border-box; min-height: 120px; }
+  .b-sentence { margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .b-sentence input[type=number] { width: 80px; }
+  .b-sentence strong { color: var(--text-primary); }
+  .b-widget { margin: 16px -16px 0; }
+
+  /* C: Python source beside the widget. */
+  .c-grid { display: grid; grid-template-columns: minmax(560px, 0.8fr) minmax(0, 1.4fr); gap: 16px; align-items: start; }
+  .c-editor { position: sticky; top: 8px; display: grid; gap: 8px; }
+  .c-editor textarea { height: calc(100vh - 160px); min-height: 420px; width: 100%; box-sizing: border-box; }
+  .c-grid gc-widget { padding: 0; }
+</style>
+<script type="module" src="gc-widget.js"></script>
+<script type="module" src="prototype-playground.js"></script>
+<script type="module" src="prototype-switcher.js"></script>
+</head>
+<body>
+<main>
+<h1>Playground</h1>
+<p class="proto">PROTOTYPE, not for main (#153, #155). Four layouts for the
+playground's editor around the real widget. Switch them with the bar at the
+bottom or the arrow keys. Every layout can start from any preset and give a
+structure a shape of your own.</p>
+<div id="stage"></div>
+<details id="state"><summary>The request the editor sends (prototype)</summary><pre></pre></details>
+</main>
+</body>
+</html>

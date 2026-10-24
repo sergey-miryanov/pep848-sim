@@ -1,0 +1,327 @@
+{
+ "stand-in": {
+  "workload": {
+   "churn": {
+    "cycle_share": "3/100",
+    "cycle_size": 3,
+    "lifetime_mean": 5,
+    "long_share": "1/20",
+    "long_lifetimes": [
+     100,
+     1000
+    ]
+   },
+   "structures": [
+    {
+     "shape": {
+      "chains": 16
+     },
+     "size": 8000,
+     "root": "module",
+     "lifetime": null,
+     "rebuild_interval": null,
+     "build_churn": 0,
+     "full_collections": false
+    },
+    {
+     "shape": "tree",
+     "size": 20000,
+     "root": "frame",
+     "lifetime": 40000,
+     "rebuild_interval": 80000,
+     "build_churn": 1,
+     "full_collections": false
+    }
+   ],
+   "seed": 848,
+   "shutdown": false
+  },
+  "settings": {
+   "threshold0": 2000,
+   "threshold1": 10,
+   "threshold2": 10
+  },
+  "run_length": 150000,
+  "every": 5
+ },
+ "create_gc_cycles": {
+  "workload": {
+   "churn": {
+    "cycle_share": "0",
+    "cycle_size": 1,
+    "lifetime_mean": 4,
+    "long_share": "0",
+    "long_lifetimes": [
+     1,
+     1
+    ]
+   },
+   "structures": [
+    {
+     "shape": {
+      "chains": 16
+     },
+     "size": 350,
+     "root": "module",
+     "lifetime": null,
+     "rebuild_interval": null,
+     "build_churn": 6,
+     "full_collections": false
+    },
+    {
+     "shape": "tree",
+     "size": 350,
+     "root": "module",
+     "lifetime": null,
+     "rebuild_interval": null,
+     "build_churn": 6,
+     "full_collections": false
+    },
+    {
+     "shape": {
+      "rings": 1
+     },
+     "size": 132,
+     "root": "frame",
+     "lifetime": 0,
+     "rebuild_interval": 140,
+     "build_churn": 0,
+     "full_collections": true
+    }
+   ],
+   "seed": 848,
+   "shutdown": true
+  },
+  "settings": {
+   "threshold0": 2000,
+   "threshold1": 10,
+   "threshold2": 10
+  },
+  "run_length": 76572,
+  "every": 20
+ },
+ "json_loads": {
+  "workload": {
+   "churn": {
+    "cycle_share": "0",
+    "cycle_size": 1,
+    "lifetime_mean": 1,
+    "long_share": "1/50",
+    "long_lifetimes": [
+     100,
+     1000
+    ]
+   },
+   "structures": [
+    {
+     "shape": {
+      "chains": 16
+     },
+     "size": 350,
+     "root": "module",
+     "lifetime": null,
+     "rebuild_interval": null,
+     "build_churn": 6,
+     "full_collections": false
+    },
+    {
+     "shape": "tree",
+     "size": 350,
+     "root": "module",
+     "lifetime": null,
+     "rebuild_interval": null,
+     "build_churn": 6,
+     "full_collections": false
+    }
+   ],
+   "seed": 848,
+   "shutdown": true
+  },
+  "settings": {
+   "threshold0": 2000,
+   "threshold1": 10,
+   "threshold2": 10
+  },
+  "run_length": 21000,
+  "every": 1
+ },
+ "xml_etree_parse": {
+  "workload": {
+   "churn": {
+    "cycle_share": "1/50",
+    "cycle_size": 2,
+    "lifetime_mean": 4,
+    "long_share": "0",
+    "long_lifetimes": [
+     1,
+     1
+    ]
+   },
+   "structures": [
+    {
+     "shape": {
+      "chains": 16
+     },
+     "size": 350,
+     "root": "module",
+     "lifetime": null,
+     "rebuild_interval": null,
+     "build_churn": 6,
+     "full_collections": false
+    },
+    {
+     "shape": "tree",
+     "size": 350,
+     "root": "module",
+     "lifetime": null,
+     "rebuild_interval": null,
+     "build_churn": 6,
+     "full_collections": false
+    },
+    {
+     "shape": {
+      "hierarchy": 50
+     },
+     "size": 322,
+     "root": "frame",
+     "lifetime": 25298,
+     "rebuild_interval": 25620,
+     "build_churn": 0,
+     "full_collections": false
+    },
+    {
+     "shape": {
+      "hierarchy": 50
+     },
+     "size": 322,
+     "root": "frame",
+     "lifetime": 840,
+     "rebuild_interval": 420,
+     "build_churn": 0,
+     "full_collections": false
+    }
+   ],
+   "seed": 848,
+   "shutdown": true
+  },
+  "settings": {
+   "threshold0": 2000,
+   "threshold1": 10,
+   "threshold2": 10
+  },
+  "run_length": 107380,
+  "every": 5
+ },
+ "async_tree_io_tg": {
+  "workload": {
+   "churn": {
+    "cycle_share": "0",
+    "cycle_size": 1,
+    "lifetime_mean": 4,
+    "long_share": "0",
+    "long_lifetimes": [
+     1,
+     1
+    ]
+   },
+   "structures": [
+    {
+     "shape": {
+      "chains": 16
+     },
+     "size": 350,
+     "root": "module",
+     "lifetime": null,
+     "rebuild_interval": null,
+     "build_churn": 6,
+     "full_collections": false
+    },
+    {
+     "shape": "tree",
+     "size": 350,
+     "root": "module",
+     "lifetime": null,
+     "rebuild_interval": null,
+     "build_churn": 6,
+     "full_collections": false
+    },
+    {
+     "shape": {
+      "hierarchy": 6
+     },
+     "size": 52487,
+     "root": "frame",
+     "lifetime": 25026,
+     "rebuild_interval": 130000,
+     "build_churn": 1,
+     "full_collections": false
+    }
+   ],
+   "seed": 848,
+   "shutdown": true
+  },
+  "settings": {
+   "threshold0": 2000,
+   "threshold1": 10,
+   "threshold2": 10
+  },
+  "run_length": 524900,
+  "every": 10
+ },
+ "connected_components": {
+  "workload": {
+   "churn": {
+    "cycle_share": "0",
+    "cycle_size": 1,
+    "lifetime_mean": 1,
+    "long_share": "0",
+    "long_lifetimes": [
+     1,
+     1
+    ]
+   },
+   "structures": [
+    {
+     "shape": {
+      "chains": 16
+     },
+     "size": 350,
+     "root": "module",
+     "lifetime": null,
+     "rebuild_interval": null,
+     "build_churn": 6,
+     "full_collections": false
+    },
+    {
+     "shape": "tree",
+     "size": 350,
+     "root": "module",
+     "lifetime": null,
+     "rebuild_interval": null,
+     "build_churn": 6,
+     "full_collections": false
+    },
+    {
+     "shape": {
+      "graph": 2
+     },
+     "size": 89007,
+     "root": "module",
+     "lifetime": null,
+     "rebuild_interval": null,
+     "build_churn": 0,
+     "full_collections": false
+    }
+   ],
+   "seed": 848,
+   "shutdown": true
+  },
+  "settings": {
+   "threshold0": 2000,
+   "threshold1": 10,
+   "threshold2": 10
+  },
+  "run_length": 199907,
+  "every": 5
+ }
+}

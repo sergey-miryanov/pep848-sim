@@ -481,10 +481,12 @@ class GcWidget extends HTMLElement {
       controls: (controls, expanded, graph) => {
         // A request that names a preset comes back spelled out: the preset's
         // workload and run length, which the controls edit from then on.
-        if ("preset" in request) {
+        // PROTOTYPE, not for main (#153): a request written as source comes back
+        // spelled out too.
+        if ("preset" in request || "source" in request) {
           request = expanded;
           entry.request = structuredClone(expanded);
-          if ("preset" in this.#drawn) this.#drawn = request;
+          if ("preset" in this.#drawn || "source" in this.#drawn) this.#drawn = request;
         }
         this.#show(controls);
         this.#graph(graph);
@@ -503,6 +505,16 @@ class GcWidget extends HTMLElement {
       done: () => {},
       error: (message) => this.#fail(message),
     }, entry.controls);
+  }
+
+  /**
+   * PROTOTYPE, not for main (#153): run this request in place of the entry's, as
+   * a control's release does, keeping the charts until its first records arrive.
+   * @param {any} request
+   */
+  run(request) {
+    /** @type {Entry} */ (this.#entry).request = structuredClone(request);
+    this.#start();
   }
 
   /** Show each control with the range its request allows. */
@@ -679,7 +691,7 @@ class GcWidget extends HTMLElement {
 
     // A request that names a preset has no run length until the worker spells it
     // out, and the charts' clock needs one.
-    if ("preset" in this.#drawn) {
+    if ("preset" in this.#drawn || "source" in this.#drawn) {
       this.#layout = null;
       this.#hover();
       return;
