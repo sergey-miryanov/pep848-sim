@@ -116,6 +116,11 @@ An object in a long-lived structure, reachable until the run ends.
 _Avoid_: immortal (CPython's immortal objects are a different thing),
 permanent, static
 
+**Object graph**:
+The heap's objects and the references between them. The widget draws a
+sample of it: a few objects of each structure.
+_Avoid_: heap graph, reference graph
+
 **Structure**:
 Objects a workload builds in one shape, hangs off one root, and drops together
 when its lifetime ends. The workload rebuilds a repeating structure at a

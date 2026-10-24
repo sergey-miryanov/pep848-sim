@@ -1,0 +1,92 @@
+// @ts-check
+// What the widget's object graph draws, under Node's test runner: `just test-js`.
+
+// @ts-expect-error: tsc has no types for Node's modules, and the project takes
+// no package for them.
+import { test } from "node:test";
+// @ts-expect-error: as above.
+import assert from "node:assert/strict";
+import { describe, describeChurn, fit, network } from "../site/graph.js";
+
+/**
+ * A structure with the fields a test names, and the rest of a small chain.
+ * @param {Partial<import("../site/graph.js").Structure>} fields
+ * @returns {import("../site/graph.js").Structure}
+ */
+function structure(fields = {}) {
+  return {
+    shape: "1 chains", size: 2, root: "module", lifetime: null, rebuild_interval: null, full_collections: false,
+    objects: [[0, 0], [1, 1]], links: [[0, 1, false]],
+    ...fields,
+  };
+}
+
+const CHURN = { cycle_share: "0", cycle_size: 1, lifetime_mean: 4, long_share: "0", long_lifetimes: /** @type {[number, number]} */ ([1, 1]) };
+
+test("sys holds the module's structures, and each structure a frame holds gets a frame", () => {
+  const graph = {
+    structures: [
+      structure(),
+      structure({ root: "frame", links: [[0, 1, true], [1, 0, true]] }),
+      structure({ root: "frame" }),
+    ],
+    churn: CHURN,
+  };
+
+  const { nodes, links } = network(graph);
+
+  assert.deepEqual(nodes.filter((node) => node.root).map(({ key }) => key), ["sys", "frame 1", "frame 2"]);
+  assert.deepEqual(nodes.filter((node) => node.first).map(({ key }) => key), ["0:0", "1:0", "2:0"]);
+  assert.deepEqual(links.filter(({ kind }) => kind === "held"), [
+    { source: "sys", target: "0:0", kind: "held" },
+    { source: "frame 1", target: "1:0", kind: "held" },
+    { source: "frame 2", target: "2:0", kind: "held" },
+  ]);
+  assert.deepEqual(links.filter(({ kind }) => kind === "cycle").map(({ source, target }) => [source, target]), [["1:0", "1:1"], ["1:1", "1:0"]]);
+});
+
+test("a graph with nothing held by a module draws no sys, and an empty structure draws nothing", () => {
+  const graph = { structures: [structure({ root: "frame" }), structure({ objects: [], links: [] })], churn: CHURN };
+
+  const { nodes } = network(graph);
+
+  assert.deepEqual(nodes.map(({ key }) => key), ["frame 0", "0:0", "0:1"]);
+});
+
+test("a layout fills its frame less the margin, scaled alike both ways and centred", () => {
+  const placed = [{ key: "a", x: 0, y: 0 }, { key: "b", x: 100, y: 10 }];
+
+  const places = fit(placed, 220, 100, 10, 5);
+
+  // Its width limits it: 200 px for 100, so twice its size.
+  assert.deepEqual(places.get("a"), [10, 40]);
+  assert.deepEqual(places.get("b"), [210, 60]);
+});
+
+test("a small layout grows no more than its most", () => {
+  const places = fit([{ key: "a", x: 0, y: 0 }, { key: "b", x: 10, y: 0 }], 220, 100, 10, 1.5);
+
+  assert.deepEqual(places.get("a"), [102.5, 50]);
+  assert.deepEqual(places.get("b"), [117.5, 50]);
+});
+
+test("the legend says what holds each structure, and when the workload builds and drops it", () => {
+  assert.equal(describe(structure({ shape: "16 chains", size: 350 })), "16 chains, 350 objects, held by sys: built first, kept to the end");
+  assert.equal(
+    describe(structure({ shape: "a hierarchy of 50 branches", size: 322, root: "frame", lifetime: 840, rebuild_interval: 420 })),
+    "a hierarchy of 50 branches, 322 objects, held by a frame: rebuilt every 420 kB, each dropped 840 kB later",
+  );
+  assert.equal(
+    describe(structure({ shape: "rings of 1 object", size: 132, root: "frame", lifetime: 0, rebuild_interval: 140, full_collections: true })),
+    "rings of 1 object, 132 objects, held by a frame: rebuilt every 140 kB, each dropped as soon as built, gc.collect() before each build and after each drop",
+  );
+  assert.equal(describe(structure({ size: 89_007, lifetime: 25_298 })), "1 chains, 89,007 objects, held by sys: built first, dropped 25.3 MB later");
+});
+
+test("the legend gives the churn's lifetimes and the cycles it makes", () => {
+  assert.equal(describeChurn(CHURN), "Churn: objects that live about 4 kB, no cycles");
+  assert.equal(
+    describeChurn({ cycle_share: "1/50", cycle_size: 2, lifetime_mean: 4, long_share: "1/20", long_lifetimes: [100, 1000] }),
+    "Churn: objects that live about 4 kB, 5% living 100 kB to 1 MB, 2% in cycles of 2",
+  );
+});

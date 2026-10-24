@@ -112,8 +112,8 @@ they import strategies and helpers from one another.
 ## The site
 
 There is no build step. `site/` holds hand-written HTML, the widget (one Web
-Component, `<gc-widget>`) and the worker. Pyodide and Observable Plot load
-from jsDelivr at exact versions. The simulator reaches the browser as
+Component, `<gc-widget>`) and the worker. Pyodide, Observable Plot and
+d3-force load from jsDelivr at exact versions. The simulator reaches the browser as
 `sim.zip`, which the worker unpacks into Pyodide and imports.
 
 The simulator package never imports from the browser (`js`, `pyodide`): it

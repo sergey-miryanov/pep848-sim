@@ -2,9 +2,9 @@
 // The page's worker. It starts Pyodide as soon as the page makes it (ADR 0009),
 // and makes every widget's runs, a part of one run at a time, in turn (ADR 0006).
 // It answers each request with the controls the widget asked for, the ranges the
-// request allows and the request with any preset it names spelled out, then posts
-// records as the runs yield them (ADR 0007), each part with its run's figures so
-// far.
+// request allows, the request with any preset it names spelled out and a sample of
+// its object graph, then posts records as the runs yield them (ADR 0007), each part
+// with its run's figures so far.
 
 // @ts-expect-error: an editor cannot fetch Pyodide's types from jsDelivr.
 import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.mjs";
@@ -21,6 +21,7 @@ const simulator = (async () => {
     request: pyodide.pyimport("pep848_sim.widget.request"),
     figures: pyodide.pyimport("pep848_sim.widget.figures"),
     controls: pyodide.pyimport("pep848_sim.widget.controls"),
+    graph: pyodide.pyimport("pep848_sim.widget.graph"),
   };
 })();
 
@@ -57,7 +58,7 @@ function drop(widget) {
 }
 
 self.onmessage = async ({ data: { id, widget, request, controls: paths } }) => {
-  let started, controls, expanded, runs;
+  let started, controls, expanded, graph, runs;
   try {
     started = await simulator;
     // After the wait, so requests that arrive while Pyodide starts replace each
@@ -67,12 +68,13 @@ self.onmessage = async ({ data: { id, widget, request, controls: paths } }) => {
     controls = ranged.toJs({ depth: 2 });
     ranged.destroy();
     expanded = started.request.expand(request);
+    graph = started.graph.graph(request);
     runs = started.request.runs(request);
   } catch (error) {
     self.postMessage({ id, kind: "error", message: lastLine(error) });
     return;
   }
-  self.postMessage({ id, kind: "controls", controls, request: expanded });
+  self.postMessage({ id, kind: "controls", controls, request: expanded, graph });
   const [legacy, incremental] = runs.toJs({ depth: 1 });
   runs.destroy();
   turns.push(

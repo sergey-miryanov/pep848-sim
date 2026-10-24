@@ -5,7 +5,8 @@
 // column per collector, each with the heap by space, work in bins and the work
 // budget, on y-scales the two columns share. Above the figures it shows the
 // controls its `controls` attribute names, and releasing one asks for both runs
-// again.
+// again. Beside them it draws a sample of the request's object graph, each
+// structure under sys or its frame, with a legend under the controls.
 //
 // The JSON can list entries in place of one request, each with a name, a title,
 // its own request and its own controls. The widget then shows a select of their
@@ -15,6 +16,11 @@
 // @ts-expect-error: an editor cannot fetch Plot's types from jsDelivr.
 import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+esm";
 import {
+  forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY,
+  // @ts-expect-error: an editor cannot fetch d3's types from jsDelivr.
+} from "https://cdn.jsdelivr.net/npm/d3-force@3.0.0/+esm";
+import { describe, describeChurn, fit, network } from "./graph.js";
+import {
   CLOCK, FADED, FULL, KIND, LANES, PARTS, SPACES, WORK_TO_DO, budgetAt, ceiling, collections, heap, heapAt, work, workAt,
 } from "./panels.js";
 import { requestRuns } from "./runs.js";
@@ -23,6 +29,7 @@ import { requestRuns } from "./runs.js";
 /** @typedef {import("./runs.js").Figures} Figures */
 /** @typedef {import("./runs.js").Control} Control */
 /** @typedef {import("./panels.js").Collector} Collector */
+/** @typedef {import("./graph.js").Graph} Graph */
 /**
  * What a redraw laid out, in MB and px: the clock's length, the charts' width,
  * the run's length and a bin's in kB, and the work panel's y-scale end.
@@ -62,6 +69,10 @@ const SLACK = 4;
 // drift then before the tooltip goes.
 const DWELL = 350;
 const DRIFT = 3;
+// The object graph's frame, in px, the margin its layout keeps inside it, and the
+// most the layout grows to fill it, so that a small sample keeps small dots.
+const GRAPH = { width: 520, height: 250, margin: 18, most: 1.3 };
+const SVG = "http://www.w3.org/2000/svg";
 // Counts of objects on an axis: 0, 500, 1K, 20K.
 const compact = new Intl.NumberFormat("en", { notation: "compact" }).format;
 
@@ -185,7 +196,25 @@ const TEMPLATE = `
   .entries select { font: inherit; color: var(--text-primary); background: var(--surface); }
   .controls { display: flex; flex-wrap: wrap; gap: 12px 32px; margin: 0 0 24px; }
   /* Their display would otherwise outrank the hidden attribute's. */
-  .entries[hidden], .controls[hidden] { display: none; }
+  .entries[hidden], .controls[hidden], .graph[hidden], .key-list[hidden] { display: none; }
+  /* The select, the controls and the object graph's legend, beside the graph. */
+  .top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 520px); gap: 24px; margin: 0 0 24px; align-items: start; }
+  .top > div:first-child > :last-child { margin-bottom: 0; }
+  .key-list h3 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+  .key-list p { margin: 0 0 8px; font-size: 12px; color: var(--text-secondary); }
+  .key-list ol { list-style: none; margin: 0 0 4px; padding: 0; display: grid; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+  .key-list li { display: flex; gap: 6px; align-items: baseline; }
+  .badge {
+    flex: none; display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 50%;
+    border: 1.5px solid var(--text-secondary); font-size: 10px; font-weight: 600; color: var(--text-primary);
+  }
+  .graph svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .graph .link { stroke: var(--text-muted); stroke-width: 1; fill: none; }
+  .graph .cycle { stroke: var(--freed); stroke-width: 1.5; fill: none; }
+  .graph .held { stroke: var(--text-secondary); stroke-width: 1.2; stroke-dasharray: 3 2; }
+  .graph .object { fill: var(--text-secondary); }
+  .graph .first circle, .graph .root rect { fill: var(--surface); stroke: var(--text-secondary); stroke-width: 1.5; }
+  .graph text { fill: var(--text-primary); font-size: 10px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
   .control { display: grid; gap: 4px; width: 200px; font-size: 13px; color: var(--text-secondary); }
   .control .name { display: flex; justify-content: space-between; gap: 8px; }
   .control output { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -220,8 +249,21 @@ const TEMPLATE = `
   .error { color: var(--text-primary); }
 </style>
 <p class="error" hidden></p>
-<label class="entries" hidden>Workload <select></select></label>
-<div class="controls" hidden></div>
+<div class="top">
+  <div>
+    <label class="entries" hidden>Workload <select></select></label>
+    <div class="controls" hidden></div>
+    <div class="key-list" hidden>
+      <h3>Object graph</h3>
+      <p>A few objects of each structure, as its shape links them. One dot is one
+      simulated object, 16 real ones. A red link lies on a cycle, so dropping its
+      structure leaves cyclic garbage.</p>
+      <ol></ol>
+      <p class="churn"></p>
+    </div>
+  </div>
+  <div class="graph" hidden></div>
+</div>
 <dl class="figures"></dl>
 <div class="columns">
   <section data-collector="legacy">
@@ -416,6 +458,7 @@ class GcWidget extends HTMLElement {
     row.replaceChildren();
     row.hidden = true;
     this.#sliders.clear();
+    for (const part of root.querySelectorAll(".graph, .key-list")) /** @type {HTMLElement} */ (part).hidden = true;
     for (const chart of root.querySelectorAll(".chart")) chart.replaceChildren();
     this.#records = { legacy: [], incremental: [] };
     this.#figures = {};
@@ -435,7 +478,7 @@ class GcWidget extends HTMLElement {
     let fresh = true;
     /** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".error")).hidden = true;
     requestRuns(this.#name, request, {
-      controls: (controls, expanded) => {
+      controls: (controls, expanded, graph) => {
         // A request that names a preset comes back spelled out: the preset's
         // workload and run length, which the controls edit from then on.
         if ("preset" in request) {
@@ -444,6 +487,7 @@ class GcWidget extends HTMLElement {
           if ("preset" in this.#drawn) this.#drawn = request;
         }
         this.#show(controls);
+        this.#graph(graph);
       },
       records: (collector, records, figures) => {
         if (fresh) {
@@ -509,6 +553,92 @@ class GcWidget extends HTMLElement {
         slider.read(value);
       }
     }
+  }
+
+  /**
+   * Draw the request's object graph: each structure's sample under sys or its
+   * frame, placed by a force layout that pulls the roots to the top, and number
+   * each structure's first object as the legend under the controls lists it.
+   * @param {Graph} graph
+   */
+  #graph(graph) {
+    const root = /** @type {ShadowRoot} */ (this.shadowRoot);
+    const frame = /** @type {HTMLElement} */ (root.querySelector(".graph"));
+    const keys = /** @type {HTMLElement} */ (root.querySelector(".key-list"));
+    const { nodes, links } = network(graph);
+    frame.hidden = keys.hidden = !nodes.length;
+    if (!nodes.length) return;
+    // The layout's own copies, which the simulation moves and links in place. The
+    // roots keep to a line along the top, and what they hold hangs below them.
+    /** @type {(import("./graph.js").Node & { x?: number, y?: number, fy?: number })[]} */
+    const placed = nodes.map((node) => (node.root ? { ...node, fy: -GRAPH.height / 2 } : { ...node }));
+    const byKey = (/** @type {{ key: string }} */ node) => node.key;
+    forceSimulation(placed)
+      .force("link", forceLink(links.map((link) => ({ ...link }))).id(byKey)
+        .distance((/** @type {{ kind: string }} */ link) => (link.kind === "held" ? 36 : 16)).strength(0.9))
+      .force("charge", forceManyBody().strength(-22))
+      .force("collide", forceCollide(5))
+      .force("x", forceX(0).strength(0.04))
+      .force("y", forceY(GRAPH.height / 4).strength(0.1))
+      .stop()
+      .tick(400);
+    const laid = placed.map(({ key, x = 0, y = 0 }) => ({ key, x, y }));
+    const places = fit(laid, GRAPH.width, GRAPH.height, GRAPH.margin, GRAPH.most);
+    const at = (/** @type {string} */ key) => /** @type {[number, number]} */ (places.get(key));
+    /**
+     * @param {string} name
+     * @param {{ [attribute: string]: string | number }} attributes
+     * @param {Element} parent
+     */
+    const make = (name, attributes, parent) => {
+      const element = document.createElementNS(SVG, name);
+      for (const [attribute, value] of Object.entries(attributes)) element.setAttribute(attribute, String(value));
+      parent.append(element);
+      return element;
+    };
+    const svg = document.createElementNS(SVG, "svg");
+    svg.setAttribute("viewBox", `0 0 ${GRAPH.width} ${GRAPH.height}`);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "A sample of the object graph, which the legend describes");
+    const both = new Set(links.map(({ source, target }) => `${source} ${target}`));
+    for (const { source, target, kind } of links) {
+      const [x1, y1] = at(source), [x2, y2] = at(target);
+      if (source === target) {
+        make("circle", { cx: x1, cy: y1 - 6, r: 5, class: kind }, svg);
+      } else if (kind !== "held" && both.has(`${target} ${source}`)) {
+        // A pair of links both ways bends apart, so both show.
+        const bend = (source < target ? 5 : -5) / (Math.hypot(x2 - x1, y2 - y1) || 1);
+        const mx = (x1 + x2) / 2 - (y2 - y1) * bend, my = (y1 + y2) / 2 + (x2 - x1) * bend;
+        make("path", { d: `M${x1},${y1} Q${mx},${my} ${x2},${y2}`, class: kind }, svg);
+      } else {
+        make("line", { x1, y1, x2, y2, class: kind }, svg);
+      }
+    }
+    for (const node of nodes) {
+      const [x, y] = at(node.key);
+      if (node.root) {
+        const group = make("g", { class: "root" }, svg);
+        make("rect", { x: x - 17, y: y - 8, width: 34, height: 16, rx: 3 }, group);
+        make("text", { x, y }, group).textContent = node.root;
+      } else if (node.first) {
+        const group = make("g", { class: "first" }, svg);
+        make("circle", { cx: x, cy: y, r: 7 }, group);
+        make("text", { x, y }, group).textContent = String(Number(node.structure) + 1);
+      } else {
+        make("circle", { cx: x, cy: y, r: 3, class: "object" }, svg);
+      }
+    }
+    frame.replaceChildren(svg);
+    const list = /** @type {HTMLElement} */ (keys.querySelector("ol"));
+    list.replaceChildren(...graph.structures.map((structure, i) => {
+      const item = document.createElement("li");
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = String(i + 1);
+      item.append(badge, describe(structure));
+      return item;
+    }));
+    /** @type {HTMLElement} */ (keys.querySelector(".churn")).textContent = describeChurn(graph.churn);
   }
 
   /** @param {Collector} collector */
