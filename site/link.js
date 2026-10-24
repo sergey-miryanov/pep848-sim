@@ -3,8 +3,9 @@
 // widget last ran in its URL fragment, so that it opens the same runs in another
 // browser. The request goes in as JSON, compressed with deflate-raw and written
 // in base64url; a fragment never reaches the server. Code in a request runs in
-// the page, so a link that holds a shape of the reader's own waits for Run. The
-// module needs no DOM, so Node's test runner can load it: see tests/link.test.js.
+// the page's worker, so a link that holds a shape of the reader's own waits for
+// Run. The module needs no DOM, so Node's test runner can load it: see
+// tests/link.test.js.
 
 /** @typedef {import("./editor.js").Request} Request */
 
@@ -56,8 +57,9 @@ export async function decode(text) {
 /**
  * Whether the request holds code: a shape of the reader's own, or a structure
  * whose shape is not plainly a named one. The simulator runs a shape's code as
- * soon as it reads the request, and Python in the page can reach the page, so a
- * link that holds code waits for the reader to read it and press Run.
+ * soon as it reads the request, and Python in the page's worker can fetch from
+ * the site's origin and post to the page, so a link that holds code waits for
+ * the reader to read it and press Run.
  * @param {Request} request
  */
 export function holdsCode(request) {

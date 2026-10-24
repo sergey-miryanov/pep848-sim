@@ -166,7 +166,7 @@ class Own:
 
     code: str
     # The line of the reader's text the code starts on, which messages count
-    # from: the box's first, or the function's own in a workload's source.
+    # from: the box's first, or the function's own in a workload source.
     line: int = field(default=1, compare=False)
     # The function the code defines for its links, which messages name.
     _name: str = field(init=False, repr=False, compare=False)

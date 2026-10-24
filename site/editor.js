@@ -204,7 +204,7 @@ export class Editor {
   #stop;
   /** @type {Request | null} */
   #request = null;
-  /** The structures, by object, and the lines, "churn" and "run", whose fields show. */
+  /** The structures, by object, and the lines, "churn", "run" and "constants", whose fields show. */
   /** @type {Set<Structure | string>} */
   #open = new Set();
   /** Each structure's words from the last sample, kept across a move. */

@@ -1,4 +1,4 @@
-"""A workload's source: the playground's workload, run length, collector settings
+"""A workload source: the playground's workload, run length, collector settings
 and constants, written as Python (ADR 0015). The source sets `churn`, `structures`
 and `run_length`, and may set `settings`, `constants`, `seed` and `shutdown`, with
 the names below besides the builtins. A shape of the reader's own is a function the
@@ -27,7 +27,7 @@ from pep848_sim.structures import (
 )
 from pep848_sim.workload import ChurnParameters, WorkloadParameters
 
-# The file name a workload's source runs under, which finds its lines in a
+# The file name a workload source runs under, which finds its lines in a
 # traceback.
 _FILE = "<your workload>"
 # The seed of a workload whose source sets none, as every preset's.
