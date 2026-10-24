@@ -12,7 +12,7 @@ import { nameOf, typeCode } from "./editor.js";
 /** @typedef {import("./editor.js").Request} Request */
 /** @typedef {import("./editor.js").Shape} Shape */
 
-// The names a workload's source sees and sets, which a shape's function keeps
+// The names a workload source sees and sets, which a shape's function keeps
 // clear of.
 const TAKEN = [
   "Chains", "Tree", "Hierarchy", "Graph", "Rings", "Own", "Structure", "Churn", "Settings", "Constants",
@@ -331,7 +331,7 @@ export class Source {
 
   /**
    * Say something above the box until the reader runs the text or another
-   * entry shows, such as why a link's source waits for Run.
+   * entry shows, such as why a link's code waits for Run.
    * @param {string} message
    */
   note(message) {
