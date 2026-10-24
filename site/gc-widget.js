@@ -405,6 +405,8 @@ class GcWidget extends HTMLElement {
     const entry = this.#entries.find((offered) => offered.name === name) ?? this.#entries[0];
     if (entry === this.#entry) return;
     this.#entry = entry;
+    // PROTOTYPE, not for main (#151): tell the object graph which entry shows.
+    this.dispatchEvent(new CustomEvent("entry", { detail: entry.name }));
     const root = /** @type {ShadowRoot} */ (this.shadowRoot);
     /** @type {HTMLSelectElement} */ (root.querySelector(".entries select")).value = entry.name;
     if (picked && this.id) {
