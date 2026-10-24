@@ -58,8 +58,8 @@ config
 **Collector constant**:
 A number fixed inside a collector that no Python API changes: the initial
 work budget and the freed-credit multiplier of the incremental collector, the
-25% long-lived ratio of the legacy collector. The playground is the one page
-that unlocks them.
+25% long-lived ratio of the legacy collector. The home page's widget and the
+playground unlock them.
 _Avoid_: setting (that is what Python can change), magic number, tunable
 
 ### Scale and time
@@ -198,10 +198,12 @@ the controls a reader may change for each, and the charts of the runs it makes.
 _Avoid_: demo, applet, visualization, simulator (that is what it runs)
 
 **Control**:
-A slider the page puts on a widget for one workload parameter or collector
-setting. Moving it changes only the value it shows; releasing it starts the
-widget's two runs again. Its range keeps the workload valid.
-_Avoid_: knob (that is the parameter or setting it moves), input, option
+A slider the page puts on a widget for one workload parameter, collector
+setting or collector constant. The widget groups them: the workload's, then the
+collector's. Moving one changes only the value it shows; releasing it starts
+the widget's two runs again. Its range keeps the workload valid.
+_Avoid_: knob (that is the parameter, setting or constant it moves), input,
+option
 
 **Guide**:
 The long-form page that explains PEP 848 section by section, each section

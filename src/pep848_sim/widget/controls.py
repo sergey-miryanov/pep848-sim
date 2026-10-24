@@ -1,5 +1,6 @@
 """The controls a widget shows: for each path into its request that the page names,
-a label and a range of values that keeps the request valid."""
+a label and a range of values that keeps the request valid. A path names a
+workload parameter, a collector setting or a collector constant."""
 
 from collections.abc import Iterable
 from typing import NamedTuple
@@ -15,7 +16,8 @@ class Control(NamedTuple):
     # Where its value sits in the request, as keys and indices joined by dots.
     path: str
     label: str
-    # "kB", or "share" for a share counted in thousandths.
+    # "kB", "share" for a share counted in thousandths, or "count" for a whole
+    # number of anything else.
     unit: str
     value: int
     min: int
@@ -38,6 +40,35 @@ def _control(request: Request, path: str) -> Control:
             low = max(1, -(-request.run_length // 1000))
             high = request.run_length // 10
             return _ranged(path, "threshold0", "kB", value, low, max(high, value))
+        case ["settings", "threshold1"]:
+            # From 1, since a widget's request refuses 0, to 40 half-spaces, four
+            # times the PEP's 10, or the request's own.
+            value = request.settings.threshold1
+            return Control(path, "threshold1", "count", value, 1, max(40, value), 1)
+        case ["settings", "threshold2"]:
+            # The legacy collector's alone: the gen 1 collections before a gen 2.
+            value = request.settings.threshold2
+            label = "threshold2 (legacy only)"
+            return Control(
+                path, label, "count", value, min(0, value), max(40, value), 1
+            )
+        case ["constants", "initial_work_budget"]:
+            # In real objects, as the PEP gives it: from twice the PEP's -100,000
+            # to half of it above 0, or the request's own, by the thousand.
+            value = request.constants.initial_work_budget
+            low, high = min(-200_000, value), max(50_000, value)
+            label = "Initial work budget (real objects)"
+            return Control(path, label, "count", value, low, high, 1_000)
+        case ["constants", "freed_credit"]:
+            # From none to five times the PEP's 2, or the request's own.
+            value = request.constants.freed_credit
+            label = "Freed-credit multiplier"
+            return Control(path, label, "count", value, 0, max(10, value), 1)
+        case ["constants", "long_lived_ratio"]:
+            # A share, in thousandths, up to the whole, or the request's own.
+            share = round(request.constants.long_lived_ratio * 1000)
+            label = "Long-lived ratio"
+            return Control(path, label, "share", share, 0, max(1000, share), 1)
         case ["workload", "churn", "cycle_share"]:
             # A share, in thousandths, up to half the churn or the request's own.
             share = round(request.workload.churn.cycle_share * 1000)
