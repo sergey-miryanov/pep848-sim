@@ -191,6 +191,7 @@ export const SOURCE_STYLE = `
     color: var(--text-primary); background: var(--surface); border: 1px solid var(--baseline); border-radius: 4px;
   }
   .source .problem { margin: 0; color: var(--text-primary); font-weight: 600; white-space: pre-wrap; }
+  .source .note { margin: 0; padding: 2px 0 2px 8px; border-left: 2px solid var(--baseline); color: var(--text-primary); }
   .modes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
   .modes label { display: flex; align-items: center; gap: 4px; }
   .modes input { margin: 0; accent-color: var(--text-secondary); }
@@ -212,6 +213,7 @@ export class Source {
   #area = document.createElement("textarea");
   #run = document.createElement("button");
   #status = document.createElement("span");
+  #note = document.createElement("p");
   #problem = document.createElement("p");
   /**
    * Each entry's text, the text it last ran or was written as, and the request,
@@ -234,7 +236,7 @@ export class Source {
     const start = () => {
       // Ctrl+Enter, as the button, waits for a preset's source.
       if (this.#run.disabled) return;
-      this.#problem.hidden = true;
+      this.#problem.hidden = this.#note.hidden = true;
       run();
     };
     this.#run.type = "button";
@@ -254,10 +256,12 @@ export class Source {
       this.#mark();
     });
     typeCode(this.#area, start);
+    this.#note.className = "note";
+    this.#note.hidden = true;
     this.#problem.className = "problem";
     this.#problem.setAttribute("role", "alert");
     this.#problem.hidden = true;
-    root.append(head, this.#area, this.#problem);
+    root.append(head, this.#note, this.#area, this.#problem);
   }
 
   /** The text in the box. */
@@ -282,7 +286,7 @@ export class Source {
     this.#entry = entry;
     const waiting = "preset" in entry.request;
     this.#area.disabled = this.#run.disabled = waiting;
-    this.#problem.hidden = true;
+    this.#problem.hidden = this.#note.hidden = true;
     if (waiting) {
       this.#area.value = "";
       this.#mark();
@@ -323,6 +327,16 @@ export class Source {
     this.#problem.textContent = message.replace(/^ValueError: /, "");
     this.#problem.hidden = false;
     return true;
+  }
+
+  /**
+   * Say something above the box until the reader runs the text or another
+   * entry shows, such as why a link's source waits for Run.
+   * @param {string} message
+   */
+  note(message) {
+    this.#note.textContent = message;
+    this.#note.hidden = false;
   }
 
   #kept() {

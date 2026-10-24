@@ -211,10 +211,18 @@ _Avoid_: tutorial, article, docs
 **Playground**:
 The page with one widget whose legend edits the whole workload, the run
 length, the collector settings and the collector constants, for readers who
-want to try anything. Each change
-starts the widget's two runs again, as a control's release does. A switch shows
-the workload source in place of the legend's editor.
+want to try anything. Each change starts the widget's two runs again, as a
+control's release does. A switch shows the workload source in place of the
+legend's editor.
 _Avoid_: sandbox, lab, explorer
+
+**Playground link**:
+The playground's address once a run has started: it holds the workload, the
+run length, the collector settings and the collector constants, and opens the
+same runs in another browser. A link with a shape of the reader's own opens its
+workload source and waits for the reader to run it.
+_Avoid_: permalink, share URL, deep link, link (bare, when another could be
+meant)
 
 **Workload source**:
 The playground's other editor: the workload, the run length, the collector
