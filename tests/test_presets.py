@@ -10,6 +10,7 @@ from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.collectors.legacy import LegacyCollector
 from pep848_sim.presets import (
     ASYNC_TREE_IO_TG,
+    CONNECTED_COMPONENTS,
     CREATE_GC_CYCLES,
     JSON_LOADS,
     PRESETS,
@@ -29,6 +30,7 @@ def test_each_preset_is_named_for_its_benchmark() -> None:
         "json_loads": "json_loads",
         "xml_etree_parse": "xml_etree_parse",
         "async_tree_io_tg": "async_tree_io_tg",
+        "connected_components": "connected_components",
     }
 
 
@@ -43,6 +45,8 @@ def test_each_preset_is_named_for_its_benchmark() -> None:
         ("xml_etree_parse", LegacyCollector, "19f765838ff779b7"),
         ("async_tree_io_tg", IncrementalCollector, "bf999cc59d2cdeec"),
         ("async_tree_io_tg", LegacyCollector, "229fe4e864440024"),
+        ("connected_components", IncrementalCollector, "cac66e2030471849"),
+        ("connected_components", LegacyCollector, "d0038708dfb87957"),
     ],
 )
 def test_each_presets_records_keep_their_digest(
@@ -145,6 +149,23 @@ def test_async_tree_io_tg_finds_no_cyclic_garbage_before_shutdown(
     assert {record.kind for record in automatic}.isdisjoint({"full", "shutdown"})
     assert all(record.freed == 0 for record in automatic)
     assert [first.kind, second.kind] == ["shutdown", "shutdown"]
+
+
+@pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
+def test_connected_components_frees_its_graph_with_its_module_at_shutdown(
+    collector: type[Collector],
+) -> None:
+    _, start_up_tree, graph = CONNECTED_COMPONENTS.workload.structures
+
+    *automatic, first, second = run_preset(CONNECTED_COMPONENTS, collector)
+
+    # The walks make no cycles, and the graph stays in its module's globals.
+    assert all(record.freed == 0 for record in automatic)
+    # Shutdown's first full collection frees the graph and the start-up tree, which
+    # its module's cycles keep, and leaves the second nothing.
+    assert [first.kind, second.kind] == ["shutdown", "shutdown"]
+    assert first.freed == graph.size + start_up_tree.size
+    assert second.freed == 0
 
 
 @pytest.mark.skipif(mock(), reason="the records in data/ are mock until the rerun")

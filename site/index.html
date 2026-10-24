@@ -119,6 +119,16 @@ the browser, downloads and starts.</p>
         "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
         "every": 10
       }
+    },
+    {
+      "name": "connected_components",
+      "title": "connected_components",
+      "controls": ["workload.structures.2.size"],
+      "request": {
+        "preset": "connected_components",
+        "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+        "every": 5
+      }
     }
   ]
 }
@@ -208,6 +218,19 @@ old collection takes all of the tree in the pending space as one increment,
 since the tree's root reaches it all. Until the benchmark runs again under
 gcmon, the start-up heap, the churn, the tree's size and each run's length are
 placeholders.</p>
+<p>connected_components models a worker of the networkx benchmark of that
+name. As its module loads, it reads the Amazon co-purchasing graph, 262,111
+products and 899,792 edges, into 1.4 million dicts that stay in the module's
+globals. Each of its four loops then walks the graph to count its components,
+and each iterator the walk makes goes once a node's neighbours run out. The
+incremental collector marks the graph from sys while it loads. After that, no
+young collection finds a survivor to add to the work budget, so the old
+collections go idle with part of the graph still pending. The legacy collector
+runs no gen 2 collection before shutdown. The graph's dicts hold no cycle, but
+the module's globals lie on one with its functions, so the graph turns into
+cyclic garbage at shutdown and the first shutdown collection frees it. Until
+the benchmark runs again under gcmon, the start-up heap, the load's churn and
+each loop's length are placeholders.</p>
 
 <h2>More</h2>
 <p><a href="widget.html">The stand-in page</a> holds a second widget, on the
