@@ -8,7 +8,12 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pep848_sim.collectors.collector import Collector, CollectorSettings, Record
+from pep848_sim.collectors.collector import (
+    Collector,
+    CollectorSettings,
+    Constants,
+    Record,
+)
 from pep848_sim.collectors.heap import Heap
 from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.collectors.legacy import LegacyCollector
@@ -75,6 +80,16 @@ def collector_settings() -> st.SearchStrategy[CollectorSettings]:
         st.integers(min_value=1, max_value=20),
         st.integers(min_value=1, max_value=10),
         st.integers(min_value=0, max_value=3),
+    )
+
+
+def constants() -> st.SearchStrategy[Constants]:
+    return st.builds(
+        Constants,
+        st.integers(min_value=-200_000, max_value=1_000),
+        st.integers(min_value=0, max_value=4),
+        st.fractions(min_value=0, max_value=2, max_denominator=100),
+        st.integers(min_value=1, max_value=2048),
     )
 
 
@@ -160,11 +175,15 @@ def test_both_collectors_runs_allocate_the_same_objects_at_the_same_clocks(
     legacy: Allocations = []
 
     incremental_parts = run(
-        parameters, lambda s: NotingIncremental(s, incremental), settings, run_length, 1
+        parameters,
+        lambda s, _: NotingIncremental(s, incremental),
+        settings,
+        run_length,
+        1,
     )
     incremental_clocks = [record.clock for record in records(incremental_parts)]
     legacy_parts = run(
-        parameters, lambda s: NotingLegacy(s, legacy), settings, run_length, 1
+        parameters, lambda s, _: NotingLegacy(s, legacy), settings, run_length, 1
     )
     legacy_clocks = [record.clock for record in records(legacy_parts)]
 

@@ -6,7 +6,7 @@
 import { test } from "node:test";
 // @ts-expect-error: as above.
 import assert from "node:assert/strict";
-import { describe, describeChurn, describeRun, fit, network } from "../site/graph.js";
+import { describe, describeChurn, describeConstants, describeRun, fit, network } from "../site/graph.js";
 
 /**
  * A structure with the fields a test names, and the rest of a small chain.
@@ -101,5 +101,16 @@ test("the playground's legend gives the run's length, its thresholds and its shu
   assert.equal(
     describeRun({ run_length: 524_900, settings, workload: { shutdown: true } }),
     "Run: 524.9 MB on the allocation clock, gc.set_threshold(2000, 10, 10), then shutdown",
+  );
+});
+
+test("the playground's legend gives the collector constants and the real object's size", () => {
+  assert.equal(
+    describeConstants({ initial_work_budget: -100_000, freed_credit: 2, long_lived_ratio: "1/4", real_object_size: 64 }),
+    "Work budget from -100,000 real objects, plus 2 for each object freed, a long-lived ratio of 25%, 64 B to a real object",
+  );
+  assert.equal(
+    describeConstants({ initial_work_budget: 0, freed_credit: 0, long_lived_ratio: "125/1000", real_object_size: 48 }),
+    "Work budget from 0 real objects, plus 0 for each object freed, a long-lived ratio of 12.5%, 48 B to a real object",
   );
 });

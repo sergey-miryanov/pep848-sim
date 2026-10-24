@@ -1,8 +1,9 @@
 // @ts-check
-// The playground's other editor (ADR 0015): the workload, the run length and the
-// collector settings as Python source beside the widget, which the reader runs
-// with a button or Ctrl+Enter. pep848_sim.widget.source reads it in the worker,
-// and the request comes back spelled out, as one that names a preset does.
+// The playground's other editor (ADR 0015): the workload, the run length, the
+// collector settings and the constants as Python source beside the widget, which
+// the reader runs with a button or Ctrl+Enter. pep848_sim.widget.source reads it
+// in the worker, and the request comes back spelled out, as one that names a
+// preset does.
 // `toSource` writes the source of a request without the DOM, so Node's test
 // runner can load this module: see tests/source.test.js.
 
@@ -14,8 +15,8 @@ import { nameOf, typeCode } from "./editor.js";
 // The names a workload's source sees and sets, which a shape's function keeps
 // clear of.
 const TAKEN = [
-  "Chains", "Tree", "Hierarchy", "Graph", "Rings", "Own", "Structure", "Churn", "Settings",
-  "churn", "structures", "run_length", "settings", "seed", "shutdown",
+  "Chains", "Tree", "Hierarchy", "Graph", "Rings", "Own", "Structure", "Churn", "Settings", "Constants",
+  "churn", "structures", "run_length", "settings", "seed", "shutdown", "constants",
 ];
 // The widest line a call's arguments fill before the next line takes them, so
 // that a line fits the box beside the widget.
@@ -24,13 +25,20 @@ const WIDTH = 66;
 const SEED = 848;
 
 const ABOUT = `# The workload both runs share, as Python. Sizes, lifetimes
-# and intervals are in kB: one simulated object is 1 kB, 16
-# real ones. Press Run or Ctrl+Enter to run it.`;
+# and intervals are in kB: one simulated object is 1 kB.
+# Press Run or Ctrl+Enter to run it.`;
 
 const ABOUT_OWN = `# A shape of your own is a function of i that gives the links
 # object i brings, as (source, target) pairs among objects 0
 # to i, one of them from an earlier object that holds object i.
 # Own(...) takes it. It sees only i and what it imports itself.`;
+
+const ABOUT_CONSTANTS = `# Numbers no Python API changes. The incremental collector's
+# work budget starts at initial_work_budget real objects, and
+# gains freed_credit for each object an increment frees. The
+# legacy collector's gen 2 waits for long_lived_ratio of the
+# objects the last gen 2 left. A real object takes
+# real_object_size bytes: at 64, 16 make a simulated object.`;
 
 // What the source offers when no structure takes a shape of its own.
 const EXAMPLE = `def doubly_linked(i):
@@ -89,14 +97,14 @@ export function functionOf(code) {
 }
 
 /**
- * The request's workload, run length and collector settings as Python source,
- * as pep848_sim.widget.source reads it. A shape of the reader's own goes in as
- * its function, under its own name unless another takes it, or as code in a
- * string when it holds more than a function.
+ * The request's workload, run length, collector settings and constants as
+ * Python source, as pep848_sim.widget.source reads it. A shape of the reader's
+ * own goes in as its function, under its own name unless another takes it, or
+ * as code in a string when it holds more than a function.
  * @param {Request} request
  */
 export function toSource(request) {
-  const { workload: { churn, structures, seed, shutdown }, settings, run_length: runLength } = request;
+  const { workload: { churn, structures, seed, shutdown }, settings, run_length: runLength, constants } = request;
   const taken = new Set(TAKEN);
   const unique = (/** @type {string} */ name) => {
     let free = name;
@@ -155,6 +163,12 @@ export function toSource(request) {
     call("settings = Settings(", Object.entries(settings).map(([name, value]) => `${name}=${py(value)}`)),
     `shutdown = ${shutdown ? "True" : "False"}`,
     ...(seed === SEED ? [] : [`seed = ${py(seed)}`]),
+    "",
+    ABOUT_CONSTANTS,
+    call("constants = Constants(", [
+      `initial_work_budget=${py(constants.initial_work_budget)}`, `freed_credit=${py(constants.freed_credit)}`,
+      `long_lived_ratio="${constants.long_lived_ratio}"`, `real_object_size=${py(constants.real_object_size)}`,
+    ]),
   ];
   return `${lines.join("\n")}\n`;
 }

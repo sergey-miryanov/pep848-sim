@@ -5,8 +5,9 @@ collector settings as Python source beside the widget (#157), the prototype's
 third layout. A switch beside the Workload select picks the legend's editor
 (ADR 0013), the default, or the source. The source uses the prototype's names:
 `Structure`, `Churn`, `Settings`, a class for each shape, and `Own` for a shape
-of the reader's own. It sets `churn`, `structures` and `run_length`, and may
-set `settings`, `seed` and `shutdown`. A reader can compute a size, build the
+of the reader's own, and `Constants` for the collector constants and the real
+object's size (#154). It sets `churn`, `structures` and `run_length`, and may
+set `settings`, `constants`, `seed` and `shutdown`. A reader can compute a size, build the
 structures in a loop, or keep several shapes of their own in one place.
 
 The source runs when the reader presses Run or Ctrl+Enter, not on each change

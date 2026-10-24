@@ -1,15 +1,22 @@
+from fractions import Fraction
 from typing import override
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pep848_sim.collectors.collector import CollectionCounts, CollectorSettings, Record
+from pep848_sim.collectors.collector import (
+    CollectionCounts,
+    CollectorSettings,
+    Constants,
+    Record,
+)
 from pep848_sim.collectors.heap import Heap
 from pep848_sim.collectors.legacy import LegacyCollector
 from pep848_sim.structures import StructureParameters
 from pep848_sim.workload import ChurnParameters, Workload, WorkloadParameters
 from test_heap import reachable
+from test_run import constants
 from test_workload import churn_parameters, structure_parameters
 
 
@@ -88,6 +95,27 @@ def test_the_generation_chosen_follows_the_counts_and_the_long_lived_ratio(
     assert collector.select_generation() == generation
 
 
+@pytest.mark.parametrize(
+    ("ratio", "pending", "generation"),
+    [
+        (Fraction(1, 2), 4, 2),  # pending reaches half the total
+        (Fraction(1, 2), 3, 1),
+        (Fraction(1, 3), 2, 2),  # a third of 8, rounded down, is 2
+        (Fraction(1, 3), 1, 1),
+        (Fraction(0), 0, 2),
+        (Fraction(2), 15, 1),
+    ],
+)
+def test_gen_2_waits_for_the_long_lived_ratio_the_constants_give(
+    ratio: Fraction, pending: int, generation: int
+) -> None:
+    collector = LegacyCollector(constants=Constants(long_lived_ratio=ratio))
+    collector.count0, collector.count1 = 11, 11
+    collector.long_lived_pending, collector.long_lived_total = pending, 8
+
+    assert collector.select_generation() == generation
+
+
 def test_with_the_default_thresholds_gen_1_comes_12th_and_gen_2_133rd() -> None:
     collector = LegacyCollector(CollectorSettings(threshold0=1))
     heap = Heap(collector)
@@ -126,8 +154,8 @@ def test_a_full_collection_is_a_gen_2_collection_under_its_own_kind() -> None:
 class Recorded(LegacyCollector):
     """A legacy collector that notes the uncollected garbage each gen 2 leaves."""
 
-    def __init__(self, settings: CollectorSettings) -> None:
-        super().__init__(settings)
+    def __init__(self, settings: CollectorSettings, constants: Constants) -> None:
+        super().__init__(settings, constants)
         self.left_by_gen2: list[int] = []
 
     @override
@@ -148,6 +176,7 @@ class Recorded(LegacyCollector):
     st.integers(min_value=1, max_value=20),
     st.integers(min_value=0, max_value=3),
     st.integers(min_value=0, max_value=3),
+    constants(),
     st.lists(st.integers(min_value=0, max_value=600), max_size=4),
 )
 def test_a_run_keeps_the_legacy_collectors_invariants(
@@ -157,10 +186,11 @@ def test_a_run_keeps_the_legacy_collectors_invariants(
     threshold0: int,
     threshold1: int,
     threshold2: int,
+    constants: Constants,
     stops: list[int],
 ) -> None:
     settings = CollectorSettings(threshold0, threshold1, threshold2)
-    collector = Recorded(settings)
+    collector = Recorded(settings, constants)
     heap = Heap(collector)
     workload = Workload(heap, WorkloadParameters(churn, tuple(structures), seed))
 

@@ -1,8 +1,9 @@
 """What a widget asks the simulator for: a workload, collector settings, a run length
-and the records each part of a run holds, as JSON text. A request can name a preset
-in place of its workload and run length, so that a preset's numbers live in one
-place, or carry the playground's Python source of all three. The worker passes the
-text on as the page sent it, so no browser object reaches the simulator.
+and the records each part of a run holds, as JSON text, with the collector constants
+and the real object's size where the playground changes them. A request can name a
+preset in place of its workload and run length, so that a preset's numbers live in
+one place, or carry the playground's Python source of all of them. The worker passes
+the text on as the page sent it, so no browser object reaches the simulator.
 """
 
 import json
@@ -12,7 +13,7 @@ from fractions import Fraction
 from functools import lru_cache
 from typing import Any, NamedTuple
 
-from pep848_sim.collectors.collector import CollectorSettings, Record
+from pep848_sim.collectors.collector import CollectorSettings, Constants, Record
 from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.collectors.legacy import LegacyCollector
 from pep848_sim.presets import PRESETS
@@ -36,13 +37,16 @@ class Request(NamedTuple):
     settings: CollectorSettings
     run_length: int
     every: int
+    constants: Constants = Constants()
 
 
+# The field a request may leave out, for its defaults.
+_OPTIONAL = ("constants",)
 # The fields of a request that names a preset, which brings its workload and run
 # length.
-_PRESET_FIELDS = ("preset", "settings", "every")
+_PRESET_FIELDS = ("preset", "settings", "every", *_OPTIONAL)
 # The fields of a request that carries a workload's source, which sets its
-# workload, collector settings and run length.
+# workload, collector settings, run length and constants.
 _SOURCE_FIELDS = ("source", "every")
 
 
@@ -52,16 +56,19 @@ _SOURCE_FIELDS = ("source", "every")
 # same workload, whatever the source draws.
 @lru_cache(maxsize=16)
 def parse(request: str) -> Request:
-    """The request a widget sends, refused unless it holds every field and no other."""
+    """The request a widget sends, refused unless it holds every field but the
+    constants, and no other."""
     values = json.loads(request)
     if "source" in values:
         values = _values(values, _SOURCE_FIELDS, "request")
-        workload, settings, run_length = source.read(values["source"])
+        workload, settings, run_length, constants = source.read(values["source"])
         for structure in workload.structures:
             _check(structure)
-        return Request(workload, _checked(settings), run_length, values["every"])
+        return Request(
+            workload, _checked(settings), run_length, values["every"], constants
+        )
     if "preset" in values:
-        values = _values(values, _PRESET_FIELDS, "request")
+        values = _values(values, _PRESET_FIELDS, "request", _OPTIONAL)
         preset = PRESETS.get(values["preset"])
         if preset is None:
             raise ValueError(f"no preset {values['preset']!r}")
@@ -70,19 +77,21 @@ def parse(request: str) -> Request:
             _settings(values["settings"]),
             preset.run_length,
             values["every"],
+            _constants(values),
         )
-    values = _values(values, Request._fields, "request")
+    values = _values(values, Request._fields, "request", _OPTIONAL)
     return Request(
         _workload(values["workload"]),
         _settings(values["settings"]),
         values["run_length"],
         values["every"],
+        _constants(values),
     )
 
 
 def expand(request: str) -> str:
     """The request with any preset it names spelled out: the preset's workload and
-    run length, which the widget's controls then edit."""
+    run length, which the widget's controls then edit, and the constants."""
     return dump(parse(request))
 
 
@@ -109,16 +118,18 @@ def dump(request: Request) -> str:
             "settings": asdict(request.settings),
             "run_length": request.run_length,
             "every": request.every,
+            "constants": asdict(request.constants)
+            | {"long_lived_ratio": str(request.constants.long_lived_ratio)},
         }
     )
 
 
 def runs(request: str) -> tuple[Iterator[list[Record]], Iterator[list[Record]]]:
     """The two runs a widget compares, legacy first."""
-    workload, settings, run_length, every = parse(request)
+    workload, settings, run_length, every, constants = parse(request)
     return (
-        run(workload, LegacyCollector, settings, run_length, every),
-        run(workload, IncrementalCollector, settings, run_length, every),
+        run(workload, LegacyCollector, settings, run_length, every, constants),
+        run(workload, IncrementalCollector, settings, run_length, every, constants),
     )
 
 
@@ -129,6 +140,16 @@ def _names(parameters: type) -> list[str]:
 def _settings(values: dict[str, Any]) -> CollectorSettings:
     return _checked(
         CollectorSettings(**_values(values, _names(CollectorSettings), "settings"))
+    )
+
+
+def _constants(values: dict[str, Any]) -> Constants:
+    """The constants a request holds, or the defaults where it holds none."""
+    if "constants" not in values:
+        return Constants()
+    constants = _values(values["constants"], _names(Constants), "constants")
+    return Constants(
+        **constants | {"long_lived_ratio": Fraction(constants["long_lived_ratio"])}
     )
 
 
@@ -144,14 +165,18 @@ def _checked(settings: CollectorSettings) -> CollectorSettings:
 
 
 def _values(
-    values: dict[str, Any], names: Collection[str], what: str
+    values: dict[str, Any],
+    names: Collection[str],
+    what: str,
+    optional: Collection[str] = (),
 ) -> dict[str, Any]:
-    """The values of `what`, which holds each field named and no other."""
+    """The values of `what`, which holds each field named but the optional ones,
+    and no other."""
     for name in values:
         if name not in names:
             raise ValueError(f"{what} has no field {name!r}")
     for name in names:
-        if name not in values:
+        if name not in values and name not in optional:
             raise ValueError(f"{what} lacks {name!r}")
     return values
 
