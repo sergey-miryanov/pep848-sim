@@ -38,8 +38,6 @@
  * }} Listener
  */
 
-const worker = new Worker(new URL("worker.js", import.meta.url), { type: "module" });
-
 /** The listener of each request still wanted, by the request's id. */
 /** @type {Map<number, Listener>} */
 const listeners = new Map();
@@ -48,17 +46,36 @@ const listeners = new Map();
 const latest = new Map();
 let nextId = 0;
 
-worker.onmessage = (/** @type {MessageEvent} */ { data }) => {
-  const listener = listeners.get(data.id);
-  if (!listener) return;
-  if (data.kind === "controls") listener.controls?.(data.controls, JSON.parse(data.request), JSON.parse(data.graph));
-  else if (data.kind === "records") listener.records(data.collector, data.records, data.figures);
-  else {
-    listeners.delete(data.id);
-    if (data.kind === "done") listener.done();
-    else listener.error(data.message);
-  }
-};
+function startWorker() {
+  const started = new Worker(new URL("worker.js", import.meta.url), { type: "module" });
+  started.onmessage = (/** @type {MessageEvent} */ { data }) => {
+    const listener = listeners.get(data.id);
+    if (!listener) return;
+    if (data.kind === "controls") listener.controls?.(data.controls, JSON.parse(data.request), JSON.parse(data.graph));
+    else if (data.kind === "records") listener.records(data.collector, data.records, data.figures);
+    else {
+      listeners.delete(data.id);
+      if (data.kind === "done") listener.done();
+      else listener.error(data.message);
+    }
+  };
+  return started;
+}
+
+let worker = startWorker();
+
+/**
+ * End every run the page asked for by ending the worker, and start another, the
+ * one way to end Python that never returns, as a reader's own shape can loop
+ * forever (ADR 0009). Each request still wanted hears that its runs stopped.
+ */
+export function stopRuns() {
+  worker.terminate();
+  worker = startWorker();
+  const stopped = [...listeners.values()];
+  listeners.clear();
+  for (const listener of stopped) listener.error("The runs stopped.");
+}
 
 /**
  * Ask for a widget's two runs, legacy and incremental, in place of any it asked

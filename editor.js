@@ -3,17 +3,18 @@
 // request it describes. Each structure's line opens fields for its shape, size,
 // root, lifetime, rebuild interval, build's churn and gc.collect() calls, and the
 // churn's line and the run's line open theirs. A change goes into the request,
-// and the widget runs it again, as a control's release does. The functions above
-// the Editor class change a request without the DOM, so Node's test runner can
-// load this module: see tests/editor.test.js.
+// and the widget runs it again, as a control's release does. A structure can take
+// a shape of the reader's own, its links written in Python (ADR 0014). The
+// functions above the Editor class change a request without the DOM, so Node's
+// test runner can load this module: see tests/editor.test.js.
 
 import { describe, describeChurn, describeRun } from "./graph.js";
 
 /** @typedef {import("./graph.js").Graph} Graph */
 /**
- * A shape as a request names it: "tree", or its name with its one parameter,
- * such as { chains: 16 }.
- * @typedef {"tree" | { [name: string]: number }} Shape
+ * A shape as a request names it: "tree", its name with its one parameter, such
+ * as { chains: 16 }, or { own: code } for the reader's own.
+ * @typedef {"tree" | { [name: string]: number | string }} Shape
  */
 /**
  * One structure as a request holds it.
@@ -45,19 +46,44 @@ export const SHAPES = {
   hierarchy: { title: "Hierarchy", parameter: { label: "Branches", value: 6, min: 1 } },
   graph: { title: "Graph", parameter: { label: "Edges a node", value: 2, min: 0 } },
   rings: { title: "Rings", parameter: { label: "Objects a ring", value: 21, min: 1 } },
+  own: { title: "Your own, in Python" },
 };
+
+/** The code a shape of the reader's own starts from: a doubly linked list. */
+export const OWN = `def links(i):
+    # The links object i brings, as (source, target) pairs
+    # among objects 0 to i. One link from an earlier object
+    # holds object i.
+    if i == 0:
+        return []
+    # A doubly linked list: each object and the one before
+    # it hold each other.
+    return [(i - 1, i), (i, i - 1)]
+`;
 
 /** The name of a shape: "tree", "chains" and so on. */
 export const nameOf = (/** @type {Shape} */ shape) => (typeof shape === "string" ? shape : Object.keys(shape)[0]);
 
 /**
- * The shape of that name, with its parameter's default.
+ * The shape of that name, with its parameter's default, or the code a shape of
+ * the reader's own starts from.
  * @param {string} name
  * @returns {Shape}
  */
 export function shapeNamed(name) {
+  if (name === "own") return { own: OWN };
   const { parameter } = SHAPES[name];
   return parameter ? { [name]: parameter.value } : "tree";
+}
+
+/**
+ * What Enter starts the next line of code with, after the line before the
+ * caret: that line's indent, and four spaces more after a colon.
+ * @param {string} line
+ */
+export function indentAfter(line) {
+  const indent = /** @type {string} */ (/^[ \t]*/.exec(line)?.[0]);
+  return line.trimEnd().endsWith(":") ? `${indent}    ` : indent;
 }
 
 /**
@@ -118,6 +144,14 @@ export const EDITOR_STYLE = `
   .key-list input[type="checkbox"] { margin: 0; accent-color: var(--text-secondary); }
   .key-list .fields button:disabled { color: var(--text-muted); }
   .key-list .problem { grid-column: 1 / -1; margin: 0; color: var(--text-primary); font-weight: 600; }
+  .key-list .code { grid-column: 1 / -1; display: grid; gap: 4px; }
+  .key-list .code p { margin: 0; }
+  .key-list .code button { justify-self: start; }
+  .key-list textarea {
+    width: 100%; box-sizing: border-box; resize: vertical; padding: 4px 6px; tab-size: 4;
+    font: 12px/1.45 ui-monospace, "Cascadia Code", Consolas, monospace; white-space: pre;
+    color: var(--text-primary); background: var(--surface); border: 1px solid var(--baseline); border-radius: 4px;
+  }
 `;
 
 /**
@@ -130,6 +164,8 @@ export class Editor {
   #root;
   /** What runs the request again after a change. */
   #change;
+  /** What ends the runs, Python stuck in the reader's code included. */
+  #stop;
   /** @type {Request | null} */
   #request = null;
   /** The structures, by object, and the lines, "churn" and "run", whose fields show. */
@@ -149,11 +185,13 @@ export class Editor {
 
   /**
    * @param {HTMLElement} root the widget's legend
-   * @param {() => void} change runs the request again
+   * @param {{ change: () => void, stop: () => void }} actions what runs the
+   *   request again, and what ends the runs
    */
-  constructor(root, change) {
+  constructor(root, { change, stop }) {
     this.#root = root;
     this.#change = change;
+    this.#stop = stop;
   }
 
   /** The request the editor changes. */
@@ -275,16 +313,17 @@ export class Editor {
     const { parameter } = SHAPES[name];
     if (parameter && typeof structure.shape !== "string") {
       const shape = structure.shape;
-      fields.append(this.#label(parameter.label, this.#number(`${i}:parameter`, shape[name], (value) => {
+      fields.append(this.#label(parameter.label, this.#number(`${i}:parameter`, Number(shape[name]), (value) => {
         shape[name] = /** @type {number} */ (value);
       }, { min: parameter.min })));
     } else {
       fields.append(document.createElement("span"));
     }
+    fields.append(this.#label("Size (objects)", this.#number(`${i}:size`, structure.size, (value) => {
+      structure.size = /** @type {number} */ (value);
+    }, { min: 1 })));
+    if (name === "own" && typeof structure.shape !== "string") fields.append(this.#code(`${i}:code`, structure.shape));
     fields.append(
-      this.#label("Size (objects)", this.#number(`${i}:size`, structure.size, (value) => {
-        structure.size = /** @type {number} */ (value);
-      }, { min: 1 })),
       this.#label("Held by", this.#select(`${i}:root`, { module: "sys", frame: "a frame" }, structure.root, (root) => {
         structure.root = root === "module" ? "module" : "frame";
         return false;
@@ -313,6 +352,52 @@ export class Editor {
     );
     fields.append(buttons);
     return fields;
+  }
+
+  /**
+   * The code of a shape of the reader's own. Leaving the box or Ctrl+Enter runs
+   * it, and Enter keeps the line's indent, with four spaces more after a colon.
+   * A button ends runs stuck in it.
+   * @param {string} key
+   * @param {{ [name: string]: number | string }} shape
+   */
+  #code(key, shape) {
+    const area = document.createElement("textarea");
+    area.dataset.focus = key;
+    area.spellcheck = false;
+    area.value = String(shape.own);
+    area.rows = area.value.split("\n").length + 1;
+    const commit = () => {
+      if (area.value === shape.own) return;
+      shape.own = area.value;
+      this.#changed(key, false);
+    };
+    area.addEventListener("change", commit);
+    area.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      if (event.ctrlKey || event.metaKey) {
+        commit();
+        return;
+      }
+      const { selectionStart: start, selectionEnd: end, value } = area;
+      const text = `\n${indentAfter(value.slice(value.lastIndexOf("\n", start - 1) + 1, start))}`;
+      // insertText keeps the box's undo; setRangeText where a browser lacks it.
+      if (!document.execCommand("insertText", false, text)) area.setRangeText(text, start, end, "end");
+    });
+    const label = document.createElement("label");
+    label.append("links(i), in Python", area);
+    const hint = document.createElement("p");
+    hint.textContent = "Leaving the box or Ctrl+Enter runs it. The simulator calls links(i) more than once "
+      + "for each object, so its answer must depend on i alone.";
+    const stop = document.createElement("button");
+    stop.type = "button";
+    stop.textContent = "Stop the runs";
+    stop.addEventListener("click", () => this.#stop());
+    const code = document.createElement("div");
+    code.className = "code";
+    code.append(label, hint, stop);
+    return code;
   }
 
   #churnFields() {
