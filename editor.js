@@ -1,14 +1,15 @@
 // @ts-check
 // The playground's first editor (ADR 0013): the widget's legend, made to edit the
-// request it describes. The other, source.js, writes the request as Python. Each structure's line opens fields for its shape, size,
-// root, lifetime, rebuild interval, build's churn and gc.collect() calls, and the
-// churn's line and the run's line open theirs. A change goes into the request,
-// and the widget runs it again, as a control's release does. A structure can take
+// request it describes. The other, source.js, writes the request as Python. Each
+// structure's line opens fields for its shape, size, root, lifetime, rebuild
+// interval, build's churn and gc.collect() calls, and the churn's line, the run's
+// line and the constants' line open theirs. A change goes into the request, and
+// the widget runs it again, as a control's release does. A structure can take
 // a shape of the reader's own, its links written in Python (ADR 0014). The
 // functions above the Editor class change a request without the DOM, so Node's
 // test runner can load this module: see tests/editor.test.js.
 
-import { describe, describeChurn, describeRun } from "./graph.js";
+import { describe, describeChurn, describeConstants, describeRun } from "./graph.js";
 
 /** @typedef {import("./graph.js").Graph} Graph */
 /**
@@ -32,6 +33,7 @@ import { describe, describeChurn, describeRun } from "./graph.js";
  *   settings: { threshold0: number, threshold1: number, threshold2: number },
  *   run_length: number,
  *   every: number,
+ *   constants: import("./graph.js").Constants,
  * }} Request
  */
 
@@ -131,6 +133,17 @@ export function move(structures, i, by) {
   return j;
 }
 
+/**
+ * The real objects one simulated object, 1 kB, stands for when a real object
+ * takes `bytes`: "16 real ones" at 64 B, "about 21.3 real ones" at 48 B.
+ * @param {number} bytes
+ */
+export function realOnes(bytes) {
+  const count = 1024 / bytes;
+  const shown = Number.isInteger(count) ? count : +count.toFixed(count < 100 ? 1 : 0);
+  return `${shown === count ? "" : "about "}${shown} real ${shown === 1 ? "one" : "ones"}`;
+}
+
 /** A share as the editor shows it, a percentage to a tenth: "1/50" is 2. */
 export function percentOf(/** @type {string} */ share) {
   const [numerator, denominator = "1"] = share.split("/");
@@ -146,6 +159,7 @@ export const EDITOR_STYLE = `
   .editing li { display: block; }
   .editing > .line, .editing > .fields, .editing .add { font-size: 12px; color: var(--text-secondary); }
   .editing .line { display: flex; gap: 6px; align-items: baseline; }
+  .editing h3:not(:first-child) { margin-top: 12px; }
   .editing .toggle, .editing .add {
     border: 0; padding: 0; background: none; font: inherit; color: var(--text-primary);
     text-decoration: underline; cursor: pointer;
@@ -201,9 +215,12 @@ export class Editor {
   #lines = new Map();
   /** The field the reader changed last, beside which a refusal shows. */
   #last = "";
-  /** Where the churn's and the run's words show. */
+  /** Where the churn's, the run's and the constants' words show. */
   #churn = document.createElement("span");
   #run = document.createElement("span");
+  #constants = document.createElement("span");
+  /** Where the real objects a dot stands for show. */
+  #count = document.createElement("span");
 
   /**
    * @param {HTMLElement} root the widget's legend
@@ -257,9 +274,9 @@ export class Editor {
     const heading = document.createElement("h3");
     heading.textContent = "Object graph";
     const about = document.createElement("p");
-    about.textContent = "A few objects of each structure, as its shape links them. One dot is one simulated object, "
-      + "16 real ones. A red link lies on a cycle, so dropping its structure leaves cyclic garbage. Edit a line "
-      + "to change it, and each change runs both collectors again.";
+    about.append("A few objects of each structure, as its shape links them. One dot is one simulated object, ",
+      this.#count, ". A red link lies on a cycle, so dropping its structure leaves cyclic garbage. Edit a line "
+      + "to change it, and each change runs both collectors again.");
     const list = document.createElement("ol");
     structures.forEach((structure, i) => {
       const item = document.createElement("li");
@@ -289,6 +306,10 @@ export class Editor {
     if (this.#open.has("churn")) this.#root.append(this.#churnFields());
     this.#root.append(this.#line("run", "run:toggle", this.#run));
     if (this.#open.has("run")) this.#root.append(this.#runFields());
+    const constants = document.createElement("h3");
+    constants.textContent = "Constants no Python API changes";
+    this.#root.append(constants, this.#line("constants", "constants:toggle", this.#constants));
+    if (this.#open.has("constants")) this.#root.append(this.#constantsFields());
     if (focus) /** @type {HTMLElement | null} */ (this.#root.querySelector(`[data-focus="${focus}"]`))?.focus();
   }
 
@@ -459,6 +480,30 @@ export class Editor {
     );
   }
 
+  #constantsFields() {
+    const { constants } = /** @type {Request} */ (this.#request);
+    return this.#fields(
+      this.#label("Initial work budget (real objects)", this.#number(
+        "constants:initial_work_budget",
+        constants.initial_work_budget,
+        (value) => { constants.initial_work_budget = /** @type {number} */ (value); },
+        { min: null },
+      )),
+      this.#label("Freed-credit multiplier", this.#number("constants:freed_credit", constants.freed_credit, (value) => {
+        constants.freed_credit = /** @type {number} */ (value);
+      })),
+      this.#label("Long-lived ratio (%)", this.#number(
+        "constants:long_lived_ratio",
+        percentOf(constants.long_lived_ratio),
+        (value) => { constants.long_lived_ratio = shareOf(/** @type {number} */ (value)); },
+        { step: 0.1 },
+      )),
+      this.#label("Real object (B)", this.#number("constants:real_object_size", constants.real_object_size, (value) => {
+        constants.real_object_size = /** @type {number} */ (value);
+      }, { min: 1 })),
+    );
+  }
+
   /** @param {...HTMLElement} parts */
   #fields(...parts) {
     const fields = document.createElement("div");
@@ -475,18 +520,20 @@ export class Editor {
   }
 
   /**
-   * A whole number field, or a share's to a tenth. An empty field reads as null
-   * where `nullable` gives the placeholder that says what null means.
+   * A whole number field, or a share's to a tenth, from 0 unless `min` gives
+   * another least value, or null for none. An empty field reads as null where
+   * `nullable` gives the placeholder that says what null means.
    * @param {string} key
    * @param {number | null} value
    * @param {(value: number | null) => void} set
-   * @param {{ min?: number, max?: number, step?: number, nullable?: string }} options
+   * @param {{ min?: number | null, max?: number, step?: number, nullable?: string }} options
    */
   #number(key, value, set, { min = 0, max, step = 1, nullable } = {}) {
     const input = document.createElement("input");
     input.type = "number";
     input.dataset.focus = key;
-    Object.assign(input, { min: String(min), step: String(step), required: nullable === undefined });
+    Object.assign(input, { step: String(step), required: nullable === undefined });
+    if (min !== null) input.min = String(min);
     if (max !== undefined) input.max = String(max);
     if (nullable !== undefined) input.placeholder = nullable;
     input.value = value === null ? "" : String(value);
@@ -560,8 +607,8 @@ export class Editor {
   /**
    * After a change, run the request again. A change to the structures draws the
    * fields again and focuses the key's; a change of a value leaves the fields as
-   * they are, so that focus moves on as the reader tabs, and rewords the churn's
-   * and the run's lines.
+   * they are, so that focus moves on as the reader tabs, and rewords the churn's,
+   * the run's and the constants' lines.
    * @param {string} key the field to focus, and to show a refusal beside
    * @param {boolean} redraw
    */
@@ -577,6 +624,8 @@ export class Editor {
     const request = /** @type {Request} */ (this.#request);
     this.#churn.textContent = describeChurn(request.workload.churn);
     this.#run.textContent = describeRun(request);
+    this.#constants.textContent = describeConstants(request.constants);
+    this.#count.textContent = realOnes(request.constants.real_object_size);
   }
 
   /**
