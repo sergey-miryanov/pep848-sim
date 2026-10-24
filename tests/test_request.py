@@ -53,6 +53,7 @@ def test_a_request_runs_the_legacy_collector_then_the_incremental_one() -> None:
         ('"tree"', '{"hierarchy": 0}', "a hierarchy of 0 branches ends at its root"),
         ('"tree"', '{"graph": -1}', "a node cannot bring -1 edges"),
         ('"module"', '"global"', "no root 'global'"),
+        ('"tree"', '{"own": 1}', "your shape's code is not text"),
         ('{"chains": 16}', '{"chains": 0}', "0 chains hold no objects"),
         ('"size": 100,', '"size": 0,', "a structure of 0 objects builds nothing"),
         ('"lifetime": 400', '"lifetime": -1', "a structure cannot live -1 kB"),
@@ -94,6 +95,14 @@ def test_a_request_the_simulator_cannot_run_names_what_it_cannot(
 
     with pytest.raises(ValueError, match=message):
         runs(request)
+
+
+def test_a_request_refuses_a_bad_link_of_its_own_shape_before_a_run_starts() -> None:
+    code = "def links(i):\n    return [(0, i)] if i < 5 else [(i, i + 1)]\n"
+    request = FIXED.replace('"tree"', json.dumps({"own": code}))
+
+    with pytest.raises(ValueError, match=r"links\(5\) gives \(5, 6\)"):
+        parse(request)
 
 
 # A request that names a preset, as a widget sends it.

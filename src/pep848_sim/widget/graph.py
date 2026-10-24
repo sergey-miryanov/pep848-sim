@@ -12,6 +12,7 @@ from pep848_sim.structures import (
     Chains,
     Graph,
     Hierarchy,
+    Own,
     Shape,
     StructureParameters,
     Tree,
@@ -21,6 +22,9 @@ from pep848_sim.widget.request import parse
 # How far into a structure, in objects, a sample looks for children. In every
 # shape the children of the objects a sample keeps come long before it.
 _REACH = 4096
+# The most objects a sample of a reader's own shape keeps: about as many as a
+# hierarchy's sample, whatever the shape, a list as much as a tree.
+_OWN_MOST = 40
 
 
 class Sample(NamedTuple):
@@ -42,7 +46,7 @@ def sample(structure: StructureParameters) -> Sample:
     children: dict[int, list[int]] = defaultdict(list)
     for source, target in links:
         children[source].append(target)
-    keep, levels = _extent(shape)
+    keep, levels, most = _extent(shape)
     level = {0: 0}
     frontier = [0]
     for depth in range(1, levels + 1):
@@ -50,6 +54,9 @@ def sample(structure: StructureParameters) -> Sample:
         for x in frontier:
             fresh = [y for y in children[x] if y not in level and y not in below]
             below.extend(fresh[:keep])
+        below = below[: most - len(level)]
+        if not below:
+            break
         level.update(dict.fromkeys(below, depth))
         frontier = below
     inside = [(s, t) for s, t in links if s in level and t in level]
@@ -90,18 +97,21 @@ def graph(request: str) -> str:
     )
 
 
-def _extent(shape: Shape) -> tuple[int, int]:
-    """How many children of each object a sample keeps, and how many levels below
-    the first object it goes: enough to show the shape beside the others, as the
-    prototype on prototype/object-graph drew them (#151)."""
+def _extent(shape: Shape) -> tuple[int, int, int]:
+    """How many children of each object a sample keeps, how many levels below the
+    first object it goes, and the most objects it keeps: enough to show the shape
+    beside the others, as the prototype on prototype/object-graph drew them
+    (#151). A reader's own shape goes as deep as its objects last."""
     if isinstance(shape, Chains):
-        return 4, 3
+        return 4, 3, _REACH
     if isinstance(shape, Tree):
-        return 2, 3
+        return 2, 3, _REACH
     if isinstance(shape, Hierarchy | Graph):
-        return 6, 2
+        return 6, 2, _REACH
+    if isinstance(shape, Own):
+        return 4, _OWN_MOST, _OWN_MOST
     # Each ring as far as six objects round it.
-    return 10, min(shape.length, 6)
+    return 10, min(shape.length, 6), _REACH
 
 
 def _label(shape: Shape) -> str:
@@ -114,6 +124,8 @@ def _label(shape: Shape) -> str:
         return f"a hierarchy of {shape.branches} branches"
     if isinstance(shape, Graph):
         return f"a graph of {shape.edges} edges a node"
+    if isinstance(shape, Own):
+        return "a shape of your own"
     return f"rings of {shape.length} object{'' if shape.length == 1 else 's'}"
 
 

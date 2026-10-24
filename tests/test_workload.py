@@ -27,6 +27,7 @@ from pep848_sim.workload import (
     geometric_thresholds,
 )
 from test_heap import Recording, reachable, reached_from
+from test_structures import own_shapes
 
 LIFETIMES = ChurnLifetimes(
     mean=16, long_share=Fraction(1, 500), long_lifetimes=(30_000, 300_000)
@@ -82,6 +83,7 @@ def structure_parameters(draw: st.DrawFn) -> StructureParameters:
                 st.builds(Hierarchy, st.integers(1, 4)),
                 st.builds(Graph, st.integers(0, 3)),
                 st.builds(Rings, st.integers(1, 4)),
+                own_shapes(),
             )
         ),
         size=size,

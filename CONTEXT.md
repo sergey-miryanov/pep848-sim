@@ -149,6 +149,11 @@ or a tree: which references its objects hold, and the order a Python program
 would allocate them in.
 _Avoid_: topology, layout, kind, type
 
+**Own shape**:
+A shape a reader writes on the playground: Python that gives the links each
+new object brings.
+_Avoid_: custom shape, user shape, plugin
+
 **Root**:
 Something outside the heap that keeps objects reachable: a module root or a
 frame root.

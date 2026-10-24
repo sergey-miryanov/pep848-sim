@@ -6,11 +6,11 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from pep848_sim.collectors.collector import CollectorSettings
-from pep848_sim.structures import Chains, Graph, Hierarchy, Rings, Shape, Tree
+from pep848_sim.structures import Chains, Graph, Hierarchy, Own, Rings, Shape, Tree
 from pep848_sim.widget.graph import graph, sample
 from pep848_sim.widget.request import Request, dump
 from pep848_sim.workload import WorkloadParameters
-from test_structures import long_lived
+from test_structures import DOUBLY_LINKED, long_lived
 from test_workload import QUIET
 
 
@@ -58,6 +58,14 @@ def test_a_graph_samples_its_roots_cycle_and_edges_two_nodes_share() -> None:
     assert {(s, t) for s, t, cycle in drawn.links if cycle} == {(0, 1), (1, 0)}
     holders = Counter(t for _, t, _ in drawn.links)
     assert holders.most_common(1)[0][1] == 2
+
+
+def test_a_sample_of_an_own_shape_keeps_its_first_forty_objects() -> None:
+    drawn = sample(long_lived(Own(DOUBLY_LINKED), 1000, "frame"))
+
+    # A list as deep as the sample's objects last, each one linked both ways.
+    assert drawn.objects == [(i, i) for i in range(40)]
+    assert all(cycle for *_, cycle in drawn.links)
 
 
 @given(
@@ -130,6 +138,7 @@ def test_a_requests_graph_holds_each_structure_and_the_churn() -> None:
         (Graph(edges=2), "a graph of 2 edges a node"),
         (Rings(length=1), "rings of 1 object"),
         (Rings(length=21), "rings of 21 objects"),
+        (Own(DOUBLY_LINKED), "a shape of your own"),
     ],
 )
 def test_the_legend_names_each_shape(shape: Shape, label: str) -> None:

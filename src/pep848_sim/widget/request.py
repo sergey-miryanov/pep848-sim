@@ -20,6 +20,7 @@ from pep848_sim.structures import (
     Chains,
     Graph,
     Hierarchy,
+    Own,
     Rings,
     Root,
     Shape,
@@ -159,10 +160,14 @@ def _structure(values: dict[str, Any]) -> StructureParameters:
     values = _values(values, _names(StructureParameters), "structure")
     if values["root"] not in get_args(Root.__value__):
         raise ValueError(f"no root {values['root']!r}")
-    return StructureParameters(**values | {"shape": _shape(values["shape"])})
+    structure = StructureParameters(**values | {"shape": _shape(values["shape"])})
+    # A reader's own links show their faults before a run starts.
+    if isinstance(structure.shape, Own):
+        structure.shape.check(structure.size)
+    return structure
 
 
-def _named(shape: Shape) -> str | dict[str, int]:
+def _named(shape: Shape) -> str | dict[str, int] | dict[str, str]:
     """A shape as a request names it."""
     if isinstance(shape, Tree):
         return "tree"
@@ -172,12 +177,14 @@ def _named(shape: Shape) -> str | dict[str, int]:
         return {"hierarchy": shape.branches}
     if isinstance(shape, Graph):
         return {"graph": shape.edges}
+    if isinstance(shape, Own):
+        return {"own": shape.code}
     return {"rings": shape.length}
 
 
 def _shape(shape: Any) -> Shape:
     """A shape: "tree", {"chains": width}, {"hierarchy": branches},
-    {"graph": edges} or {"rings": length}."""
+    {"graph": edges}, {"rings": length}, or {"own": code} for the reader's own."""
     if shape == "tree":
         return Tree()
     if isinstance(shape, dict) and list(shape) == ["chains"]:
@@ -188,4 +195,8 @@ def _shape(shape: Any) -> Shape:
         return Graph(shape["graph"])
     if isinstance(shape, dict) and list(shape) == ["rings"]:
         return Rings(shape["rings"])
+    if isinstance(shape, dict) and list(shape) == ["own"]:
+        if not isinstance(shape["own"], str):
+            raise ValueError("your shape's code is not text")
+        return Own(shape["own"])
     raise ValueError(f"no shape {shape!r}")

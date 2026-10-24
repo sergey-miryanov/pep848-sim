@@ -7,13 +7,21 @@
 import { test } from "node:test";
 // @ts-expect-error: as above.
 import assert from "node:assert/strict";
-import { SHAPES, move, nameOf, newStructure, percentOf, shapeNamed, shareOf } from "../site/editor.js";
+import { OWN, SHAPES, indentAfter, move, nameOf, newStructure, percentOf, shapeNamed, shareOf } from "../site/editor.js";
 
-test("a shape takes its name's default parameter, and a tree takes none", () => {
+test("a shape takes its name's default parameter, a tree none, and the reader's own a list's code", () => {
   assert.deepEqual(shapeNamed("chains"), { chains: 16 });
   assert.deepEqual(shapeNamed("graph"), { graph: 2 });
   assert.equal(shapeNamed("tree"), "tree");
+  assert.deepEqual(shapeNamed("own"), { own: OWN });
   assert.deepEqual(Object.keys(SHAPES).map((name) => nameOf(shapeNamed(name))), Object.keys(SHAPES));
+});
+
+test("Enter keeps a line's indent, and indents four spaces more after a colon", () => {
+  assert.equal(indentAfter("    return []"), "    ");
+  assert.equal(indentAfter("def links(i):"), "    ");
+  assert.equal(indentAfter("    if i == 0:  "), "        ");
+  assert.equal(indentAfter(""), "");
 });
 
 test("a move swaps a structure with its neighbour, and goes nowhere past either end", () => {

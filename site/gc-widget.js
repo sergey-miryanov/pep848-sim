@@ -26,7 +26,7 @@ import { describe, describeChurn, fit, network } from "./graph.js";
 import {
   CLOCK, FADED, FULL, KIND, LANES, PARTS, SPACES, WORK_TO_DO, budgetAt, ceiling, collections, heap, heapAt, work, workAt,
 } from "./panels.js";
-import { requestRuns } from "./runs.js";
+import { requestRuns, stopRuns } from "./runs.js";
 
 /** @typedef {import("./runs.js").Record} Record */
 /** @typedef {import("./runs.js").Figures} Figures */
@@ -432,7 +432,10 @@ class GcWidget extends HTMLElement {
       const style = document.createElement("style");
       style.textContent = EDITOR_STYLE;
       root.append(style);
-      this.#editor = new Editor(/** @type {HTMLElement} */ (root.querySelector(".key-list")), () => this.#start());
+      this.#editor = new Editor(/** @type {HTMLElement} */ (root.querySelector(".key-list")), {
+        change: () => this.#start(),
+        stop: stopRuns,
+      });
     }
     if (this.#entries.length > 1) {
       const label = /** @type {HTMLElement} */ (root.querySelector(".entries"));
