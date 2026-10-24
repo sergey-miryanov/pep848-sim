@@ -9,7 +9,8 @@ import traceback
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from types import FunctionType
+from typing import Any, Literal, get_args
 
 from pep848_sim.collectors.heap import Heap
 
@@ -157,13 +158,18 @@ class Graph:
 
 @dataclass(frozen=True)
 class Own:
-    """A shape of the reader's own, from Python code that defines `links(i)`: the
-    links object i brings, as (source, target) pairs among objects 0 to i. One of
-    them, from an earlier object, holds object i, or it would be garbage as soon as
-    it is built. The simulator calls links(i) more than once for an object, so its
-    answer depends on i alone."""
+    """A shape of the reader's own, from Python code that defines `links(i)`, or
+    one function by another name: the links object i brings, as (source, target)
+    pairs among objects 0 to i. One of them, from an earlier object, holds object
+    i, or it would be garbage as soon as it is built. The simulator calls links(i)
+    more than once for an object, so its answer depends on i alone."""
 
     code: str
+    # The line of the reader's text the code starts on, which messages count
+    # from: the box's first, or the function's own in a workload's source.
+    line: int = field(default=1, compare=False)
+    # The function the code defines for its links, which messages name.
+    _name: str = field(init=False, repr=False, compare=False)
     _links: Callable[[int], Any] = field(init=False, repr=False, compare=False)
     # The cyclic garbage a drop leaves, by the structure's size.
     _garbage: dict[int, int] = field(
@@ -172,7 +178,7 @@ class Own:
 
     def __post_init__(self) -> None:
         try:
-            compiled = compile(self.code, _OWN_FILE, "exec")
+            compiled = compile("\n" * (self.line - 1) + self.code, _OWN_FILE, "exec")
         except SyntaxError as error:
             raise ValueError(
                 f"line {error.lineno} of your shape: {error.msg}"
@@ -182,10 +188,9 @@ class Own:
             exec(compiled, namespace)
         except Exception as error:
             raise ValueError(_raised(error)) from None
-        links = namespace.get("links")
-        if not callable(links):
-            raise ValueError("your shape defines no links(i)")
-        object.__setattr__(self, "_links", links)
+        name = "links" if callable(namespace.get("links")) else _alone(namespace)
+        object.__setattr__(self, "_name", name)
+        object.__setattr__(self, "_links", namespace[name])
 
     def cyclic_garbage(self, size: int) -> int:
         """How many objects of a dropped structure of this size stay as cyclic
@@ -212,24 +217,25 @@ class Own:
         return self._garbage[size]
 
     def links(self, i: int) -> list[tuple[int, int]]:
+        call = f"{self._name}({i})"
         try:
             made = self._links(i)
         except Exception as error:
-            raise ValueError(_raised(error, f"links({i})")) from None
+            raise ValueError(_raised(error, call)) from None
         try:
             pairs = [(source, target) for source, target in made]
         except TypeError, ValueError:
             raise ValueError(
-                f"links({i}) gives {made!r}, not (source, target) pairs"
+                f"{call} gives {made!r}, not (source, target) pairs"
             ) from None
         for pair in pairs:
             if not all(type(x) is int and 0 <= x <= i for x in pair):
                 raise ValueError(
-                    f"links({i}) gives {pair!r}: a link joins two of objects 0 to {i}"
+                    f"{call} gives {pair!r}: a link joins two of objects 0 to {i}"
                 )
         if i and not any(source < target == i for source, target in pairs):
             raise ValueError(
-                f"links({i}) gives object {i} no holder among objects 0 to {i - 1},"
+                f"{call} gives object {i} no holder among objects 0 to {i - 1},"
                 " so it would be garbage as soon as it is built"
             )
         return pairs
@@ -241,13 +247,27 @@ class Own:
         for i in range(min(size, _CHECKED)):
             if self.links(i) != self.links(i):
                 raise ValueError(
-                    f"links({i}) gave two answers, where it must depend on i alone"
+                    f"{self._name}({i}) gave two answers, where it must depend on i"
+                    " alone"
                 )
 
 
+def _alone(namespace: dict[str, object]) -> str:
+    """The one function an own shape's code defines, which gives its links when it
+    defines no links(i)."""
+    defined = [
+        name
+        for name, value in namespace.items()
+        if isinstance(value, FunctionType) and value.__code__.co_filename == _OWN_FILE
+    ]
+    if len(defined) != 1:
+        raise ValueError("your shape defines no links(i)")
+    return defined[0]
+
+
 def _raised(error: Exception, call: str = "") -> str:
-    """What the reader's code raised, in a call of links(i) or as it ran, and the
-    line of their code it raised at."""
+    """What the reader's code raised, in a call of its links or as it ran, and the
+    line of their text it raised at."""
     lines = [
         frame.lineno
         for frame in traceback.extract_tb(error.__traceback__)
@@ -256,7 +276,7 @@ def _raised(error: Exception, call: str = "") -> str:
     name = type(error).__name__
     if not call:
         return f"your shape raised {name} at line {lines[-1]}: {error}"
-    where = f" at line {lines[-1]} of your shape" if lines else ""
+    where = f" at line {lines[-1]}" if lines else ""
     return f"{call} raised {name}{where}: {error}"
 
 
@@ -280,6 +300,8 @@ class StructureParameters:
     full_collections: bool = False
 
     def __post_init__(self) -> None:
+        if self.root not in get_args(Root.__value__):
+            raise ValueError(f"no root {self.root!r}")
         if self.size < 1:
             raise ValueError(f"a structure of {self.size} objects builds nothing")
         if self.lifetime is not None and self.lifetime < 0:

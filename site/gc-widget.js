@@ -8,7 +8,9 @@
 // again. Beside them it draws a sample of the request's object graph, each
 // structure under sys or its frame, with a legend under the controls. With an
 // `editor` attribute, as on the playground, the legend edits the request, and
-// each change asks for both runs again (ADR 0013).
+// each change asks for both runs again (ADR 0013). A switch then shows the
+// request as Python source beside the rest, which runs with a button (ADR 0015),
+// and the widget carries a `source` attribute meanwhile, so a page can widen it.
 //
 // The JSON can list entries in place of one request, each with a name, a title,
 // its own request and its own controls. The widget then shows a select of their
@@ -22,6 +24,7 @@ import {
   // @ts-expect-error: an editor cannot fetch d3's types from jsDelivr.
 } from "https://cdn.jsdelivr.net/npm/d3-force@3.0.0/+esm";
 import { Editor, EDITOR_STYLE } from "./editor.js";
+import { Source, SOURCE_STYLE } from "./source.js";
 import { describe, describeChurn, fit, network } from "./graph.js";
 import {
   CLOCK, FADED, FULL, KIND, LANES, PARTS, SPACES, WORK_TO_DO, budgetAt, ceiling, collections, heap, heapAt, work, workAt,
@@ -195,11 +198,12 @@ const TEMPLATE = `
       --freed: #e66767;
     }
   }
-  .entries { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; font-size: 13px; color: var(--text-secondary); }
+  .picks { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; margin: 0 0 16px; font-size: 13px; color: var(--text-secondary); }
+  .entries { display: flex; align-items: center; gap: 8px; }
   .entries select { font: inherit; color: var(--text-primary); background: var(--surface); }
   .controls { display: flex; flex-wrap: wrap; gap: 12px 32px; margin: 0 0 24px; }
   /* Their display would otherwise outrank the hidden attribute's. */
-  .entries[hidden], .controls[hidden], .graph[hidden], .key-list[hidden] { display: none; }
+  .picks[hidden], .entries[hidden], .controls[hidden], .graph[hidden], .key-list[hidden] { display: none; }
   /* The select, the controls and the object graph's legend, beside the graph. */
   .top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 520px); gap: 24px; margin: 0 0 24px; align-items: start; }
   .top > div:first-child > :last-child { margin-bottom: 0; }
@@ -251,18 +255,21 @@ const TEMPLATE = `
   .tip td { padding: 0 0 0 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); }
   .error { color: var(--text-primary); }
 </style>
+<div class="frame"><div>
 <p class="error" hidden></p>
 <div class="top">
   <div>
-    <label class="entries" hidden>Workload <select></select></label>
+    <div class="picks" hidden><label class="entries" hidden>Workload <select></select></label></div>
     <div class="controls" hidden></div>
     <div class="key-list" hidden>
-      <h3>Object graph</h3>
-      <p>A few objects of each structure, as its shape links them. One dot is one
-      simulated object, 16 real ones. A red link lies on a cycle, so dropping its
-      structure leaves cyclic garbage.</p>
-      <ol></ol>
-      <p class="churn"></p>
+      <div class="plain">
+        <h3>Object graph</h3>
+        <p>A few objects of each structure, as its shape links them. One dot is one
+        simulated object, 16 real ones. A red link lies on a cycle, so dropping its
+        structure leaves cyclic garbage.</p>
+        <ol></ol>
+        <p class="churn"></p>
+      </div>
     </div>
   </div>
   <div class="graph" hidden></div>
@@ -282,7 +289,8 @@ const TEMPLATE = `
     <figure data-panel="work"><figcaption></figcaption><div class="legend"></div><div class="plot"><div class="chart"></div></div></figure>
     <figure data-panel="budget"><figcaption>Work budget</figcaption><div class="plot"><div class="chart"></div></div></figure>
   </section>
-</div>`;
+</div>
+</div></div>`;
 
 /** A legend entry: a swatch for a fill, a short stroke for a line. */
 function key(/** @type {string} */ name, /** @type {string} */ color, line = false) {
@@ -335,6 +343,12 @@ class GcWidget extends HTMLElement {
   /** The legend's editor, on a widget with the `editor` attribute. */
   /** @type {Editor | null} */
   #editor = null;
+  /** The request as Python source, beside the rest, on a widget with the `editor` attribute. */
+  /** @type {Source | null} */
+  #source = null;
+  /** Which editor shows: the legend's or the source. */
+  /** @type {"legend" | "source"} */
+  #mode = "legend";
 
   connectedCallback() {
     if (this.shadowRoot) return;
@@ -428,20 +442,31 @@ class GcWidget extends HTMLElement {
       this.#hover();
     });
     this.#name = this.id || `gc-widget-${widgets++}`;
+    const picks = /** @type {HTMLElement} */ (root.querySelector(".picks"));
     if (this.hasAttribute("editor")) {
       const style = document.createElement("style");
-      style.textContent = EDITOR_STYLE;
+      style.textContent = EDITOR_STYLE + SOURCE_STYLE;
       root.append(style);
-      this.#editor = new Editor(/** @type {HTMLElement} */ (root.querySelector(".key-list")), {
-        change: () => this.#start(),
-        stop: stopRuns,
-      });
+      // The legend's editor takes the place of the plain legend, which the
+      // source shows beside it.
+      const editing = document.createElement("div");
+      editing.className = "editing";
+      /** @type {HTMLElement} */ (root.querySelector(".key-list")).append(editing);
+      /** @type {HTMLElement} */ (root.querySelector(".plain")).hidden = true;
+      this.#editor = new Editor(editing, { change: () => this.#start(), stop: stopRuns });
+      const panel = document.createElement("div");
+      panel.className = "source";
+      panel.hidden = true;
+      /** @type {HTMLElement} */ (root.querySelector(".frame")).prepend(panel);
+      this.#source = new Source(panel, { run: () => this.#runSource(false), stop: stopRuns });
+      picks.append(this.#switcher());
+      picks.hidden = false;
     }
     if (this.#entries.length > 1) {
       const label = /** @type {HTMLElement} */ (root.querySelector(".entries"));
       const select = /** @type {HTMLSelectElement} */ (label.querySelector("select"));
       select.append(...this.#entries.map(({ name, title }) => new Option(title, name)));
-      label.hidden = false;
+      label.hidden = picks.hidden = false;
       select.addEventListener("change", () => this.#choose(select.value, true));
       addEventListener("hashchange", () => this.#choose(fragment().get(this.id) ?? "", false));
     }
@@ -478,30 +503,40 @@ class GcWidget extends HTMLElement {
     this.#records = { legacy: [], incremental: [] };
     this.#figures = {};
     this.#drawn = entry.request;
+    if (this.#mode === "source") this.#source?.show(entry);
     this.#schedule();
     this.#start();
   }
 
   /**
-   * Ask for both runs of the request as the controls have set it, in place of any
-   * runs asked for before. The charts keep the old runs until the new runs' first
-   * records arrive.
+   * Ask for both runs of the request as the controls have set it, or of another
+   * request for the entry, in place of any runs asked for before. The charts keep
+   * the old runs until the new runs' first records arrive.
+   * @param {any} sent the request, the entry's own unless another is given
+   * @param {() => void} made what follows once the worker spells the request out
    */
-  #start() {
+  #start(sent = /** @type {Entry} */ (this.#entry).request, made = () => {}) {
     const entry = /** @type {Entry} */ (this.#entry);
-    let request = structuredClone(entry.request);
+    let request = structuredClone(sent);
     let fresh = true;
-    /** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".error")).hidden = true;
+    const root = /** @type {ShadowRoot} */ (this.shadowRoot);
+    /** @type {HTMLElement} */ (root.querySelector(".error")).hidden = true;
     requestRuns(this.#name, request, {
       controls: (controls, expanded, graph) => {
-        // A request that names a preset comes back spelled out: the preset's
-        // workload and run length, which the controls edit from then on.
-        if ("preset" in request) {
+        // A request that names a preset, or carries a workload's source, comes
+        // back spelled out: its workload and run length, which the controls and
+        // the editors edit from then on.
+        const preset = "preset" in request;
+        if (preset || "source" in request) {
           request = expanded;
           entry.request = structuredClone(expanded);
           if ("preset" in this.#drawn) this.#drawn = request;
         }
         this.#editor?.edit(entry.request);
+        if (preset && this.#mode === "source") this.#source?.show(entry);
+        // Either editor can show the request once the worker has spelled it out.
+        for (const input of root.querySelectorAll(".modes input")) /** @type {HTMLInputElement} */ (input).disabled = false;
+        made();
         this.#show(controls);
         this.#graph(graph);
       },
@@ -517,9 +552,80 @@ class GcWidget extends HTMLElement {
         this.#schedule();
       },
       done: () => {},
-      // The editor shows a refusal beside the field the reader changed.
-      error: (message) => this.#editor?.fail(message) || this.#fail(message),
+      // The legend's editor shows a refusal beside the field the reader changed,
+      // and the source under its box, setting back a switch that waited on it.
+      error: (message) => {
+        if (this.#mode === "legend") return this.#editor?.fail(message) || this.#fail(message);
+        this.#view("source");
+        return this.#source?.fail(message) || this.#fail(message);
+      },
     }, entry.controls);
+  }
+
+  /** The switch between the legend's editor and the source, which waits for the worker's first request. */
+  #switcher() {
+    const group = document.createElement("div");
+    group.className = "modes";
+    group.setAttribute("role", "radiogroup");
+    group.setAttribute("aria-label", "Edit the workload");
+    group.append("Edit");
+    for (const [mode, text] of /** @type {const} */ ([["legend", "in the legend"], ["source", "as Python"]])) {
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      Object.assign(input, { type: "radio", name: "mode", value: mode, checked: mode === "legend", disabled: true });
+      input.addEventListener("change", () => this.#switch(mode));
+      label.append(input, text);
+      group.append(label);
+    }
+    return group;
+  }
+
+  /**
+   * Switch to the legend's editor or to the source. The source shows the reader's
+   * text while the legend has changed nothing, and the request written afresh
+   * once it has. Text that has not run runs first, and the legend shows the
+   * workload it makes, unless it fails, when the source keeps it and its error.
+   * @param {"legend" | "source"} mode
+   */
+  #switch(mode) {
+    const source = /** @type {Source} */ (this.#source);
+    if (mode === "source") source.show(/** @type {Entry} */ (this.#entry));
+    // The source stays while its text runs, and a failure puts the switch back.
+    if (mode === "legend" && source.changed) this.#runSource(true);
+    else this.#view(mode);
+  }
+
+  /** Show one editor and hide the other. */
+  #view(/** @type {"legend" | "source"} */ mode) {
+    this.#mode = mode;
+    const root = /** @type {ShadowRoot} */ (this.shadowRoot);
+    for (const input of root.querySelectorAll(".modes input")) {
+      /** @type {HTMLInputElement} */ (input).checked = /** @type {HTMLInputElement} */ (input).value === mode;
+    }
+    const legend = mode === "legend";
+    /** @type {HTMLElement} */ (root.querySelector(".plain")).hidden = legend;
+    /** @type {HTMLElement} */ (root.querySelector(".editing")).hidden = !legend;
+    /** @type {HTMLElement} */ (root.querySelector(".source")).hidden = legend;
+    this.toggleAttribute("source", !legend);
+    // The panels' width changes with the source beside them.
+    this.#schedule();
+  }
+
+  /**
+   * Run the source's text for the entry, and once the worker sends back the
+   * request it makes, switch to the legend, if `legend`.
+   * @param {boolean} legend
+   */
+  #runSource(legend) {
+    const entry = /** @type {Entry} */ (this.#entry);
+    const source = /** @type {Source} */ (this.#source);
+    const text = source.text;
+    this.#start({ source: text, every: entry.request.every }, () => {
+      source.ran(entry, text);
+      // Unless the reader picked the source again while the text ran.
+      const picked = /** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".modes input:checked");
+      if (legend && /** @type {HTMLInputElement | null} */ (picked)?.value === "legend") this.#view("legend");
+    });
   }
 
   /** Show each control with the range its request allows. */
@@ -586,20 +692,18 @@ class GcWidget extends HTMLElement {
     frame.hidden = !nodes.length;
     // The editor stays, so that a workload without structures can gain one.
     keys.hidden = !nodes.length && !this.#editor;
-    if (this.#editor) {
-      this.#editor.describe(graph);
-    } else {
-      const list = /** @type {HTMLElement} */ (keys.querySelector("ol"));
-      list.replaceChildren(...graph.structures.map((structure, i) => {
-        const item = document.createElement("li");
-        const badge = document.createElement("span");
-        badge.className = "badge";
-        badge.textContent = String(i + 1);
-        item.append(badge, describe(structure));
-        return item;
-      }));
-      /** @type {HTMLElement} */ (keys.querySelector(".churn")).textContent = describeChurn(graph.churn);
-    }
+    // The plain legend, which the source shows beside it on the playground.
+    const list = /** @type {HTMLElement} */ (keys.querySelector(".plain ol"));
+    list.replaceChildren(...graph.structures.map((structure, i) => {
+      const item = document.createElement("li");
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = String(i + 1);
+      item.append(badge, describe(structure));
+      return item;
+    }));
+    /** @type {HTMLElement} */ (keys.querySelector(".plain .churn")).textContent = describeChurn(graph.churn);
+    this.#editor?.describe(graph);
     if (!nodes.length) return;
     // The layout's own copies, which the simulation moves and links in place. The
     // roots keep to a line along the top, and what they hold hangs below them.

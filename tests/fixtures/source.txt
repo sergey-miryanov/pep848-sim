@@ -1,0 +1,64 @@
+# The workload both runs share, as Python. Sizes, lifetimes
+# and intervals are in kB: one simulated object is 1 kB, 16
+# real ones. Press Run or Ctrl+Enter to run it.
+
+# A shape of your own is a function of i that gives the links
+# object i brings, as (source, target) pairs among objects 0
+# to i, one of them from an earlier object that holds object i.
+# Own(...) takes it. It sees only i and what it imports itself.
+def links(i):
+    # The links object i brings, as (source, target) pairs
+    # among objects 0 to i. One link from an earlier object
+    # holds object i.
+    if i == 0:
+        return []
+    # A doubly linked list: each object and the one before
+    # it hold each other.
+    return [(i - 1, i), (i, i - 1)]
+
+
+def links_2(i):
+    return [(0, i)] if i else []
+
+
+def churn_2(i):
+    return [(i - 1, i)] if i else []
+
+
+shape_10 = """\
+# A chain of four.
+WIDTH = 4
+
+def links(i):
+    return [(max(i - WIDTH, 0), i)] if i else []
+"""
+
+
+shape_11 = "NAME = \"a\\tb\"\ndef links(i):\n    return [(0, i)] if i else []\n"
+
+
+churn = Churn(lifetime_mean=5, cycle_share="3/100", cycle_size=3,
+              long_share="1/20", long_lifetimes=(100, 1000))
+
+structures = [
+    Structure(Chains(16), size=8000, root="module"),
+    Structure(Tree(), size=20_000, root="frame", lifetime=40_000,
+              rebuild_interval=80_000, build_churn=1),
+    Structure(Hierarchy(6), size=100, root="frame", lifetime=0,
+              rebuild_interval=1000),
+    Structure(Graph(2), size=100, root="module"),
+    Structure(Rings(21), size=100, root="frame", lifetime=500,
+              rebuild_interval=1000, full_collections=True),
+    Structure(Own(links), size=1000, root="frame", lifetime=2000,
+              rebuild_interval=4000),
+    Structure(Own(links), size=500, root="module"),
+    Structure(Own(links_2), size=50, root="frame"),
+    Structure(Own(churn_2), size=50, root="frame"),
+    Structure(Own(shape_10), size=50, root="frame"),
+    Structure(Own(shape_11), size=50, root="frame"),
+]
+
+run_length = 150_000
+settings = Settings(threshold0=2000, threshold1=10, threshold2=10)
+shutdown = True
+seed = 7

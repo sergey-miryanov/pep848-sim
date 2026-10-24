@@ -19,6 +19,12 @@ cyclic garbage a drop leaves, and an answer that changes would draw one graph
 and count another. A run depends only on its inputs (ADR 0007) as long as the
 code does.
 
+The workload's source (ADR 0015) gives a shape as a function by any name, and
+the request carries its text alone. So the code may define one function in
+place of links(i), and the simulator calls that. A message names the function
+it called, and counts lines from where the code starts in the reader's text:
+the box's first line, or the function's own line in the source.
+
 A built-in shape declares the cyclic garbage a drop leaves. For a reader's
 shape the simulator counts it by refcounting the structure's own links. The
 drop takes away the first object's holder, refcounting frees each object left

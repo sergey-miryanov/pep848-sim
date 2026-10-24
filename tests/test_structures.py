@@ -326,6 +326,23 @@ def test_an_own_shape_links_each_object_as_its_code_says() -> None:
     ]
 
 
+def test_an_own_shape_without_links_calls_the_one_function_it_defines() -> None:
+    shape = Own("from math import floor\n" + DOUBLY_LINKED.replace("links", "pairs"))
+
+    assert shape.links(1) == [(0, 1), (1, 0)]
+    with pytest.raises(ValueError, match=r"pairs\(1\) gives \(1, 2\)"):
+        Own("def pairs(i):\n    return [(0, i), (i, i + 1)] if i else []\n").check(2)
+
+
+def test_an_own_shape_counts_its_lines_from_where_its_code_starts() -> None:
+    shape = Own("def links(i):\n    return 1 / 0\n", line=12)
+
+    with pytest.raises(ValueError, match="raised ZeroDivisionError at line 13"):
+        shape.links(0)
+    with pytest.raises(ValueError, match="line 12 of your shape: expected ':'"):
+        Own("def links(i)\n", line=12)
+
+
 def test_a_dropped_own_shape_leaves_its_cycles_and_what_they_hold() -> None:
     # A list whose third object links back to the second: refcounting frees the
     # first two, and the cycle keeps the second and third and the two after.
@@ -347,6 +364,10 @@ def test_a_dropped_own_shape_leaves_its_cycles_and_what_they_hold() -> None:
     [
         ("def links(i)\n    return []\n", "line 1 of your shape: expected ':'"),
         ("x = 1\n", r"your shape defines no links\(i\)"),
+        (
+            "def a(i):\n    return []\ndef b(i):\n    return []\n",
+            r"your shape defines no links\(i\)",
+        ),
         (
             "1 / 0\n",
             "your shape raised ZeroDivisionError at line 1: division by zero",
@@ -376,8 +397,7 @@ def test_own_code_that_defines_no_links_is_refused(code: str, message: str) -> N
         ("return [(i, i)]", r"links\(1\) gives object 1 no holder"),
         (
             "return 1 / 0",
-            r"links\(0\) raised ZeroDivisionError at line 2 of your shape:"
-            " division by zero",
+            r"links\(0\) raised ZeroDivisionError at line 2: division by zero",
         ),
     ],
 )

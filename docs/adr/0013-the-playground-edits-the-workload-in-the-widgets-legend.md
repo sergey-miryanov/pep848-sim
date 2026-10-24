@@ -31,7 +31,7 @@ the legacy collector but leaves the incremental collector no aging space, so
 a widget's request refuses it.
 
 The prototype's third layout, the workload as Python source beside the
-widget, stays as a view the reader can switch to (#157).
+widget, is the editor a switch shows in place of the legend's (ADR 0015).
 
 ## Considered Options
 

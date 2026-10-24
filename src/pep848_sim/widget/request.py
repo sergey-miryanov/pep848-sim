@@ -1,15 +1,16 @@
 """What a widget asks the simulator for: a workload, collector settings, a run length
 and the records each part of a run holds, as JSON text. A request can name a preset
 in place of its workload and run length, so that a preset's numbers live in one
-place. The worker passes the text on as the page sent it, so no browser object
-reaches the simulator.
+place, or carry the playground's Python source of all three. The worker passes the
+text on as the page sent it, so no browser object reaches the simulator.
 """
 
 import json
 from collections.abc import Collection, Iterator
 from dataclasses import asdict, fields
 from fractions import Fraction
-from typing import Any, NamedTuple, get_args
+from functools import lru_cache
+from typing import Any, NamedTuple
 
 from pep848_sim.collectors.collector import CollectorSettings, Record
 from pep848_sim.collectors.incremental import IncrementalCollector
@@ -22,11 +23,11 @@ from pep848_sim.structures import (
     Hierarchy,
     Own,
     Rings,
-    Root,
     Shape,
     StructureParameters,
     Tree,
 )
+from pep848_sim.widget import source
 from pep848_sim.workload import ChurnParameters, WorkloadParameters
 
 
@@ -40,11 +41,25 @@ class Request(NamedTuple):
 # The fields of a request that names a preset, which brings its workload and run
 # length.
 _PRESET_FIELDS = ("preset", "settings", "every")
+# The fields of a request that carries a workload's source, which sets its
+# workload, collector settings and run length.
+_SOURCE_FIELDS = ("source", "every")
 
 
+# The worker reads each request four times, for its controls, its spelled-out
+# form, its object graph and its runs. Keeping the last few runs a source and
+# checks a shape of the reader's own once for all four, and each reading gets the
+# same workload, whatever the source draws.
+@lru_cache(maxsize=16)
 def parse(request: str) -> Request:
     """The request a widget sends, refused unless it holds every field and no other."""
     values = json.loads(request)
+    if "source" in values:
+        values = _values(values, _SOURCE_FIELDS, "request")
+        workload, settings, run_length = source.read(values["source"])
+        for structure in workload.structures:
+            _check(structure)
+        return Request(workload, _checked(settings), run_length, values["every"])
     if "preset" in values:
         values = _values(values, _PRESET_FIELDS, "request")
         preset = PRESETS.get(values["preset"])
@@ -112,9 +127,12 @@ def _names(parameters: type) -> list[str]:
 
 
 def _settings(values: dict[str, Any]) -> CollectorSettings:
-    settings = CollectorSettings(
-        **_values(values, _names(CollectorSettings), "settings")
+    return _checked(
+        CollectorSettings(**_values(values, _names(CollectorSettings), "settings"))
     )
+
+
+def _checked(settings: CollectorSettings) -> CollectorSettings:
     # The legacy collector takes a threshold1 of 0, but the incremental collector
     # counts its aging spaces from it, and a widget runs both.
     if settings.threshold1 < 1:
@@ -158,9 +176,10 @@ def _workload(values: dict[str, Any]) -> WorkloadParameters:
 
 def _structure(values: dict[str, Any]) -> StructureParameters:
     values = _values(values, _names(StructureParameters), "structure")
-    if values["root"] not in get_args(Root.__value__):
-        raise ValueError(f"no root {values['root']!r}")
-    structure = StructureParameters(**values | {"shape": _shape(values["shape"])})
+    return _check(StructureParameters(**values | {"shape": _shape(values["shape"])}))
+
+
+def _check(structure: StructureParameters) -> StructureParameters:
     # A reader's own links show their faults before a run starts.
     if isinstance(structure.shape, Own):
         structure.shape.check(structure.size)

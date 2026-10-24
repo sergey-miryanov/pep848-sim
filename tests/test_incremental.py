@@ -117,7 +117,7 @@ class Recorded(IncrementalCollector):
 
 @given(
     churn_parameters(),
-    st.lists(structure_parameters(), max_size=2),
+    st.lists(structure_parameters(own=False), max_size=2),
     st.integers(min_value=0, max_value=2**32),
     st.integers(min_value=1, max_value=20),
     st.integers(min_value=1, max_value=6),
@@ -132,7 +132,9 @@ def test_a_run_keeps_the_incremental_collectors_invariants(
     stops: list[int],
 ) -> None:
     """The workloads' garbage never holds other garbage, so each sweep frees the
-    cyclic garbage wholly in the old generation when it starts."""
+    cyclic garbage wholly in the old generation when it starts. A reader's own
+    shape can hold one cycle from another: an increment that takes the held cycle
+    first leaves it in visited, still held, and the next sweep frees it."""
     settings = CollectorSettings(threshold0=threshold0, threshold1=threshold1)
     collector = Recorded(settings)
     heap = Heap(collector)
