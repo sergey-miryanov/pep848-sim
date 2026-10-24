@@ -5,7 +5,8 @@
 // column per collector, each with the heap by space, work in bins and the work
 // budget, on y-scales the two columns share. Above the figures it shows the
 // controls its `controls` attribute names, and releasing one asks for both runs
-// again. Beside them it draws a sample of the request's object graph, each
+// again. It groups them: the workload's, then the collector settings', with the
+// collector constants behind a toggle under them. Beside them it draws a sample of the request's object graph, each
 // structure under sys or its frame, with a legend under the controls. With an
 // `editor` attribute, as on the playground, the legend edits the request, and
 // each change asks for both runs again (ADR 0013). A switch then shows the
@@ -28,7 +29,7 @@ import {
 import { Editor, EDITOR_STYLE } from "./editor.js";
 import { Source, SOURCE_STYLE } from "./source.js";
 import { FOREIGN, decode, encode, holdsCode, LINK_STYLE } from "./link.js";
-import { describe, describeChurn, fit, network } from "./graph.js";
+import { describe, describeChurn, describeYoung, fit, network } from "./graph.js";
 import {
   CLOCK, FADED, FULL, KIND, LANES, PARTS, SPACES, WORK_TO_DO, budgetAt, ceiling, collections, heap, heapAt, work, workAt,
 } from "./panels.js";
@@ -121,13 +122,18 @@ const FIGURES = [
   { label: "Gen 2 collections / sweeps", read: (figures, collector) => figures[collector === "legacy" ? 6 : 5], show: count },
 ];
 
-/** A control's value as the reader sees it: kB, or a share as a percentage. */
-const reading = (/** @type {Control[2]} */ unit, /** @type {number} */ value) =>
-  unit === "share" ? percent(value / 1000) : `${whole(value)} kB`;
+/** A control's value as the reader sees it: kB, a share as a percentage, or a count. */
+const reading = (/** @type {Control[2]} */ unit, /** @type {number} */ value) => {
+  if (unit === "share") return percent(value / 1000);
+  return unit === "count" ? whole(value) : `${whole(value)} kB`;
+};
 
-/** A control's value as the request holds it: kB, or a share as a fraction. */
+/** A control's value as the request holds it: kB or a count, or a share as a fraction. */
 const held = (/** @type {Control[2]} */ unit, /** @type {number} */ value) =>
   unit === "share" ? `${value}/1000` : value;
+
+// The controls that say what they make of the young generation.
+const YOUNG = ["settings.threshold0", "settings.threshold1"];
 
 /** Put a value into the request at a path of keys and indices joined by dots. */
 function assign(/** @type {any} */ request, /** @type {string} */ path, /** @type {unknown} */ value) {
@@ -137,8 +143,9 @@ function assign(/** @type {any} */ request, /** @type {string} */ path, /** @typ
 }
 
 /**
- * The entries a widget's JSON offers: the ones it lists, or else the one request
- * it holds, with the controls the widget's `controls` attribute names.
+ * The entries a widget's JSON offers: the ones it lists, each with its own
+ * controls and those the JSON lists for every entry, or else the one request it
+ * holds, with the controls the widget's `controls` attribute names.
  * @param {any} json
  * @param {string | null} controls
  * @returns {Entry[]}
@@ -152,7 +159,11 @@ function entriesOf(json, controls) {
   if (!entries.length) throw new Error("The widget lists no entries.");
   const names = entries.map((entry) => entry.name);
   if (new Set(names).size < names.length) throw new Error("The widget lists two entries under one name.");
-  return entries.map(({ name, title, request, controls = [] }) => ({ name, title, request, controls }));
+  /** @type {string[]} */
+  const shared = json.controls ?? [];
+  return entries.map(({ name, title, request, controls = [] }) => ({
+    name, title, request, controls: [...controls, ...shared.filter((path) => !controls.includes(path))],
+  }));
 }
 
 /**
@@ -211,7 +222,12 @@ const TEMPLATE = `
   .picks { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; margin: 0 0 16px; font-size: 13px; color: var(--text-secondary); }
   .entries { display: flex; align-items: center; gap: 8px; }
   .entries select { font: inherit; color: var(--text-primary); background: var(--surface); }
-  .controls { display: flex; flex-wrap: wrap; gap: 12px 32px; margin: 0 0 24px; }
+  .controls { display: grid; gap: 16px; margin: 0 0 24px; }
+  .controls .group { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: start; }
+  .controls h3 { flex-basis: 100%; margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .controls details { flex-basis: 100%; font-size: 13px; color: var(--text-secondary); }
+  .controls summary { width: max-content; cursor: pointer; }
+  .controls details > .group { margin-top: 12px; }
   /* Their display would otherwise outrank the hidden attribute's. */
   .picks[hidden], .entries[hidden], .controls[hidden], .graph[hidden], .key-list[hidden] { display: none; }
   /* The select, the controls and the object graph's legend, beside the graph. */
@@ -236,6 +252,7 @@ const TEMPLATE = `
   .control .name { display: flex; justify-content: space-between; gap: 8px; }
   .control output { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
   .control input { margin: 0; accent-color: var(--text-secondary); }
+  .control .note { font-size: 12px; }
   .figures { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px 16px; margin: 0 0 24px; }
   .figure { display: grid; grid-row: span 2; grid-template-rows: subgrid; grid-template-columns: 1fr 1fr; column-gap: 8px; }
   .figure dt { grid-column: 1 / -1; align-self: end; font-size: 13px; color: var(--text-secondary); }
@@ -332,9 +349,14 @@ class GcWidget extends HTMLElement {
   /** @type {any} */
   #drawn = null;
   #name = "";
-  /** Each control's slider, by path, and whether the reader is moving it. */
-  /** @type {Map<string, { input: HTMLInputElement, read: (value: number) => void, moving: boolean }>} */
+  /**
+   * Each control's slider, by path, what it says it makes, if anything, and
+   * whether the reader is moving it.
+   * @type {Map<string, { input: HTMLInputElement, note: HTMLElement | null, read: (value: number) => void, moving: boolean }>}
+   */
   #sliders = new Map();
+  /** Whether the reader opened the collector constants' controls, kept from one entry to the next. */
+  #constantsOpen = false;
   #frame = 0;
   /** What the last redraw laid out, which the pointer's marks follow; null before the clock has a length. */
   /** @type {Layout | null} */
@@ -760,7 +782,10 @@ class GcWidget extends HTMLElement {
     });
   }
 
-  /** Show each control with the range its request allows. */
+  /**
+   * Show each control with the range its request allows, in its group: the
+   * workload's, the collector settings', or the collector constants' under them.
+   */
   #show(/** @type {Control[]} */ controls) {
     const row = /** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".controls"));
     row.hidden = !controls.length;
@@ -777,9 +802,17 @@ class GcWidget extends HTMLElement {
         input.type = "range";
         input.name = path;
         control.append(name, input);
-        row.append(control);
+        const note = YOUNG.includes(path) ? document.createElement("span") : null;
+        if (note) {
+          note.className = "note";
+          control.append(note);
+        }
+        const group = this.#group(path);
+        // The constants' toggle stays last in the collector settings' group.
+        group.insertBefore(control, group.querySelector(":scope > details"));
         const made = {
           input,
+          note,
           moving: false,
           read: (/** @type {number} */ value) => {
             output.textContent = reading(unit, value);
@@ -791,6 +824,7 @@ class GcWidget extends HTMLElement {
         input.addEventListener("input", () => {
           made.moving = true;
           made.read(Number(input.value));
+          this.#young();
         });
         input.addEventListener("change", () => {
           made.moving = false;
@@ -808,6 +842,63 @@ class GcWidget extends HTMLElement {
         slider.read(value);
       }
     }
+    this.#young();
+  }
+
+  /**
+   * The group a control's path puts it in, made for the first control that
+   * needs it: the workload's, the collector settings', or the collector
+   * constants', which a toggle opens under the settings.
+   * @param {string} path
+   * @returns {HTMLElement}
+   */
+  #group(path) {
+    const row = /** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".controls"));
+    const [first] = path.split(".");
+    const kind = first === "settings" || first === "constants" ? first : "workload";
+    const found = /** @type {HTMLElement | null} */ (row.querySelector(`[data-group="${kind}"]`));
+    if (found) return found;
+    const group = document.createElement("div");
+    group.className = "group";
+    group.dataset.group = kind;
+    group.setAttribute("role", "group");
+    if (kind === "constants") {
+      group.setAttribute("aria-label", "Collector constants");
+      const toggle = document.createElement("details");
+      toggle.open = this.#constantsOpen;
+      toggle.addEventListener("toggle", () => {
+        this.#constantsOpen = toggle.open;
+      });
+      const summary = document.createElement("summary");
+      summary.textContent = "Collector constants, which no Python API changes";
+      toggle.append(summary, group);
+      this.#group("settings").append(toggle);
+      return group;
+    }
+    const heading = document.createElement("h3");
+    heading.textContent = kind === "settings" ? "Collector settings" : "Workload";
+    group.setAttribute("aria-label", heading.textContent);
+    group.append(heading);
+    // The workload's group comes first.
+    if (kind === "workload") row.prepend(group);
+    else row.append(group);
+    return group;
+  }
+
+  /**
+   * Say what threshold0 and threshold1 make of the incremental collector's
+   * young generation, as their sliders stand.
+   */
+  #young() {
+    const [zero, one] = YOUNG.map((path) => this.#sliders.get(path));
+    if (!zero && !one) return;
+    const { settings } = /** @type {Entry} */ (this.#entry).request;
+    const words = describeYoung(
+      zero ? Number(zero.input.value) : settings.threshold0,
+      one ? Number(one.input.value) : settings.threshold1,
+    );
+    if (zero?.note) zero.note.textContent = words.nursery;
+    if (one?.note) one.note.textContent = words.aging;
   }
 
   /**

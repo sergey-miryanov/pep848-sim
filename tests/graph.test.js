@@ -6,7 +6,7 @@
 import { test } from "node:test";
 // @ts-expect-error: as above.
 import assert from "node:assert/strict";
-import { describe, describeChurn, describeConstants, describeRun, fit, network } from "../site/graph.js";
+import { describe, describeChurn, describeConstants, describeRun, describeYoung, fit, network } from "../site/graph.js";
 
 /**
  * A structure with the fields a test names, and the rest of a small chain.
@@ -102,6 +102,19 @@ test("the playground's legend gives the run's length, its thresholds and its shu
     describeRun({ run_length: 524_900, settings, workload: { shutdown: true } }),
     "Run: 524.9 MB on the allocation clock, gc.set_threshold(2000, 10, 10), then shutdown",
   );
+});
+
+test("the thresholds make a nursery of two half-spaces and aging of threshold1 half-spaces", () => {
+  assert.deepEqual(describeYoung(2000, 10), {
+    nursery: "Incremental nursery: 4 MB",
+    aging: "Incremental aging: 5 spaces, 20 MB",
+  });
+  // threshold1 / 2 aging spaces, rounded up.
+  assert.deepEqual(describeYoung(100, 1), {
+    nursery: "Incremental nursery: 200 kB",
+    aging: "Incremental aging: 1 space, 200 kB",
+  });
+  assert.equal(describeYoung(2000, 9).aging, "Incremental aging: 5 spaces, 20 MB");
 });
 
 test("the playground's legend gives the collector constants and the real object's size", () => {
