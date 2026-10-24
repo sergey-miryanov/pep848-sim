@@ -15,7 +15,9 @@
 // The JSON can list entries in place of one request, each with a name, a title,
 // its own request and its own controls. The widget then shows a select of their
 // titles and runs one entry at a time, and the URL fragment names the entry each
-// widget shows, as widget-id=entry-name pairs.
+// widget shows, as widget-id=entry-name pairs. An editing widget with an id also
+// writes the request of its last runs there, as a widget-id.request pair, which
+// makes the address a link that opens the same runs (ADR 0016).
 
 // @ts-expect-error: an editor cannot fetch Plot's types from jsDelivr.
 import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+esm";
@@ -25,11 +27,12 @@ import {
 } from "https://cdn.jsdelivr.net/npm/d3-force@3.0.0/+esm";
 import { Editor, EDITOR_STYLE } from "./editor.js";
 import { Source, SOURCE_STYLE } from "./source.js";
+import { FOREIGN, decode, encode, holdsCode, LINK_STYLE } from "./link.js";
 import { describe, describeChurn, fit, network } from "./graph.js";
 import {
   CLOCK, FADED, FULL, KIND, LANES, PARTS, SPACES, WORK_TO_DO, budgetAt, ceiling, collections, heap, heapAt, work, workAt,
 } from "./panels.js";
-import { requestRuns, stopRuns } from "./runs.js";
+import { dropRuns, requestRuns, stopRuns } from "./runs.js";
 
 /** @typedef {import("./runs.js").Record} Record */
 /** @typedef {import("./runs.js").Figures} Figures */
@@ -152,8 +155,15 @@ function entriesOf(json, controls) {
   return entries.map(({ name, title, request, controls = [] }) => ({ name, title, request, controls }));
 }
 
-/** The URL fragment's pairs of a widget's id and the name of the entry it shows. */
+/**
+ * The URL fragment's pairs of a widget's id and the name of the entry it shows,
+ * and of an editing widget's id and its link's request.
+ */
 const fragment = () => new URLSearchParams(location.hash.slice(1));
+/** The key of a widget's link's request in the URL fragment. */
+const linkKey = (/** @type {string} */ id) => `${id}.request`;
+// What the source of a link's request says while it waits for Run.
+const HELD = "This link carries Python, which runs in your browser once you press Run. Read it first.";
 
 // The colors come from the dataviz skill's reference palette, assigned so that
 // neighbors in each stack pass its validator in both modes.
@@ -349,6 +359,15 @@ class GcWidget extends HTMLElement {
   /** Which editor shows: the legend's or the source. */
   /** @type {"legend" | "source"} */
   #mode = "legend";
+  /** The link's request the widget last wrote into the URL fragment or opened from it. */
+  #linked = "";
+  /** Links written so far, so that a slow one gives way to the next. */
+  #shares = 0;
+  /** Entries whose request a link with code brought, until the reader runs it. */
+  /** @type {WeakSet<Entry>} */
+  #held = new WeakSet();
+  /** The button that copies the link, on a widget with the `editor` attribute. */
+  #copy = document.createElement("button");
 
   connectedCallback() {
     if (this.shadowRoot) return;
@@ -445,7 +464,7 @@ class GcWidget extends HTMLElement {
     const picks = /** @type {HTMLElement} */ (root.querySelector(".picks"));
     if (this.hasAttribute("editor")) {
       const style = document.createElement("style");
-      style.textContent = EDITOR_STYLE + SOURCE_STYLE;
+      style.textContent = EDITOR_STYLE + SOURCE_STYLE + LINK_STYLE;
       root.append(style);
       // The legend's editor takes the place of the plain legend, which the
       // source shows beside it.
@@ -460,6 +479,7 @@ class GcWidget extends HTMLElement {
       /** @type {HTMLElement} */ (root.querySelector(".frame")).prepend(panel);
       this.#source = new Source(panel, { run: () => this.#runSource(false), stop: stopRuns });
       picks.append(this.#switcher());
+      if (this.id) picks.append(this.#sharer());
       picks.hidden = false;
     }
     if (this.#entries.length > 1) {
@@ -468,17 +488,54 @@ class GcWidget extends HTMLElement {
       select.append(...this.#entries.map(({ name, title }) => new Option(title, name)));
       label.hidden = picks.hidden = false;
       select.addEventListener("change", () => this.#choose(select.value, true));
-      addEventListener("hashchange", () => this.#choose(fragment().get(this.id) ?? "", false));
     }
+    if (this.#entries.length > 1 || this.#editor) addEventListener("hashchange", () => this.#follow());
     new ResizeObserver(() => this.#schedule()).observe(this);
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.#schedule());
-    this.#choose(fragment().get(this.id) ?? "", false);
+    this.#follow();
+  }
+
+  /**
+   * Show what the URL fragment names: a link of the widget's own that it did
+   * not write, or else the entry of the widget's id.
+   */
+  #follow() {
+    const link = this.#editor && this.id ? fragment().get(linkKey(this.id)) : null;
+    if (link && link !== this.#linked) this.#open(link);
+    else this.#choose(fragment().get(this.id) ?? "", false);
+  }
+
+  /**
+   * Open a link: the entry it names, with the request it holds, run at once
+   * unless the request holds code, which waits in the source for Run. A link
+   * the widget cannot read leaves the entry as the page gives it, with the
+   * reason.
+   * @param {string} link the link's request, as the URL fragment holds it
+   */
+  async #open(link) {
+    this.#linked = link;
+    const name = fragment().get(this.id) ?? "";
+    let request;
+    try {
+      request = await decode(link);
+    } catch (error) {
+      this.#choose(name, false);
+      this.#fail(error instanceof Error ? error.message : String(error));
+      return;
+    }
+    // A later link came while this one opened.
+    if (link !== this.#linked) return;
+    const entry = this.#entries.find((offered) => offered.name === name) ?? this.#entries[0];
+    entry.request = request;
+    if (holdsCode(request)) this.#held.add(entry);
+    else this.#held.delete(entry);
+    this.#copy.disabled = false;
+    this.#enter(entry);
   }
 
   /**
    * Show the entry of that name, or the first if the widget offers none by it, and
-   * start its runs. The last entry's controls, figures and charts go at once, and
-   * its request keeps the values its controls set, for when it is shown again.
+   * start its runs.
    * @param {string} name
    * @param {boolean} picked whether the reader picked it, which the URL fragment
    *   then records
@@ -486,14 +543,28 @@ class GcWidget extends HTMLElement {
   #choose(name, picked) {
     const entry = this.#entries.find((offered) => offered.name === name) ?? this.#entries[0];
     if (entry === this.#entry) return;
-    this.#entry = entry;
-    const root = /** @type {ShadowRoot} */ (this.shadowRoot);
-    /** @type {HTMLSelectElement} */ (root.querySelector(".entries select")).value = entry.name;
     if (picked && this.id) {
       const pairs = fragment();
       pairs.set(this.id, entry.name);
+      // The link held the last entry's request, and the new entry's runs write their own.
+      pairs.delete(linkKey(this.id));
       history.replaceState(null, "", `#${pairs}`);
     }
+    this.#enter(entry);
+  }
+
+  /**
+   * Show the entry and start its runs, or, if a link with code brought its
+   * request, show its source and wait for the reader to press Run, with the
+   * switch to the legend shut until then. The last entry's controls, figures
+   * and charts go at once, and its request keeps the values its controls set,
+   * for when it is shown again.
+   * @param {Entry} entry
+   */
+  #enter(entry) {
+    this.#entry = entry;
+    const root = /** @type {ShadowRoot} */ (this.shadowRoot);
+    /** @type {HTMLSelectElement} */ (root.querySelector(".entries select")).value = entry.name;
     const row = /** @type {HTMLElement} */ (root.querySelector(".controls"));
     row.replaceChildren();
     row.hidden = true;
@@ -503,6 +574,23 @@ class GcWidget extends HTMLElement {
     this.#records = { legacy: [], incremental: [] };
     this.#figures = {};
     this.#drawn = entry.request;
+    if (this.#held.has(entry)) {
+      const source = /** @type {Source} */ (this.#source);
+      try {
+        source.show(entry);
+      } catch {
+        this.#fail(FOREIGN);
+        return;
+      }
+      for (const input of root.querySelectorAll(".modes input")) /** @type {HTMLInputElement} */ (input).disabled = true;
+      // The last entry's runs would draw over the empty charts.
+      dropRuns(this.#name);
+      this.#view("source");
+      source.note(HELD);
+      // The address holds the link again, if a pick of another entry took it.
+      this.#share(entry, entry.request);
+      return;
+    }
     if (this.#mode === "source") this.#source?.show(entry);
     this.#schedule();
     this.#start();
@@ -536,7 +624,9 @@ class GcWidget extends HTMLElement {
         if (preset && this.#mode === "source") this.#source?.show(entry);
         // Either editor can show the request once the worker has spelled it out.
         for (const input of root.querySelectorAll(".modes input")) /** @type {HTMLInputElement} */ (input).disabled = false;
+        this.#held.delete(entry);
         made();
+        this.#share(entry, request);
         this.#show(controls);
         this.#graph(graph);
       },
@@ -560,6 +650,48 @@ class GcWidget extends HTMLElement {
         return this.#source?.fail(message) || this.#fail(message);
       },
     }, entry.controls);
+  }
+
+  /**
+   * Write the request the worker took for the entry into the URL fragment, as
+   * the link that opens its runs, unless a later run's link gets there first.
+   * @param {Entry} entry
+   * @param {any} request
+   */
+  async #share(entry, request) {
+    if (!this.#editor || !this.id) return;
+    const turn = ++this.#shares;
+    const link = await encode(request);
+    if (turn !== this.#shares) return;
+    const pairs = fragment();
+    pairs.set(this.id, entry.name);
+    pairs.set(linkKey(this.id), link);
+    this.#linked = link;
+    history.replaceState(null, "", `#${pairs}`);
+    this.#copy.disabled = false;
+  }
+
+  /** The button that copies the link, which waits for the first one. */
+  #sharer() {
+    const share = document.createElement("span");
+    share.className = "share";
+    const said = document.createElement("span");
+    said.setAttribute("role", "status");
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let clear;
+    Object.assign(this.#copy, { type: "button", textContent: "Copy link", disabled: true });
+    this.#copy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(location.href);
+        said.textContent = "Copied";
+      } catch {
+        said.textContent = "Copy it from the address bar";
+      }
+      clearTimeout(clear);
+      clear = setTimeout(() => { said.textContent = ""; }, 3000);
+    });
+    share.append(this.#copy, said);
+    return share;
   }
 
   /** The switch between the legend's editor and the source, which waits for the worker's first request. */
@@ -806,8 +938,8 @@ class GcWidget extends HTMLElement {
     });
 
     // A request that names a preset has no run length until the worker spells it
-    // out, and the charts' clock needs one.
-    if ("preset" in this.#drawn) {
+    // out, and the charts' clock needs one. Nor has a link still opening.
+    if (!this.#drawn || "preset" in this.#drawn) {
       this.#layout = null;
       this.#hover();
       return;

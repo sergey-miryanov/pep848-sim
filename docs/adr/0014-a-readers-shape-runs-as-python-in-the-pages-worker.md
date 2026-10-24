@@ -34,9 +34,9 @@ four children to an object, up to 40 objects, so a list draws as long as a
 tree.
 
 The code runs in the worker, which has no page to change. It can fetch and
-post messages, and the page reads what the worker posts as data. A reader runs
-only code they wrote until a link can carry code (#156), which then waits for
-the reader to run it. Code that never returns holds the worker. The Stop button
+post messages, and the page reads what the worker posts as data. A link can
+carry another reader's code, and it waits for the reader to press Run (ADR
+0016). Code that never returns holds the worker. The Stop button
 ends the worker and starts another (ADR 0009).
 
 ## Considered Options

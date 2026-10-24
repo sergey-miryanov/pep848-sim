@@ -11,8 +11,8 @@ whose select offers a stand-in workload and five presets modelled on
 pyperformance benchmarks: create_gc_cycles, json_loads, xml_etree_parse,
 async_tree_io_tg and connected_components. Its playground starts from the
 same workloads and lets you change any part of them, in the widget's legend or
-as Python, along with the collector constants no Python API changes. The guide
-comes next.
+as Python, along with the collector constants no Python API changes, and send
+what they made by its link. The guide comes next.
 
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): how to set up, run and publish
 - [`CONTEXT.md`](CONTEXT.md): the vocabulary
