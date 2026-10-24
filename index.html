@@ -61,12 +61,15 @@ the browser, downloads and starts.</p>
 <gc-widget id="home-widget">
 <script type="application/json">
 {
+  "controls": ["settings.threshold0", "settings.threshold1", "settings.threshold2",
+               "constants.initial_work_budget", "constants.freed_credit",
+               "constants.long_lived_ratio"],
   "entries": [
     {
       "name": "stand-in",
       "title": "Stand-in",
-      "controls": ["settings.threshold0", "workload.churn.cycle_share",
-                   "workload.churn.lifetime_mean", "workload.structures.1.size",
+      "controls": ["workload.churn.cycle_share", "workload.churn.lifetime_mean",
+                   "workload.structures.1.size",
                    "workload.structures.1.rebuild_interval"],
       "request": {
         "workload": {
@@ -103,7 +106,6 @@ the browser, downloads and starts.</p>
     {
       "name": "json_loads",
       "title": "json_loads",
-      "controls": ["settings.threshold0"],
       "request": {
         "preset": "json_loads",
         "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
@@ -161,7 +163,13 @@ controls while the page stays open, and the page's address names the one
 shown, so a link opens it.</dd>
 <dt>Controls</dt>
 <dd>Move a slider to pick a value, and release it to run both collectors
-again with it.</dd>
+again with it. The workload's sliders come first, then the collector
+settings: the three thresholds of <code>gc.set_threshold()</code>, which every
+workload shares. Under threshold0 and threshold1 you read the young generation
+they make in the incremental collector, and only the legacy collector reads
+threshold2. Under them, <em>Collector constants</em> opens the numbers no Python
+API changes: the incremental collector's initial work budget and freed-credit
+multiplier, and the legacy collector's long-lived ratio.</dd>
 <dt>Object graph</dt>
 <dd>A few objects of each structure the workload builds, linked as its shape
 links them, under sys or the frame that holds it. A number marks each
@@ -221,7 +229,7 @@ Four times over, it builds a tree of 5,103 elements, then parses it 60 times,
 from a file and from bytes in turn, and each parsed tree replaces the last of
 its kind. No element links back to its parent, so refcounting frees
 each tree as the next replaces it, and a collection that examines a tree finds
-it alive. The slider sets the parsed trees' size. Until the benchmark runs
+it alive. Its workload's slider sets the parsed trees' size. Until the benchmark runs
 again under gcmon, the start-up heap, the churn with its cycles and each
 tree's share of the clock are placeholders.</p>
 <p>async_tree_io_tg models a worker of the benchmark of that name. Four times

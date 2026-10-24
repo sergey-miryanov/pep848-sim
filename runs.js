@@ -19,9 +19,9 @@
 
 /**
  * One control, as pep848_sim.widget.controls.Control holds it: its path into the
- * request, label, unit ("kB", or "share" in thousandths), value, min, max and
- * step.
- * @typedef {[string, string, "kB" | "share", number, number, number, number]} Control
+ * request, label, unit ("kB", "share" in thousandths, or "count"), value, min,
+ * max and step.
+ * @typedef {[string, string, "kB" | "share" | "count", number, number, number, number]} Control
  */
 
 /** @typedef {import("./graph.js").Graph} Graph */

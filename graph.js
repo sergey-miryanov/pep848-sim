@@ -2,7 +2,8 @@
 // What the widget's object graph draws from a request's samples
 // (pep848_sim.widget.graph): the nodes and links its layout places, how the
 // layout fills its frame, and how the legend reads each structure, the churn and,
-// on the playground, the run and the constants.
+// on the playground, the run and the constants. The threshold controls take the
+// young generation's sizes from here too.
 // The module imports neither d3 nor the DOM, so Node's test runner can load it:
 // see tests/graph.test.js.
 
@@ -143,6 +144,22 @@ export function describeRun(request) {
   const { run_length: length, settings: { threshold0, threshold1, threshold2 }, workload: { shutdown } } = request;
   const end = shutdown ? ", then shutdown" : "";
   return `Run: ${size(length)} on the allocation clock, gc.set_threshold(${threshold0}, ${threshold1}, ${threshold2})${end}`;
+}
+
+/**
+ * The incremental collector's young generation as threshold0 and threshold1
+ * make it: a nursery of two half-spaces, threshold0 kB each, and threshold1
+ * half-spaces of aging, held as threshold1 / 2 aging spaces, rounded up, each
+ * the size of a nursery.
+ * @param {number} threshold0
+ * @param {number} threshold1
+ */
+export function describeYoung(threshold0, threshold1) {
+  const spaces = Math.ceil(threshold1 / 2);
+  return {
+    nursery: `Incremental nursery: ${size(2 * threshold0)}`,
+    aging: `Incremental aging: ${spaces} ${spaces === 1 ? "space" : "spaces"}, ${size(2 * threshold0 * spaces)}`,
+  };
 }
 
 /**
