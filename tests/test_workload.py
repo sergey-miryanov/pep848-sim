@@ -11,6 +11,7 @@ from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.collectors.legacy import LegacyCollector
 from pep848_sim.structures import (
     Chains,
+    Graph,
     Hierarchy,
     Rings,
     Root,
@@ -79,6 +80,7 @@ def structure_parameters(draw: st.DrawFn) -> StructureParameters:
                 st.builds(Chains, st.integers(1, 4)),
                 st.just(Tree()),
                 st.builds(Hierarchy, st.integers(1, 4)),
+                st.builds(Graph, st.integers(0, 3)),
                 st.builds(Rings, st.integers(1, 4)),
             )
         ),

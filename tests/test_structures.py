@@ -9,6 +9,7 @@ from pep848_sim.collectors.heap import Heap
 from pep848_sim.structures import (
     Build,
     Chains,
+    Graph,
     Hierarchy,
     Rings,
     Root,
@@ -145,6 +146,43 @@ def test_a_hierarchy_without_branches_is_refused() -> None:
         Hierarchy(branches=0)
 
 
+def test_a_graph_shares_each_edge_with_a_node_read_before() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+
+    built(heap, long_lived(Graph(edges=2), 11, "module"))
+
+    root, f, a, a1, a2, b, b1, b2, c, c1, c2 = list(collector.nursery)[1:]
+    assert [heap.references(x) for x in (root, f, a, b, c)] == [
+        (f, a, b, c),
+        (root,),
+        (a1, a2, b1, c2),
+        (b1, b2, c1),
+        (c1, c2),
+    ]
+    assert all(heap.references(x) == () for x in (a1, a2, b1, b2, c1, c2))
+    assert heap.references(heap.module_root) == (root,)
+
+
+@pytest.mark.parametrize("root", ["module", "frame"])
+def test_a_dropped_graph_stays_as_cyclic_garbage_with_its_roots_cycle(
+    root: Root,
+) -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    build = built(heap, long_lived(Graph(edges=2), 11, root))
+
+    build.drop()
+
+    assert heap.uncollected_garbage == 11
+    assert len(set(collector.nursery) - reachable(heap)) == 11
+
+
+def test_a_graph_whose_nodes_bring_fewer_than_no_edges_is_refused() -> None:
+    with pytest.raises(ValueError, match="cannot bring -1 edges"):
+        Graph(edges=-1)
+
+
 def test_rings_link_each_object_to_the_next_and_back_and_close() -> None:
     collector = Collector()
     heap = Heap(collector)
@@ -217,6 +255,7 @@ def test_a_build_that_outlasts_its_rebuild_interval_is_refused() -> None:
         st.builds(Chains, width=st.integers(1, 8)),
         st.just(Tree()),
         st.builds(Hierarchy, branches=st.integers(1, 8)),
+        st.builds(Graph, edges=st.integers(0, 4)),
         st.builds(Rings, length=st.integers(1, 8)),
     ),
     st.integers(min_value=1, max_value=40),

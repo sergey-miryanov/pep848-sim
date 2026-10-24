@@ -105,7 +105,44 @@ class Rings:
         return links
 
 
-type Shape = Chains | Tree | Hierarchy | Rings
+@dataclass(frozen=True)
+class Graph:
+    """A networkx graph in a module's globals, as connected_components loads it. The
+    root, the globals, lies on a cycle with a function that reads them, as each
+    function's __globals__ makes one. The root holds each node, and each node holds
+    the data of its `edges` edges to the nodes read just before it, which it shares
+    with them. Nothing in the graph links back, so only the root's cycle keeps it:
+    once its module goes, all of it stays as cyclic garbage."""
+
+    edges: int
+
+    def __post_init__(self) -> None:
+        if self.edges < 0:
+            raise ValueError(f"a node cannot bring {self.edges} edges")
+
+    def cyclic_garbage(self, size: int) -> int:
+        """How many objects of a dropped structure of this size stay as cyclic
+        garbage: all of them, held by the root's cycle, unless the root stands
+        alone."""
+        return size if size > 1 else 0
+
+    def links(self, i: int) -> list[tuple[int, int]]:
+        if not i:
+            return []
+        if i == 1:
+            return [(0, 1), (1, 0)]
+        span = self.edges + 1
+        node, edge = divmod(i - 2, span)
+        if not edge:
+            return [(0, i)]
+        holder = 2 + node * span
+        links = [(holder, i)]
+        if edge <= node:
+            links.append((holder - edge * span, i))
+        return links
+
+
+type Shape = Chains | Tree | Hierarchy | Graph | Rings
 
 
 @dataclass(frozen=True)

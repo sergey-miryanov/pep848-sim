@@ -12,6 +12,7 @@ from fractions import Fraction
 from pep848_sim.collectors.collector import CollectorSettings
 from pep848_sim.structures import (
     Chains,
+    Graph,
     Hierarchy,
     Rings,
     StructureParameters,
@@ -278,9 +279,63 @@ ASYNC_TREE_IO_TG = Preset(
     run_length=_ASYNC_TREE_IO_TG_START_UP.length + _ASYNC_RUNS * _ASYNC_RUN,
 )
 
+
+# connected_components, in bm_networkx: the module loads the Amazon co-purchasing
+# graph into its globals before pyperf starts, and each loop counts the graph's
+# connected components with a breadth-first walk.
+
+# Start-up and imports: the interpreter, pyperf and networkx. Placeholders until the
+# rerun.
+_CONNECTED_COMPONENTS_START_UP = _StartUp(acyclic=350, cyclic=350, churn=6)
+# Code: read_adjlist's 262,111 nodes with two dicts each and 899,792 edges with one,
+# 1,424,118 tracked objects in all under networkx 3.4.2: 89,007 simulated objects
+# (ADR 0002), with about two edges' dicts to a node's.
+_GRAPH = 1_424_118 // 16
+_GRAPH_SHAPE = Graph(edges=2)
+# Placeholder: a loop's length on the clock, the records' automatic collections
+# after the load over the worker's loops.
+_WALK = 26_500
+# pyperf runs a warmup and three values a worker, one loop each.
+_WALKS = 4
+
+CONNECTED_COMPONENTS = Preset(
+    benchmark="connected_components",
+    workload=WorkloadParameters(
+        churn=ChurnParameters(
+            # Code: the walk's key iterator over each node's neighbours goes once
+            # they run out, and nothing it makes holds a cycle.
+            cycle_share=Fraction(0),
+            cycle_size=1,
+            lifetime_mean=1,
+            # Placeholders: what outlives a collection, such as each level's list.
+            long_share=Fraction(0),
+            long_lifetimes=(1, 1),
+        ),
+        structures=(
+            *_CONNECTED_COMPONENTS_START_UP.structures,
+            # Code: the graph, a global of the benchmark's module until shutdown.
+            # Placeholder: read_adjlist's lists, tuples and throwaway dicts as its
+            # build churn, none until the records fit them.
+            StructureParameters(
+                shape=_GRAPH_SHAPE,
+                size=_GRAPH,
+                root="module",
+                lifetime=None,
+                rebuild_interval=None,
+                build_churn=0,
+            ),
+        ),
+        seed=848,
+        shutdown=True,
+    ),
+    # The worker's own length: start-up, the load, then its loops.
+    run_length=_CONNECTED_COMPONENTS_START_UP.length + _GRAPH + _WALKS * _WALK,
+)
+
 PRESETS = {
     "create_gc_cycles": CREATE_GC_CYCLES,
     "json_loads": JSON_LOADS,
     "xml_etree_parse": XML_ETREE_PARSE,
     "async_tree_io_tg": ASYNC_TREE_IO_TG,
+    "connected_components": CONNECTED_COMPONENTS,
 }
