@@ -68,24 +68,22 @@ ROOTS: tuple[Root, ...] = ("module", "frame")
 
 
 @st.composite
-def structure_parameters(draw: st.DrawFn) -> StructureParameters:
-    """A small structure of either shape and root: long-lived, built once and
-    dropped, or repeating."""
+def structure_parameters(draw: st.DrawFn, own: bool = True) -> StructureParameters:
+    """A small structure of any shape, a reader's own too unless `own` is false,
+    and either root: long-lived, built once and dropped, or repeating."""
     size = draw(st.integers(min_value=1, max_value=6))
     build_churn = draw(st.integers(min_value=0, max_value=2))
     build = size * (1 + build_churn)
     kind = draw(st.sampled_from(["long-lived", "once", "repeating"]))
+    shapes = [
+        st.builds(Chains, st.integers(1, 4)),
+        st.just(Tree()),
+        st.builds(Hierarchy, st.integers(1, 4)),
+        st.builds(Graph, st.integers(0, 3)),
+        st.builds(Rings, st.integers(1, 4)),
+    ]
     return StructureParameters(
-        shape=draw(
-            st.one_of(
-                st.builds(Chains, st.integers(1, 4)),
-                st.just(Tree()),
-                st.builds(Hierarchy, st.integers(1, 4)),
-                st.builds(Graph, st.integers(0, 3)),
-                st.builds(Rings, st.integers(1, 4)),
-                own_shapes(),
-            )
-        ),
+        shape=draw(st.one_of(*shapes, *([own_shapes()] if own else []))),
         size=size,
         root=draw(st.sampled_from(ROOTS)),
         lifetime=None if kind == "long-lived" else draw(st.integers(1, 60)),

@@ -211,8 +211,15 @@ _Avoid_: tutorial, article, docs
 **Playground**:
 The page with one widget whose legend edits the whole workload, the run length
 and the collector settings, for readers who want to try anything. Each change
-starts the widget's two runs again, as a control's release does.
+starts the widget's two runs again, as a control's release does. A switch shows
+the workload source in place of the legend's editor.
 _Avoid_: sandbox, lab, explorer
+
+**Workload source**:
+The playground's other editor: the workload, the run length and the collector
+settings as Python beside the widget. The reader runs it with a button, and the
+legend then shows the workload it made.
+_Avoid_: script, program, code view, source (bare: a link has a source too)
 
 **Run**:
 One simulation of one workload by one collector under one set of collector

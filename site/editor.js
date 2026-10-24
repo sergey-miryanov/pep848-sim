@@ -1,6 +1,6 @@
 // @ts-check
-// The playground's editor (ADR 0013): the widget's legend, made to edit the
-// request it describes. Each structure's line opens fields for its shape, size,
+// The playground's first editor (ADR 0013): the widget's legend, made to edit the
+// request it describes. The other, source.js, writes the request as Python. Each structure's line opens fields for its shape, size,
 // root, lifetime, rebuild interval, build's churn and gc.collect() calls, and the
 // churn's line and the run's line open theirs. A change goes into the request,
 // and the widget runs it again, as a control's release does. A structure can take
@@ -87,6 +87,28 @@ export function indentAfter(line) {
 }
 
 /**
+ * Make a textarea take code: Enter keeps the line's indent, with four spaces
+ * more after a colon, and Ctrl+Enter commits the code.
+ * @param {HTMLTextAreaElement} area
+ * @param {() => void} commit
+ */
+export function typeCode(area, commit) {
+  area.spellcheck = false;
+  area.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    if (event.ctrlKey || event.metaKey) {
+      commit();
+      return;
+    }
+    const { selectionStart: start, selectionEnd: end, value } = area;
+    const text = `\n${indentAfter(value.slice(value.lastIndexOf("\n", start - 1) + 1, start))}`;
+    // insertText keeps the box's undo; setRangeText where a browser lacks it.
+    if (!document.execCommand("insertText", false, text)) area.setRangeText(text, start, end, "end");
+  });
+}
+
+/**
  * A structure to add: a 1 MB tree in a frame, rebuilt every 4 MB and dropped
  * 2 MB after each build.
  * @returns {Structure}
@@ -121,33 +143,33 @@ export const shareOf = (/** @type {number} */ percent) => `${Math.round(percent 
 /** The editor's own styles, which the widget adds to its shadow root. */
 export const EDITOR_STYLE = `
   /* Each structure's fields go under its line, as do the churn's and the run's. */
-  .key-list li { display: block; }
-  .key-list > .line, .key-list > .fields, .key-list .add { font-size: 12px; color: var(--text-secondary); }
-  .key-list .line { display: flex; gap: 6px; align-items: baseline; }
-  .key-list .toggle, .key-list .add {
+  .editing li { display: block; }
+  .editing > .line, .editing > .fields, .editing .add { font-size: 12px; color: var(--text-secondary); }
+  .editing .line { display: flex; gap: 6px; align-items: baseline; }
+  .editing .toggle, .editing .add {
     border: 0; padding: 0; background: none; font: inherit; color: var(--text-primary);
     text-decoration: underline; cursor: pointer;
   }
-  .key-list .add { margin: 2px 0 6px; }
-  .key-list .fields {
+  .editing .add { margin: 2px 0 6px; }
+  .editing .fields {
     display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 10px;
     margin: 6px 0 10px 21px; padding: 4px 0 4px 10px; border-left: 2px solid var(--grid);
   }
-  .key-list .fields label { display: grid; gap: 2px; align-content: start; }
-  .key-list .fields .check { display: flex; gap: 6px; align-items: center; grid-column: span 2; }
-  .key-list .fields .wide { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
-  .key-list input, .key-list select, .key-list .fields button {
+  .editing .fields label { display: grid; gap: 2px; align-content: start; }
+  .editing .fields .check { display: flex; gap: 6px; align-items: center; grid-column: span 2; }
+  .editing .fields .wide { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+  .editing input, .editing select, .editing .fields button {
     font: inherit; color: var(--text-primary); background: var(--surface);
     border: 1px solid var(--baseline); border-radius: 4px; padding: 2px 5px;
   }
-  .key-list input[type="number"] { width: 100%; box-sizing: border-box; font-variant-numeric: tabular-nums; }
-  .key-list input[type="checkbox"] { margin: 0; accent-color: var(--text-secondary); }
-  .key-list .fields button:disabled { color: var(--text-muted); }
-  .key-list .problem { grid-column: 1 / -1; margin: 0; color: var(--text-primary); font-weight: 600; }
-  .key-list .code { grid-column: 1 / -1; display: grid; gap: 4px; }
-  .key-list .code p { margin: 0; }
-  .key-list .code button { justify-self: start; }
-  .key-list textarea {
+  .editing input[type="number"] { width: 100%; box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  .editing input[type="checkbox"] { margin: 0; accent-color: var(--text-secondary); }
+  .editing .fields button:disabled { color: var(--text-muted); }
+  .editing .problem { grid-column: 1 / -1; margin: 0; color: var(--text-primary); font-weight: 600; }
+  .editing .code { grid-column: 1 / -1; display: grid; gap: 4px; }
+  .editing .code p { margin: 0; }
+  .editing .code button { justify-self: start; }
+  .editing textarea {
     width: 100%; box-sizing: border-box; resize: vertical; padding: 4px 6px; tab-size: 4;
     font: 12px/1.45 ui-monospace, "Cascadia Code", Consolas, monospace; white-space: pre;
     color: var(--text-primary); background: var(--surface); border: 1px solid var(--baseline); border-radius: 4px;
@@ -364,7 +386,6 @@ export class Editor {
   #code(key, shape) {
     const area = document.createElement("textarea");
     area.dataset.focus = key;
-    area.spellcheck = false;
     area.value = String(shape.own);
     area.rows = area.value.split("\n").length + 1;
     const commit = () => {
@@ -373,18 +394,7 @@ export class Editor {
       this.#changed(key, false);
     };
     area.addEventListener("change", commit);
-    area.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter") return;
-      event.preventDefault();
-      if (event.ctrlKey || event.metaKey) {
-        commit();
-        return;
-      }
-      const { selectionStart: start, selectionEnd: end, value } = area;
-      const text = `\n${indentAfter(value.slice(value.lastIndexOf("\n", start - 1) + 1, start))}`;
-      // insertText keeps the box's undo; setRangeText where a browser lacks it.
-      if (!document.execCommand("insertText", false, text)) area.setRangeText(text, start, end, "end");
-    });
+    typeCode(area, commit);
     const label = document.createElement("label");
     label.append("links(i), in Python", area);
     const hint = document.createElement("p");
