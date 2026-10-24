@@ -78,6 +78,16 @@ export function stopRuns() {
 }
 
 /**
+ * Stop hearing about the runs a widget asked for last. The worker finishes them
+ * unheard.
+ * @param {string} widget names the widget, unique on the page
+ */
+export function dropRuns(widget) {
+  const before = latest.get(widget);
+  if (before !== undefined) listeners.delete(before);
+}
+
+/**
  * Ask for a widget's two runs, legacy and incremental, in place of any it asked
  * for before.
  * @param {string} widget names the widget, unique on the page
@@ -87,8 +97,7 @@ export function stopRuns() {
  *   widget shows
  */
 export function requestRuns(widget, request, listener, controls = []) {
-  const before = latest.get(widget);
-  if (before !== undefined) listeners.delete(before);
+  dropRuns(widget);
   const id = nextId++;
   latest.set(widget, id);
   listeners.set(id, listener);
