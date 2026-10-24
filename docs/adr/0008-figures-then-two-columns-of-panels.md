@@ -61,6 +61,19 @@ chart: marking every panel of both columns took about 0.5 ms at 1,028
 collections. Each redraw while runs stream draws the overlay again from the
 records so far, so the tooltip holds and its values follow the run.
 
+Beside the select and the controls, the widget draws a sample of the
+request's object graph (#151): a few objects of each structure, linked as its
+shape links them, under sys or the frame that holds it, with each link that
+lies on a cycle in the freed color. connected_components' graph alone holds
+89,007 objects, so the sample keeps the first children of each object, as far
+as each shape needs to show itself: four chains three objects deep, a binary
+tree four levels deep, six children of six children for a hierarchy or a
+graph's nodes, and ten rings. A force layout places the sample with sys and
+the frames pinned along the top, and fits it into its frame. The objects keep
+to ink, and a number on each structure's first object points to its line in
+the legend under the controls, since the panels below take all eight of the
+palette's hues. The graph moves the figures down about 150 px.
+
 ## Considered Options
 
 - Both collectors overlaid on the same axes: the clearest comparison of the
@@ -96,3 +109,16 @@ records so far, so the tooltip holds and its values follow the run.
   no keys.
 - The crosshair alone in the column the pointer is not in: comparing the two
   runs at one clock would take a move to the other column and back.
+- A small diagram for each structure, laid out level by level under the
+  controls: it showed each shape plainly, but read as a strip of thumbnails
+  that ran past the widget's edge.
+- A graph for each preset after its paragraph under "The workloads": the
+  reader had to scroll from the widget down to it and back.
+- A row for each structure, its sample beside its builds and lifetimes on the
+  allocation clock: it showed when each structure lives, but shrank each
+  sample to a glyph.
+- The graph under the controls with its legend beside it: it moved the
+  figures down twice as far. A prototype on the `prototype/object-graph`
+  branch compared these with the graph beside the controls.
+- A hue for each structure, as the prototype drew them: its hues were the
+  nursery's and the aging generation's in the panels below.

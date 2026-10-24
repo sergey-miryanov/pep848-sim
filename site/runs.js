@@ -24,12 +24,14 @@
  * @typedef {[string, string, "kB" | "share", number, number, number, number]} Control
  */
 
+/** @typedef {import("./graph.js").Graph} Graph */
+
 /**
  * What a widget hears about its runs: the controls it asked for, with the ranges
- * the request allows and the request with any preset it names spelled out, then
- * each part of a run, with its figures so far.
+ * the request allows, the request with any preset it names spelled out and a
+ * sample of its object graph, then each part of a run, with its figures so far.
  * @typedef {{
- *   controls?: (controls: Control[], request: any) => void,
+ *   controls?: (controls: Control[], request: any, graph: Graph) => void,
  *   records: (collector: "legacy" | "incremental", records: Record[], figures: Figures) => void,
  *   done: () => void,
  *   error: (message: string) => void,
@@ -49,7 +51,7 @@ let nextId = 0;
 worker.onmessage = (/** @type {MessageEvent} */ { data }) => {
   const listener = listeners.get(data.id);
   if (!listener) return;
-  if (data.kind === "controls") listener.controls?.(data.controls, JSON.parse(data.request));
+  if (data.kind === "controls") listener.controls?.(data.controls, JSON.parse(data.request), JSON.parse(data.graph));
   else if (data.kind === "records") listener.records(data.collector, data.records, data.figures);
   else {
     listeners.delete(data.id);
