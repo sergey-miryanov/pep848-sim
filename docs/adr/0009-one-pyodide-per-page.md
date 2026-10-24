@@ -12,9 +12,17 @@ the reader reaches any widget, and every widget on the page runs its runs in
 that worker. A widget's re-run, after a reader changes a control, never
 starts Pyodide again: it costs the runs alone.
 
+Python that never returns, as a reader's own shape can loop forever (ADR
+0014), holds the worker and every widget's runs with it. The playground's Stop
+button ends the worker and starts another, which starts Pyodide again, and
+every request still running hears that its runs stopped.
+
 ## Considered Options
 
 - A worker per widget: the guide embeds one in every section, and each would
   pay the start, and on a cold cache the download, again.
 - Starting Pyodide when the reader reaches the first widget: the reader
   would wait out the whole start there.
+- Interrupting Python in place, as Pyodide can, instead of ending the worker:
+  it needs a SharedArrayBuffer, which needs headers GitHub Pages does not
+  send.

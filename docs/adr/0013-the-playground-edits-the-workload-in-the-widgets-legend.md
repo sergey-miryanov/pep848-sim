@@ -8,8 +8,9 @@ structure beside the object graph, becomes the editor. Each structure's
 numbered line opens its fields under it: its shape and the shape's one
 parameter, its size, what holds it, its lifetime, its rebuild interval, its
 build's churn and its `gc.collect()` calls, with buttons that move it or
-remove it. The churn's line and a line for the run open theirs, and a button
-under the list adds a structure. A page asks for the editor with the widget's
+remove it. A shape can be the reader's own, written in Python (ADR 0014).
+The churn's line and a line for the run open theirs, and a button under the
+list adds a structure. A page asks for the editor with the widget's
 `editor` attribute. The home page's widget keeps its legend and its sliders.
 
 Each change runs both collectors again, as a control's release does, and the

@@ -5,12 +5,21 @@ A shape gives the links each new object gets, by its index among the structure's
 objects; the root is object 0.
 """
 
-from dataclasses import dataclass
-from typing import Literal
+import traceback
+from collections import defaultdict
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any, Literal
 
 from pep848_sim.collectors.heap import Heap
 
 type Root = Literal["module", "frame"]
+
+# The file name an own shape's code runs under, which finds its lines in a
+# traceback.
+_OWN_FILE = "<your shape>"
+# How many of an own shape's first objects a check calls links(i) on.
+_CHECKED = 1024
 
 
 @dataclass(frozen=True)
@@ -146,7 +155,112 @@ class Graph:
         return links
 
 
-type Shape = Chains | Tree | Hierarchy | Graph | Rings
+@dataclass(frozen=True)
+class Own:
+    """A shape of the reader's own, from Python code that defines `links(i)`: the
+    links object i brings, as (source, target) pairs among objects 0 to i. One of
+    them, from an earlier object, holds object i, or it would be garbage as soon as
+    it is built. The simulator calls links(i) more than once for an object, so its
+    answer depends on i alone."""
+
+    code: str
+    _links: Callable[[int], Any] = field(init=False, repr=False, compare=False)
+    # The cyclic garbage a drop leaves, by the structure's size.
+    _garbage: dict[int, int] = field(
+        init=False, repr=False, compare=False, default_factory=dict
+    )
+
+    def __post_init__(self) -> None:
+        try:
+            compiled = compile(self.code, _OWN_FILE, "exec")
+        except SyntaxError as error:
+            raise ValueError(
+                f"line {error.lineno} of your shape: {error.msg}"
+            ) from None
+        namespace: dict[str, object] = {}
+        try:
+            exec(compiled, namespace)
+        except Exception as error:
+            raise ValueError(_raised(error)) from None
+        links = namespace.get("links")
+        if not callable(links):
+            raise ValueError("your shape defines no links(i)")
+        object.__setattr__(self, "_links", links)
+
+    def cyclic_garbage(self, size: int) -> int:
+        """How many objects of a dropped structure of this size stay as cyclic
+        garbage: those its links leave alive once refcounting has freed all it
+        can."""
+        if size not in self._garbage:
+            out: dict[int, list[int]] = defaultdict(list)
+            count = [0] * size
+            for i in range(size):
+                for source, target in self.links(i):
+                    out[source].append(target)
+                    count[target] += 1
+            # An earlier object holds each object but the first, and the drop takes
+            # away the first's own holder.
+            freed = [x for x in range(size) if not count[x]]
+            alive = size - len(freed)
+            while freed:
+                for target in out[freed.pop()]:
+                    count[target] -= 1
+                    if not count[target]:
+                        freed.append(target)
+                        alive -= 1
+            self._garbage[size] = alive
+        return self._garbage[size]
+
+    def links(self, i: int) -> list[tuple[int, int]]:
+        try:
+            made = self._links(i)
+        except Exception as error:
+            raise ValueError(_raised(error, f"links({i})")) from None
+        try:
+            pairs = [(source, target) for source, target in made]
+        except TypeError, ValueError:
+            raise ValueError(
+                f"links({i}) gives {made!r}, not (source, target) pairs"
+            ) from None
+        for pair in pairs:
+            if not all(type(x) is int and 0 <= x <= i for x in pair):
+                raise ValueError(
+                    f"links({i}) gives {pair!r}: a link joins two of objects 0 to {i}"
+                )
+        if i and not any(source < target == i for source, target in pairs):
+            raise ValueError(
+                f"links({i}) gives object {i} no holder among objects 0 to {i - 1},"
+                " so it would be garbage as soon as it is built"
+            )
+        return pairs
+
+    def check(self, size: int) -> None:
+        """Call links(i) twice on each of the first objects of a structure of this
+        size, so that a link the heap cannot make, or an answer that changes from
+        one call to the next, shows before a run starts."""
+        for i in range(min(size, _CHECKED)):
+            if self.links(i) != self.links(i):
+                raise ValueError(
+                    f"links({i}) gave two answers, where it must depend on i alone"
+                )
+
+
+def _raised(error: Exception, call: str = "") -> str:
+    """What the reader's code raised, in a call of links(i) or as it ran, and the
+    line of their code it raised at."""
+    lines = [
+        frame.lineno
+        for frame in traceback.extract_tb(error.__traceback__)
+        if frame.filename == _OWN_FILE
+    ]
+    name = type(error).__name__
+    if not call:
+        return f"your shape raised {name} at line {lines[-1]}: {error}"
+    where = f" at line {lines[-1]} of your shape" if lines else ""
+    return f"{call} raised {name}{where}: {error}"
+
+
+type Shape = Chains | Tree | Hierarchy | Graph | Rings | Own
 
 
 @dataclass(frozen=True)
