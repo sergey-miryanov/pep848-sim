@@ -152,6 +152,12 @@ shown, so a link opens it.</dd>
 <dt>Controls</dt>
 <dd>Move a slider to pick a value, and release it to run both collectors
 again with it.</dd>
+<dt>Object graph</dt>
+<dd>A few objects of each structure the workload builds, linked as its shape
+links them, under sys or the frame that holds it. A number marks each
+structure's first object, and the list under the controls gives its size and
+when the workload builds and drops it. A red link lies on a cycle, so
+dropping its structure leaves cyclic garbage for a collection to find.</dd>
 <dt>Figures</dt>
 <dd>Each run's peak work, the most work one collection the runtime started
 did, which stands in for the worst pause; its peak uncollected garbage; its work per MB, which
