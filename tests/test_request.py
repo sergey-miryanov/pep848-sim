@@ -53,6 +53,38 @@ def test_a_request_runs_the_legacy_collector_then_the_incremental_one() -> None:
         ('"tree"', '{"hierarchy": 0}', "a hierarchy of 0 branches ends at its root"),
         ('"tree"', '{"graph": -1}', "a node cannot bring -1 edges"),
         ('"module"', '"global"', "no root 'global'"),
+        ('{"chains": 16}', '{"chains": 0}', "0 chains hold no objects"),
+        ('"size": 100,', '"size": 0,', "a structure of 0 objects builds nothing"),
+        ('"lifetime": 400', '"lifetime": -1', "a structure cannot live -1 kB"),
+        (
+            '"build_churn": 1',
+            '"build_churn": -1',
+            "a build cannot follow each object with -1 churn allocations",
+        ),
+        ('"1/4"', '"5/4"', "a cycle share of 5/4 lies outside 0 to 1"),
+        ('"cycle_size": 3', '"cycle_size": 0', "a cycle of 0 objects holds none"),
+        (
+            '"lifetime_mean": 200',
+            '"lifetime_mean": 0',
+            "a churn lifetime mean of 0 kB falls under 1 kB",
+        ),
+        ('"1/20"', '"-1/20"', "a long share of -1/20 lies outside 0 to 1"),
+        (
+            "[100, 1000]",
+            "[1000, 100]",
+            "long lifetimes cannot run from 1000 kB to 100 kB",
+        ),
+        ("[100, 1000]", "[0, 100]", "long lifetimes cannot run from 0 kB to 100 kB"),
+        (
+            '"threshold0": 20',
+            '"threshold0": 0',
+            "a threshold0 of 0 kB falls under 1 kB",
+        ),
+        (
+            '"threshold1": 10',
+            '"threshold1": 0',
+            "a threshold1 of 0 leaves the incremental collector no aging space",
+        ),
     ],
 )
 def test_a_request_the_simulator_cannot_run_names_what_it_cannot(

@@ -99,6 +99,20 @@ class ChurnParameters:
     long_share: Fraction
     long_lifetimes: tuple[int, int]
 
+    def __post_init__(self) -> None:
+        for name, share in ("cycle", self.cycle_share), ("long", self.long_share):
+            if not 0 <= share <= 1:
+                raise ValueError(f"a {name} share of {share} lies outside 0 to 1")
+        if self.cycle_size < 1:
+            raise ValueError(f"a cycle of {self.cycle_size} objects holds none")
+        if self.lifetime_mean < 1:
+            raise ValueError(
+                f"a churn lifetime mean of {self.lifetime_mean} kB falls under 1 kB"
+            )
+        low, high = self.long_lifetimes
+        if not 1 <= low <= high:
+            raise ValueError(f"long lifetimes cannot run from {low} kB to {high} kB")
+
 
 class Churn:
     """Background churn over a heap, one kB at a time: transients, and small cycles

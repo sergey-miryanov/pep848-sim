@@ -1,7 +1,8 @@
 // @ts-check
 // What the widget's object graph draws from a request's samples
 // (pep848_sim.widget.graph): the nodes and links its layout places, how the
-// layout fills its frame, and how the legend reads each structure and the churn.
+// layout fills its frame, and how the legend reads each structure, the churn and,
+// on the playground, the run.
 // The module imports neither d3 nor the DOM, so Node's test runner can load it:
 // see tests/graph.test.js.
 
@@ -119,4 +120,18 @@ export function describeChurn(churn) {
   }
   parts.push(Number(churn.cycle_share.split("/")[0]) ? `${percent(churn.cycle_share)} in cycles of ${churn.cycle_size}` : "no cycles");
   return `Churn: ${parts.join(", ")}`;
+}
+
+/**
+ * The run as the playground's legend reads it: its length on the allocation
+ * clock, the collector settings, and whether it ends in shutdown.
+ * @param {{
+ *   run_length: number, settings: { threshold0: number, threshold1: number, threshold2: number },
+ *   workload: { shutdown: boolean },
+ * }} request
+ */
+export function describeRun(request) {
+  const { run_length: length, settings: { threshold0, threshold1, threshold2 }, workload: { shutdown } } = request;
+  const end = shutdown ? ", then shutdown" : "";
+  return `Run: ${size(length)} on the allocation clock, gc.set_threshold(${threshold0}, ${threshold1}, ${threshold2})${end}`;
 }

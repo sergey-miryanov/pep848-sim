@@ -6,7 +6,7 @@
 import { test } from "node:test";
 // @ts-expect-error: as above.
 import assert from "node:assert/strict";
-import { describe, describeChurn, fit, network } from "../site/graph.js";
+import { describe, describeChurn, describeRun, fit, network } from "../site/graph.js";
 
 /**
  * A structure with the fields a test names, and the rest of a small chain.
@@ -88,5 +88,18 @@ test("the legend gives the churn's lifetimes and the cycles it makes", () => {
   assert.equal(
     describeChurn({ cycle_share: "1/50", cycle_size: 2, lifetime_mean: 4, long_share: "1/20", long_lifetimes: [100, 1000] }),
     "Churn: objects that live about 4 kB, 5% living 100 kB to 1 MB, 2% in cycles of 2",
+  );
+});
+
+test("the playground's legend gives the run's length, its thresholds and its shutdown", () => {
+  const settings = { threshold0: 2000, threshold1: 10, threshold2: 10 };
+
+  assert.equal(
+    describeRun({ run_length: 150_000, settings, workload: { shutdown: false } }),
+    "Run: 150 MB on the allocation clock, gc.set_threshold(2000, 10, 10)",
+  );
+  assert.equal(
+    describeRun({ run_length: 524_900, settings, workload: { shutdown: true } }),
+    "Run: 524.9 MB on the allocation clock, gc.set_threshold(2000, 10, 10), then shutdown",
   );
 });

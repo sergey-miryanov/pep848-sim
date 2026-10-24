@@ -111,7 +111,17 @@ def _names(parameters: type) -> list[str]:
 
 
 def _settings(values: dict[str, Any]) -> CollectorSettings:
-    return CollectorSettings(**_values(values, _names(CollectorSettings), "settings"))
+    settings = CollectorSettings(
+        **_values(values, _names(CollectorSettings), "settings")
+    )
+    # The legacy collector takes a threshold1 of 0, but the incremental collector
+    # counts its aging spaces from it, and a widget runs both.
+    if settings.threshold1 < 1:
+        raise ValueError(
+            f"a threshold1 of {settings.threshold1} leaves the incremental collector"
+            " no aging space"
+        )
+    return settings
 
 
 def _values(

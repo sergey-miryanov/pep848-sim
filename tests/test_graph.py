@@ -60,10 +60,6 @@ def test_a_graph_samples_its_roots_cycle_and_edges_two_nodes_share() -> None:
     assert holders.most_common(1)[0][1] == 2
 
 
-def test_a_structure_of_no_objects_samples_none() -> None:
-    assert sample(long_lived(Tree(), 0, "frame")) == ([], [])
-
-
 @given(
     st.one_of(
         st.builds(Chains, width=st.integers(1, 8)),
