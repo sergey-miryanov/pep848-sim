@@ -27,6 +27,8 @@
     font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 48px; }
+  /* The source takes a column beside the widget's panels. */
+  main:has(gc-widget[source]) { max-width: 1520px; }
   h1 { font-size: 28px; margin: 0 0 12px; }
   h2 { font-size: 20px; margin: 32px 0 12px; }
   p, dl { max-width: 70ch; }
@@ -46,6 +48,10 @@ line with <em>edit</em>, change a field, and both collectors run the
 workload again. A structure can take a shape of your own: pick <em>Your own,
 in Python</em> and write the links each new object brings. The workload you
 pick keeps your changes while the page stays open.</p>
+<p>To compute a size, loop over structures or keep your shapes in one place,
+switch <em>Edit</em> to <em>as Python</em>. You get the whole workload as
+source: change it and press <em>Run</em>. Switch back, and the legend shows
+what your source made.</p>
 <p>The first runs wait a few seconds while Pyodide, the Python that runs in
 the browser, downloads and starts. <a href="./">The home page</a> explains
 what the widget draws.</p>
