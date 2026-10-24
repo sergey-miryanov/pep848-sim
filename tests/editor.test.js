@@ -7,7 +7,7 @@
 import { test } from "node:test";
 // @ts-expect-error: as above.
 import assert from "node:assert/strict";
-import { OWN, SHAPES, indentAfter, move, nameOf, newStructure, percentOf, shapeNamed, shareOf } from "../site/editor.js";
+import { OWN, SHAPES, indentAfter, move, nameOf, newStructure, percentOf, realOnes, shapeNamed, shareOf } from "../site/editor.js";
 
 test("a shape takes its name's default parameter, a tree none, and the reader's own a list's code", () => {
   assert.deepEqual(shapeNamed("chains"), { chains: 16 });
@@ -42,6 +42,14 @@ test("a share shows as a percentage to a tenth, and goes back in thousandths", (
   assert.equal(percentOf("0"), 0);
   assert.equal(shareOf(2.5), "25/1000");
   assert.equal(shareOf(percentOf("1/20")), "50/1000");
+});
+
+test("a dot stands for the real objects that fill 1 kB", () => {
+  assert.equal(realOnes(64), "16 real ones");
+  assert.equal(realOnes(48), "about 21.3 real ones");
+  assert.equal(realOnes(1000), "about 1 real one");
+  assert.equal(realOnes(1024), "1 real one");
+  assert.equal(realOnes(3), "about 341 real ones");
 });
 
 test("a new structure builds within its rebuild interval", () => {

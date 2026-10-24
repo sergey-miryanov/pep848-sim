@@ -77,7 +77,7 @@ objects the collector never sees fall outside the term: they enter no space
 and leave the allocation clock where it is. The simulator divides by the same
 16 any count the PEP or the C implementation gives in real objects. The 64 B
 is an assumption, outside the collector constants, and the playground lets a
-reader change it.
+reader change it beside them.
 _Avoid_: object (bare, when the two could be confused), PyObject, tracked
 object (a real object can be untracked after it is allocated, as a
 collection does to a tuple that holds only numbers)
@@ -209,15 +209,16 @@ embedding a widget with its preset and one or two controls.
 _Avoid_: tutorial, article, docs
 
 **Playground**:
-The page with one widget whose legend edits the whole workload, the run length
-and the collector settings, for readers who want to try anything. Each change
+The page with one widget whose legend edits the whole workload, the run
+length, the collector settings and the collector constants, for readers who
+want to try anything. Each change
 starts the widget's two runs again, as a control's release does. A switch shows
 the workload source in place of the legend's editor.
 _Avoid_: sandbox, lab, explorer
 
 **Workload source**:
-The playground's other editor: the workload, the run length and the collector
-settings as Python beside the widget. The reader runs it with a button, and the
+The playground's other editor: the workload, the run length, the collector
+settings and the collector constants as Python beside the widget. The reader runs it with a button, and the
 legend then shows the workload it made.
 _Avoid_: script, program, code view, source (bare: a link has a source too)
 

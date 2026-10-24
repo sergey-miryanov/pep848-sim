@@ -1,11 +1,13 @@
 from typing import override
 
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
 from pep848_sim.collectors.collector import (
     CollectionCounts,
     CollectorSettings,
+    Constants,
     Record,
     find_unreachable,
 )
@@ -14,6 +16,7 @@ from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.structures import StructureParameters
 from pep848_sim.workload import ChurnParameters, Workload, WorkloadParameters
 from test_heap import reachable
+from test_run import constants
 from test_workload import churn_parameters, structure_parameters
 
 
@@ -55,6 +58,13 @@ def test_a_young_collection_follows_the_pseudocode_line_by_line() -> None:
     assert list(collector.nursery) == []
 
 
+def test_the_budget_starts_at_the_initial_work_budget_in_simulated_objects() -> None:
+    assert IncrementalCollector().work_to_do == -6_250
+    # -1,000 real objects of 48 B: 46.875 kB, rounded down.
+    constants = Constants(initial_work_budget=-1_000, real_object_size=48)
+    assert IncrementalCollector(constants=constants).work_to_do == -47
+
+
 def test_collections_alternate_from_an_old_one_and_young_ones_start_idle() -> None:
     collector = IncrementalCollector(CollectorSettings(threshold0=10))
     heap = Heap(collector)
@@ -83,8 +93,8 @@ class Recorded(IncrementalCollector):
     run within a short run. It notes the budget around each collection, and at each
     swap the cyclic garbage wholly in the old generation."""
 
-    def __init__(self, settings: CollectorSettings) -> None:
-        super().__init__(settings)
+    def __init__(self, settings: CollectorSettings, constants: Constants) -> None:
+        super().__init__(settings, constants)
         self.work_to_do = 0
         # Each collection's budget before and after, whether it swapped, and its
         # counts.
@@ -121,6 +131,7 @@ class Recorded(IncrementalCollector):
     st.integers(min_value=0, max_value=2**32),
     st.integers(min_value=1, max_value=20),
     st.integers(min_value=1, max_value=6),
+    constants(),
     st.lists(st.integers(min_value=0, max_value=600), max_size=4),
 )
 def test_a_run_keeps_the_incremental_collectors_invariants(
@@ -129,6 +140,7 @@ def test_a_run_keeps_the_incremental_collectors_invariants(
     seed: int,
     threshold0: int,
     threshold1: int,
+    constants: Constants,
     stops: list[int],
 ) -> None:
     """The workloads' garbage never holds other garbage, so each sweep frees the
@@ -136,7 +148,7 @@ def test_a_run_keeps_the_incremental_collectors_invariants(
     shape can hold one cycle from another: an increment that takes the held cycle
     first leaves it in visited, still held, and the next sweep frees it."""
     settings = CollectorSettings(threshold0=threshold0, threshold1=threshold1)
-    collector = Recorded(settings)
+    collector = Recorded(settings, constants)
     heap = Heap(collector)
     workload = Workload(heap, WorkloadParameters(churn, tuple(structures), seed))
 
@@ -163,7 +175,9 @@ def test_a_run_keeps_the_incremental_collectors_invariants(
         elif swapped:
             assert after == 0
         else:
-            assert after == before - counts.marked - counts.survived + counts.freed
+            examined = counts.survived + counts.freed
+            credit = constants.freed_credit * counts.freed
+            assert after == before - counts.marked - examined + credit
     assert [left for left in collector.left_by_sweeps if left] == []
 
 
@@ -252,6 +266,31 @@ def test_an_old_collection_follows_the_pseudocode_line_by_line() -> None:
     assert list(collector.reachable) == [sys]
     assert collector.work_to_do == 0
     assert collector.counts == [CollectionCounts("old", 3, 1, 2)]
+
+
+@pytest.mark.parametrize("credit", [0, 2, 3])
+def test_an_increment_credits_the_budget_the_freed_credit_for_each_object_it_frees(
+    credit: int,
+) -> None:
+    settings = CollectorSettings(threshold0=1_000)
+    collector = IncrementalCollector(settings, Constants(freed_credit=credit))
+    heap = Heap(collector)
+    a, b = heap.allocate(), heap.allocate()
+    heap.link(a, b)
+    heap.link(b, a)
+    heap.let_go_frame_root(b)
+    heap.let_go_frame_root(a, leaves_unreachable=2)
+    held = [heap.allocate() for _ in range(10)]  # their allocating frames hold them
+    collector.pending_space.extend([a, b, *held])
+    collector.work_to_do = 3
+
+    collector.collect()
+
+    # Marking sys leaves 2, which the increment [a, b] spends and credits back with
+    # credit * 2: enough to examine as many held objects.
+    assert [heap.is_freed(x) for x in (a, b)] == [True, True]
+    assert collector.counts == [CollectionCounts("old", 1, 2 * credit, 2)]
+    assert collector.work_to_do == 0
 
 
 def test_marking_takes_from_pending_alone_and_stops_where_the_budget_does() -> None:

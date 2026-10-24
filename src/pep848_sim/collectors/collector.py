@@ -1,6 +1,6 @@
-"""What both collectors share: their settings, the spaces they keep the heap's
-objects in, how they find and free the cyclic garbage among the objects a
-collection examines, and the record each collection leaves.
+"""What both collectors share: their settings and constants, the spaces they keep
+the heap's objects in, how they find and free the cyclic garbage among the objects
+a collection examines, and the record each collection leaves.
 
 The collector owns every space, the nursery included, as CPython's collector owns
 its generation lists. The heap hands it each new object, calls for a collection
@@ -11,6 +11,7 @@ workload or its shutdown asks.
 from collections.abc import Generator, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import TYPE_CHECKING, ClassVar, Literal, NamedTuple
 
 if TYPE_CHECKING:
@@ -35,6 +36,45 @@ class CollectorSettings:
     def __post_init__(self) -> None:
         if self.threshold0 < 1:
             raise ValueError(f"a threshold0 of {self.threshold0} kB falls under 1 kB")
+
+
+@dataclass(frozen=True)
+class Constants:
+    """The collector constants, which no Python API changes, and the size the
+    simulator assumes for a real object. The defaults are the PEP's and the
+    reference branch's (ADR 0003, ADR 0004), and ADR 0002's 64 B."""
+
+    # The incremental collector's work budget before its first collection, in
+    # real objects, as the pseudocode gives it.
+    initial_work_budget: int = -100_000
+    # What an increment credits the work budget with for each object it frees.
+    freed_credit: int = 2
+    # The legacy collector's gen 2 waits until the objects awaiting it reach this
+    # share of those the last gen 2 left.
+    long_lived_ratio: Fraction = Fraction(1, 4)
+    # A real object's bytes, on average: a simulated object, 1 kB, stands for
+    # 1024 / real_object_size of them.
+    real_object_size: int = 64
+
+    def __post_init__(self) -> None:
+        if self.freed_credit < 0:
+            raise ValueError(
+                f"a freed-credit multiplier of {self.freed_credit} takes work off"
+                " the budget for each object an increment frees"
+            )
+        if self.long_lived_ratio < 0:
+            raise ValueError(
+                f"a long-lived ratio of {self.long_lived_ratio} falls under 0"
+            )
+        if self.real_object_size < 1:
+            raise ValueError(
+                f"a real object of {self.real_object_size} B takes no room"
+            )
+
+    def simulated(self, real: int) -> int:
+        """A count the PEP or the C implementation gives in real objects, in
+        simulated objects, rounded down."""
+        return real * self.real_object_size // 1024
 
 
 @dataclass(frozen=True)
@@ -130,8 +170,13 @@ class Collector:
     # The spaces a record reports, young to old.
     SPACES: ClassVar[tuple[str, ...]] = ("nursery",)
 
-    def __init__(self, settings: CollectorSettings | None = None) -> None:
+    def __init__(
+        self,
+        settings: CollectorSettings | None = None,
+        constants: Constants | None = None,
+    ) -> None:
         self.settings = CollectorSettings() if settings is None else settings
+        self.constants = Constants() if constants is None else constants
         self.counts: list[CollectionCounts] = []
         self.records: list[Record] = []
         # Each object's space, as CPython's PyGC_Head links an object into a list.

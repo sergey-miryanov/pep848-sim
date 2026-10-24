@@ -2,7 +2,7 @@
 // What the widget's object graph draws from a request's samples
 // (pep848_sim.widget.graph): the nodes and links its layout places, how the
 // layout fills its frame, and how the legend reads each structure, the churn and,
-// on the playground, the run.
+// on the playground, the run and the constants.
 // The module imports neither d3 nor the DOM, so Node's test runner can load it:
 // see tests/graph.test.js.
 
@@ -23,6 +23,15 @@
  *   cycle_share: string, cycle_size: number, lifetime_mean: number,
  *   long_share: string, long_lifetimes: [number, number],
  * }} Churn
+ */
+/**
+ * The collector constants and the real object's size, as
+ * pep848_sim.collectors.collector.Constants holds them, the long-lived ratio as
+ * a fraction such as "1/4".
+ * @typedef {{
+ *   initial_work_budget: number, freed_credit: number, long_lived_ratio: string,
+ *   real_object_size: number,
+ * }} Constants
  */
 /** @typedef {{ structures: Structure[], churn: Churn }} Graph */
 /**
@@ -134,4 +143,17 @@ export function describeRun(request) {
   const { run_length: length, settings: { threshold0, threshold1, threshold2 }, workload: { shutdown } } = request;
   const end = shutdown ? ", then shutdown" : "";
   return `Run: ${size(length)} on the allocation clock, gc.set_threshold(${threshold0}, ${threshold1}, ${threshold2})${end}`;
+}
+
+/**
+ * The constants as the playground's legend reads them: the incremental
+ * collector's work budget at the start and its credit for each object an
+ * increment frees, the legacy collector's long-lived ratio, and the real
+ * object's size.
+ * @param {Constants} constants
+ */
+export function describeConstants(constants) {
+  const { initial_work_budget: budget, freed_credit: credit, long_lived_ratio: ratio, real_object_size: bytes } = constants;
+  return `Work budget from ${budget.toLocaleString("en")} real objects, plus ${credit} for each object freed, `
+    + `a long-lived ratio of ${percent(ratio)}, ${bytes} B to a real object`;
 }

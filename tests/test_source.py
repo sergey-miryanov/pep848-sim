@@ -1,9 +1,10 @@
 import json
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
 
-from pep848_sim.collectors.collector import CollectorSettings
+from pep848_sim.collectors.collector import CollectorSettings, Constants
 from pep848_sim.structures import Own
 from pep848_sim.widget.request import dump, parse
 
@@ -42,6 +43,7 @@ def test_a_source_that_sets_no_settings_seed_or_shutdown_takes_the_defaults() ->
     read = parse(request(CHURN + "structures = []\n"))
 
     assert read.settings == CollectorSettings()
+    assert read.constants == Constants()
     assert (read.workload.seed, read.workload.shutdown) == (848, False)
     assert read.run_length == 1000
 
@@ -55,6 +57,18 @@ def test_a_share_reads_as_written() -> None:
     ).workload.churn
 
     assert (str(churn.cycle_share), str(churn.long_share)) == ("3/100", "1/20")
+
+
+def test_constants_keep_the_defaults_the_source_leaves_out() -> None:
+    read = parse(
+        request(
+            CHURN
+            + "structures = []\n"
+            + "constants = Constants(freed_credit=4, long_lived_ratio=0.1)\n"
+        )
+    )
+
+    assert read.constants == Constants(freed_credit=4, long_lived_ratio=Fraction(1, 10))
 
 
 def test_a_shape_function_brings_its_text_with_its_comments_and_no_more() -> None:
@@ -128,6 +142,14 @@ def test_a_request_reads_its_source_once() -> None:
         ("structures = []\nrun_length = 0", "a run_length of 0 kB allocates nothing"),
         ("structures = []\nseed = '1'", "sets seed to '1', not a whole number"),
         (
+            "structures = []\nconstants = 3",
+            r"your workload sets constants to 3, not Constants\(...\)",
+        ),
+        (
+            "structures = []\nconstants = Constants(real_object_size=0)",
+            "line 4 of your workload: a real object of 0 B takes no room",
+        ),
+        (
             "structures = []\nsettings = Settings(threshold1=0)",
             "a threshold1 of 0 leaves the incremental collector no aging space",
         ),
@@ -171,6 +193,7 @@ def test_a_source_the_simulator_cannot_run_names_what_it_cannot(
         parse(request(CHURN + source))
 
 
-def test_a_request_with_a_source_holds_no_other_workload() -> None:
-    with pytest.raises(ValueError, match="request has no field 'run_length'"):
-        parse(json.dumps({"source": "", "every": 5, "run_length": 1}))
+@pytest.mark.parametrize("name", ["run_length", "constants"])
+def test_a_request_with_a_source_holds_no_other_workload(name: str) -> None:
+    with pytest.raises(ValueError, match=f"request has no field '{name}'"):
+        parse(json.dumps({"source": "", "every": 5, name: 1}))

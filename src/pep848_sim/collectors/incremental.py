@@ -19,6 +19,7 @@ from typing import override
 from pep848_sim.collectors.collector import (
     Collector,
     CollectorSettings,
+    Constants,
     FullKind,
     Space,
 )
@@ -28,15 +29,20 @@ class IncrementalCollector(Collector):
     # reachable, sys and the marking worklist, counts in visited.
     SPACES = ("nursery", "aging", "pending", "visited")
 
-    def __init__(self, settings: CollectorSettings | None = None) -> None:
-        super().__init__(settings)
+    def __init__(
+        self,
+        settings: CollectorSettings | None = None,
+        constants: Constants | None = None,
+    ) -> None:
+        super().__init__(settings, constants)
         # threshold1 counts half-spaces, two to an aging space.
         self.aging = [Space(self) for _ in range(-(-self.settings.threshold1 // 2))]
         self.pending_space = Space(self)
         self.visited_space = Space(self)
         self.reachable = Space(self)
-        # The pseudocode's -100_000 real objects, 16 to a simulated one (ADR 0002).
-        self.work_to_do = -100_000 // 16
+        # The constants' initial budget, by default the pseudocode's -100_000 real
+        # objects, in simulated ones (ADR 0002).
+        self.work_to_do = self.constants.simulated(self.constants.initial_work_budget)
         self.young_next = False
         # Sweeps ended, for the records.
         self.sweeps = 0
@@ -129,7 +135,7 @@ class IncrementalCollector(Collector):
             # If we are collecting lots of objects, that means there is a lot of
             # cycle garbage and we should sweep the heap faster to keep the amount
             # of garbage down
-            self.work_to_do += 2 * collected
+            self.work_to_do += self.constants.freed_credit * collected
 
     def full_collection(self) -> None:
         """Collect the whole heap, as `gc.collect()` does. The PEP gives it no

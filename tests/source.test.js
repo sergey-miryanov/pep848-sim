@@ -29,6 +29,7 @@ const holding = (/** @type {any[]} */ ...structures) => ({
   settings: { threshold0: 2000, threshold1: 10, threshold2: 10 },
   run_length: 10_000,
   every: 1,
+  constants: { initial_work_budget: -100_000, freed_credit: 2, long_lived_ratio: "1/4", real_object_size: 64 },
 });
 
 test("a request's source spells out each structure, the churn and the run", () => {

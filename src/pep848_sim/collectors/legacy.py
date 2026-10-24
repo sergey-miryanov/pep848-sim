@@ -13,11 +13,13 @@ Each name stands for a field of `struct _gc_runtime_state`:
     long_lived_total     long_lived_total
 """
 
+import math
 from typing import override
 
 from pep848_sim.collectors.collector import (
     Collector,
     CollectorSettings,
+    Constants,
     FullKind,
     Space,
 )
@@ -26,8 +28,12 @@ from pep848_sim.collectors.collector import (
 class LegacyCollector(Collector):
     SPACES = ("nursery", "aging", "old")
 
-    def __init__(self, settings: CollectorSettings | None = None) -> None:
-        super().__init__(settings)
+    def __init__(
+        self,
+        settings: CollectorSettings | None = None,
+        constants: Constants | None = None,
+    ) -> None:
+        super().__init__(settings, constants)
         self.aging = Space(self)
         self.old = Space(self)
         # Gen 0 collections since the last gen 1 or 2, and gen 1 collections since
@@ -65,14 +71,16 @@ class LegacyCollector(Collector):
     def select_generation(self) -> int:
         """gc_select_generation, as the legacy collector reads it: the oldest
         generation whose count is over its threshold. Gen 2 waits until the objects
-        awaiting it reach a quarter of those the last gen 2 left, the long-lived
-        ratio."""
+        awaiting it reach the long-lived ratio, a quarter unless the constants say
+        otherwise, of those the last gen 2 left."""
         counts = (self.count0, self.count1)
         thresholds = (self.settings.threshold1, self.settings.threshold2)
+        # Rounded down, as C divides the branch's long_lived_total / 4.
+        waiting = math.floor(self.long_lived_total * self.constants.long_lived_ratio)
         for i in (1, 0):
             if counts[i] <= thresholds[i]:
                 continue
-            if i == 1 and self.long_lived_pending < self.long_lived_total // 4:
+            if i == 1 and self.long_lived_pending < waiting:
                 continue
             return i + 1
         return 0

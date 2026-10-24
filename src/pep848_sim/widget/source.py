@@ -1,9 +1,9 @@
-"""A workload's source: the playground's workload, run length and collector
-settings, written as Python (ADR 0015). The source sets `churn`, `structures` and
-`run_length`, and may set `settings`, `seed` and `shutdown`, with the names below
-besides the builtins. A shape of the reader's own is a function the source
-defines, or code as text, either of which `Own` takes. A function's text alone
-goes into the request, so it sees only i and what it imports itself.
+"""A workload's source: the playground's workload, run length, collector settings
+and constants, written as Python (ADR 0015). The source sets `churn`, `structures`
+and `run_length`, and may set `settings`, `constants`, `seed` and `shutdown`, with
+the names below besides the builtins. A shape of the reader's own is a function the
+source defines, or code as text, either of which `Own` takes. A function's text
+alone goes into the request, so it sees only i and what it imports itself.
 """
 
 import ast
@@ -13,7 +13,7 @@ from fractions import Fraction
 from types import FunctionType
 from typing import get_args
 
-from pep848_sim.collectors.collector import CollectorSettings
+from pep848_sim.collectors.collector import CollectorSettings, Constants
 from pep848_sim.structures import (
     Chains,
     Graph,
@@ -32,12 +32,14 @@ from pep848_sim.workload import ChurnParameters, WorkloadParameters
 _FILE = "<your workload>"
 # The seed of a workload whose source sets none, as every preset's.
 _SEED = 848
+# The constants of a workload whose source sets none, and those it leaves out.
+_CONSTANTS = Constants()
 
 type Share = str | int | float | Fraction
 
 
-def read(text: str) -> tuple[WorkloadParameters, CollectorSettings, int]:
-    """The workload, collector settings and run length the source sets."""
+def read(text: str) -> tuple[WorkloadParameters, CollectorSettings, int, Constants]:
+    """The workload, collector settings, run length and constants the source sets."""
     try:
         tree = ast.parse(text, _FILE)
     except SyntaxError as error:
@@ -58,15 +60,16 @@ def read(text: str) -> tuple[WorkloadParameters, CollectorSettings, int]:
     settings = _set(
         namespace, "settings", CollectorSettings, "Settings(...)", CollectorSettings()
     )
+    constants = _set(namespace, "constants", Constants, "Constants(...)", _CONSTANTS)
     seed = _set(namespace, "seed", int, "a whole number", _SEED)
     shutdown = _set(namespace, "shutdown", bool, "True or False", False)
     workload = WorkloadParameters(churn, tuple(structures), seed, shutdown)
-    return workload, settings, run_length
+    return workload, settings, run_length, constants
 
 
 def _names(text: str, tree: ast.Module) -> dict[str, object]:
     """What the source sees besides the builtins: the shapes, and a function for
-    a structure, the churn and the collector settings."""
+    a structure, the churn, the collector settings and the constants."""
     lines = text.splitlines()
     # Each function the source defines without a decorator, by its first line.
     defined = {
@@ -101,6 +104,7 @@ def _names(text: str, tree: ast.Module) -> dict[str, object]:
         "Structure": _structure,
         "Churn": _churn,
         "Settings": CollectorSettings,
+        "Constants": _constants,
     }
 
 
@@ -156,6 +160,21 @@ def _churn(
     low, high = long_lifetimes
     return ChurnParameters(
         _share(cycle_share), cycle_size, lifetime_mean, _share(long_share), (low, high)
+    )
+
+
+def _constants(
+    *,
+    initial_work_budget: int = _CONSTANTS.initial_work_budget,
+    freed_credit: int = _CONSTANTS.freed_credit,
+    long_lived_ratio: Share = _CONSTANTS.long_lived_ratio,
+    real_object_size: int = _CONSTANTS.real_object_size,
+) -> Constants:
+    """The collector constants and the real object's size, as
+    `Constants(freed_credit=4)` sets them, the rest at their defaults. The
+    long-lived ratio is a share, as the churn's are."""
+    return Constants(
+        initial_work_budget, freed_credit, _share(long_lived_ratio), real_object_size
     )
 
 

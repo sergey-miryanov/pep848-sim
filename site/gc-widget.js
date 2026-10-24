@@ -523,11 +523,11 @@ class GcWidget extends HTMLElement {
     /** @type {HTMLElement} */ (root.querySelector(".error")).hidden = true;
     requestRuns(this.#name, request, {
       controls: (controls, expanded, graph) => {
-        // A request that names a preset, or carries a workload's source, comes
-        // back spelled out: its workload and run length, which the controls and
-        // the editors edit from then on.
+        // A request that names a preset, carries a workload's source or leaves
+        // out the constants comes back spelled out: its workload, run length and
+        // constants, which the controls and the editors edit from then on.
         const preset = "preset" in request;
-        if (preset || "source" in request) {
+        if (preset || "source" in request || !("constants" in request)) {
           request = expanded;
           entry.request = structuredClone(expanded);
           if ("preset" in this.#drawn) this.#drawn = request;
