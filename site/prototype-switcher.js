@@ -7,6 +7,8 @@ const VARIANTS = [
   ["A", "Shapes strip: a diagram per structure, in the widget"],
   ["B", "Force graph: one per preset, after its paragraph"],
   ["C", "Rows on the clock: shape beside builds, in the widget"],
+  ["D", "B's graph under the controls, legend beside it"],
+  ["E", "B's graph at the widget's top right, beside the controls"],
 ];
 
 const bar = document.createElement("div");

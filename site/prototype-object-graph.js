@@ -8,6 +8,10 @@
 //    "The workloads", all five at once.
 // C: a row for each structure in the widget, its diagram beside its builds and
 //    lifetimes on the allocation clock.
+// D: B's diagram for the selected preset, in the widget under its controls, its
+//    legend beside it.
+// E: B's diagram for the selected preset, at the widget's top right, beside the
+//    select and the controls, its legend under them.
 
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7.9.0/+esm";
 
@@ -250,28 +254,67 @@ function variantB() {
     section.style.maxWidth = "70ch";
     section.append(html("h3", "", `Object graph of ${name}`), note());
     section.append(forceSvg(DATA[name]));
-    const legend = html("div", "");
-    legend.style.cssText = "display: grid; gap: 4px; margin-top: 6px;";
-    DATA[name].structures.forEach((s, i) => {
-      const line = html("div", "caption", `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--proto-s${i});margin-right:6px"></span><b>${s.label}</b>: ${shapeName(s)}, × ${s.size.toLocaleString("en")}, held by ${s.root === "module" ? "sys" : "a frame"}; ${timing(s)}`);
-      line.style.maxWidth = "none";
-      legend.append(line);
-    });
-    legend.append(html("div", "caption", `<b>churn</b>: ${churnText(DATA[name].churn)}`));
-    section.append(legend);
+    const made = legend(DATA[name]);
+    made.style.marginTop = "6px";
+    section.append(made);
     paragraph.after(section);
   }
 }
 
-function forceSvg(preset) {
-  const width = 640, height = 340;
-  const nodes = [{ key: "sys", kind: "root", label: "sys", fx: 40, fy: 30 }];
+function legend(preset) {
+  const made = html("div", "");
+  made.style.cssText = "display: grid; gap: 4px; align-content: start;";
+  preset.structures.forEach((s, i) => {
+    const line = html("div", "caption", `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--proto-s${i});margin-right:6px"></span><b>${s.label}</b>: ${shapeName(s)}, × ${s.size.toLocaleString("en")}, held by ${s.root === "module" ? "sys" : "a frame"}; ${timing(s)}`);
+    line.style.maxWidth = "none";
+    made.append(line);
+  });
+  const churn = html("div", "caption", `<b>churn</b>: ${churnText(preset.churn)}`);
+  churn.style.maxWidth = "none";
+  made.append(churn);
+  return made;
+}
+
+// D: B's diagram for the selected preset, under the controls, its legend beside it.
+function variantD(name) {
+  const section = shadowSection();
+  section.append(html("h3", "", `Object graph of ${name}`), note());
+  const row = html("div", "");
+  row.style.cssText = "display: grid; grid-template-columns: minmax(320px, 560px) minmax(240px, 1fr); gap: 24px; align-items: start;";
+  row.append(forceSvg(DATA[name], 560, 260), legend(DATA[name]));
+  section.append(row);
+}
+
+// E: B's diagram for the selected preset, at the widget's top right, beside the
+// select and the controls.
+function topRight(name) {
+  const root = widget.shadowRoot;
+  shadowSection().remove();  // only for its style
+  const top = html("div", "proto-top");
+  top.style.cssText = "display: grid; grid-template-columns: minmax(280px, 1fr) minmax(320px, 520px); gap: 24px; margin: 0 0 16px; align-items: start;";
+  const left = html("div", "");
+  const right = html("div", "proto");
+  right.style.cssText = "margin: 0; padding: 0; border: 0;";
+  const entries = root.querySelector(".entries");
+  const controls = root.querySelector(".controls");
+  entries.before(top);
+  left.append(entries, controls);
+  const head = html("div", "proto");
+  head.style.cssText = "margin: 0; padding: 0; border: 0;";
+  head.append(html("h3", "", `Object graph of ${name}`), note(), legend(DATA[name]));
+  left.append(head);
+  right.append(forceSvg(DATA[name], 520, 250));
+  top.append(left, right);
+}
+
+function forceSvg(preset, width = 640, height = 340) {
+  const nodes = [{ key: "sys", kind: "root", label: "sys" }];
   const links = [];
   preset.structures.forEach((s, i) => {
     let holder = "sys";
     if (s.root === "frame") {
       holder = `frame${i}`;
-      nodes.push({ key: holder, kind: "root", label: "frame", fy: 30 });
+      nodes.push({ key: holder, kind: "root", label: "frame" });
     }
     for (const n of s.nodes) nodes.push({ key: `${i}:${n.id}`, kind: "object", structure: i, head: n.id === 0 });
     links.push({ source: holder, target: `${i}:0`, cycle: false });
@@ -283,12 +326,17 @@ function forceSvg(preset) {
     .force("charge", d3.forceManyBody().strength(-22))
     .force("collide", d3.forceCollide(5))
     .force("x", d3.forceX(width / 2).strength(0.04))
-    .force("y", d3.forceY(height / 2).strength(0.06))
+    // The roots rise to the top, and what they hold hangs below them.
+    .force("y", d3.forceY((n) => (n.kind === "root" ? -height : height / 2)).strength((n) => (n.kind === "root" ? 0.3 : 0.06)))
     .stop()
     .tick(400);
+  // Fit the layout into the frame, roots' boxes included, scaling it down if need be.
+  const margin = 18;
+  const [x0, x1] = d3.extent(nodes, (n) => n.x), [y0, y1] = d3.extent(nodes, (n) => n.y);
+  const scale = Math.min((width - 2 * margin) / Math.max(1, x1 - x0), (height - 2 * margin) / Math.max(1, y1 - y0), 1.3);
   for (const n of nodes) {
-    n.x = Math.max(10, Math.min(width - 10, n.x));
-    n.y = Math.max(10, Math.min(height - 10, n.y));
+    n.x = width / 2 + (n.x - (x0 + x1) / 2) * scale;
+    n.y = height / 2 + (n.y - (y0 + y1) / 2) * scale;
   }
   const svg = el("svg", { width: "100%", viewBox: `0 0 ${width} ${height}` });
   const byKey = new Map(nodes.map((n) => [n.key, n]));
@@ -355,11 +403,17 @@ function variantC(name) {
 
 function render() {
   for (const old of document.querySelectorAll(".proto-b")) old.remove();
-  widget.shadowRoot?.querySelector("section.proto")?.remove();
+  const root = widget.shadowRoot;
+  root?.querySelector("section.proto")?.remove();
+  const top = root?.querySelector(".proto-top");
+  if (top) {
+    top.before(root.querySelector(".entries"), root.querySelector(".controls"));
+    top.remove();
+  }
   const name = entry();
   const v = variant();
   if (v === "B") variantB();
-  else if (DATA[name]) (v === "C" ? variantC : variantA)(name);
+  else if (DATA[name]) ({ C: variantC, D: variantD, E: topRight }[v] ?? variantA)(name);
   else if (name) {
     const section = shadowSection();
     section.append(html("p", "note", `${name} is no preset, so it has no object graph to draw.`));
