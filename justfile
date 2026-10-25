@@ -3,8 +3,8 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
 _default:
     @just --list
 
-# check-py, check-ts and test-js: what CI gates on
-check: check-py check-ts test-js
+# check-py, check-ts, test-js and test-pyodide: what CI gates on
+check: check-py check-ts test-js test-pyodide
 
 # lint, typecheck and test: the Python
 check-py: lint typecheck test
@@ -17,6 +17,10 @@ check-ts:
 # Node's test runner over the widget's JavaScript
 test-js:
     node --test "tests/*.test.js"
+
+# the pinned runs' digests under Pyodide, in Node (ADR 0007)
+test-pyodide:
+    node --test tests/digests.pyodide.js
 
 # pytest, Hypothesis invariants included, with the coverage gate
 test *args:

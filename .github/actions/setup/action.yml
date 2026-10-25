@@ -1,5 +1,5 @@
 name: Set up Python, Poetry and Node
-description: Set up Pyodide's Python, install Poetry and the project's dependencies, and install Node and tsc, after a checkout
+description: Set up Pyodide's Python, install Poetry and the project's dependencies, and install Node, tsc and Pyodide, after a checkout
 
 runs:
   using: composite
@@ -17,11 +17,12 @@ runs:
       run: poetry install --no-interaction
       shell: bash
 
-    # Node runs tsc, which checks the site's JavaScript, and the widget's tests.
+    # Node runs tsc over the site's JavaScript, the widget's tests, and Pyodide
+    # for the check of the pinned digests.
     - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       with:
         node-version: "24"
 
-    - name: Install tsc
+    - name: Install tsc and Pyodide
       run: npm ci
       shell: bash

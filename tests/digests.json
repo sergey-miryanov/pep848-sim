@@ -1,0 +1,116 @@
+{
+  "fixed": {
+    "request": {
+      "workload": {
+        "churn": {
+          "cycle_share": "1/4",
+          "cycle_size": 3,
+          "lifetime_mean": 200,
+          "long_share": "1/20",
+          "long_lifetimes": [
+            100,
+            1000
+          ]
+        },
+        "structures": [
+          {
+            "shape": {
+              "chains": 16
+            },
+            "size": 1000,
+            "root": "module",
+            "lifetime": null,
+            "rebuild_interval": null,
+            "build_churn": 0,
+            "full_collections": false
+          },
+          {
+            "shape": "tree",
+            "size": 100,
+            "root": "frame",
+            "lifetime": 400,
+            "rebuild_interval": 1000,
+            "build_churn": 1,
+            "full_collections": false
+          }
+        ],
+        "seed": 848,
+        "shutdown": false
+      },
+      "settings": {
+        "threshold0": 20,
+        "threshold1": 10,
+        "threshold2": 10
+      },
+      "run_length": 20000,
+      "every": 50
+    },
+    "legacy": "8eb3fc9dd9e3d903",
+    "incremental": "c679a9492b62551a"
+  },
+  "create_gc_cycles": {
+    "request": {
+      "preset": "create_gc_cycles",
+      "settings": {
+        "threshold0": 2000,
+        "threshold1": 10,
+        "threshold2": 10
+      },
+      "every": 5
+    },
+    "legacy": "3facc140edae9c35",
+    "incremental": "056d431af7a2b8f8"
+  },
+  "json_loads": {
+    "request": {
+      "preset": "json_loads",
+      "settings": {
+        "threshold0": 2000,
+        "threshold1": 10,
+        "threshold2": 10
+      },
+      "every": 5
+    },
+    "legacy": "0b0de830268571c1",
+    "incremental": "6fafb92dad242ff4"
+  },
+  "xml_etree_parse": {
+    "request": {
+      "preset": "xml_etree_parse",
+      "settings": {
+        "threshold0": 2000,
+        "threshold1": 10,
+        "threshold2": 10
+      },
+      "every": 5
+    },
+    "legacy": "19f765838ff779b7",
+    "incremental": "52482d165ce1db17"
+  },
+  "async_tree_io_tg": {
+    "request": {
+      "preset": "async_tree_io_tg",
+      "settings": {
+        "threshold0": 2000,
+        "threshold1": 10,
+        "threshold2": 10
+      },
+      "every": 5
+    },
+    "legacy": "229fe4e864440024",
+    "incremental": "bf999cc59d2cdeec"
+  },
+  "connected_components": {
+    "request": {
+      "preset": "connected_components",
+      "settings": {
+        "threshold0": 2000,
+        "threshold1": 10,
+        "threshold2": 10
+      },
+      "every": 5
+    },
+    "legacy": "d0038708dfb87957",
+    "incremental": "cac66e2030471849"
+  }
+}

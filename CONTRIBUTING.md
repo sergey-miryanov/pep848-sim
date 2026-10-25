@@ -13,7 +13,8 @@ Python**. Today that is 3.14 (Pyodide 314.0.7 runs 3.14.2): develop, type
 check and test on 3.14, never on a newer one. When Pyodide moves to a new
 Python, move `requires-python`, the ruff, mypy and pyrefly targets, the CI
 interpreter (in `.github/actions/setup`, which both workflows use) and the
-Pyodide pin together, in one pull request.
+Pyodide pin, in `site/worker.js` and `package.json`, together, in one pull
+request.
 
 ## Getting set up
 
@@ -30,9 +31,10 @@ If Poetry cannot find 3.14 by version, give `poetry env use` the full path to
 the interpreter. If a `.venv` on another Python is already there, delete it
 first: Poetry reuses an in-project `.venv` whatever its version.
 
-`npm ci` installs tsc into `node_modules`, at the version `package-lock.json`
-locks. It needs Node 24, the version CI runs. Node's own test runner runs the
-widget's tests, so they take no package.
+`npm ci` installs tsc and Pyodide into `node_modules`, at the versions
+`package-lock.json` locks. It needs Node 24, the version CI runs. Node's own
+test runner runs the widget's tests and the Pyodide check, so neither takes a
+test framework.
 
 ## Commands
 
@@ -42,10 +44,11 @@ lists them.
 
 | Recipe | What it does |
 |---|---|
-| `check` | `check-py`, `check-ts` and `test-js`: what CI gates on |
+| `check` | `check-py`, `check-ts`, `test-js` and `test-pyodide`: what CI gates on |
 | `check-py` | `lint`, `typecheck` and `test`: the Python |
 | `check-ts` | tsc over the site's JavaScript and its tests |
 | `test-js` | Node's test runner over the widget's JavaScript |
+| `test-pyodide` | the pinned runs' digests under Pyodide, in Node: about 13 s |
 | `test` | pytest, Hypothesis invariants included, with the coverage gate |
 | `lint` | ruff's checker and formatter |
 | `typecheck` | mypy and pyrefly, both strict |
@@ -68,6 +71,10 @@ coverage gate out: `poetry run just test tests/test_smoke.py --no-cov`.
   turns a run's records into what each panel draws. `panels.js` imports neither
   Plot nor the DOM, so Node can load it. The tests stay out of `site/`, which
   `just site` publishes whole.
+- Node runs `tests/digests.pyodide.js` under Pyodide, from npm at the version
+  the site's worker loads. It sends each request `tests/digests.json` pins
+  through `pep848_sim.widget.request`, the worker's path, and each run's
+  records must give the digest pytest pins under CPython (ADR 0007).
 - pytest runs the example tests and the Hypothesis invariants: no reachable
   object is ever freed, every alive object sits in exactly one space, the work
   budget moves by exactly what the counters say, and cyclic garbage wholly in
