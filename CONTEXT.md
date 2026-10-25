@@ -380,7 +380,8 @@ in the incremental collector, to an older generation in the legacy one.
 _Avoid_: promoted, kept, live
 
 **Freed**:
-Objects a collection examined and found to be cyclic garbage.
+Objects a collection examined and freed: the cyclic garbage it found, and any
+object it kept that refcounting freed when it cleared that garbage.
 _Avoid_: collected (reads as the act, not the count), reclaimed, swept
 
 **Yield**:

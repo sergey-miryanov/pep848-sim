@@ -256,10 +256,12 @@ class Collector:
         for x in garbage:
             if not heap.is_freed(x):
                 heap.clear(x)
-        freed = set(garbage)
-        survivors = [x for x in examined if x not in freed]
+        # Refcounting can free a kept object too, when its one reference from outside
+        # the examined objects came from an object that only the garbage held. CPython
+        # unlinks an object from its survivors list as it frees it, so leave those out.
+        survivors = [x for x in examined if not heap.is_freed(x)]
         self.survived += len(survivors)
-        self.freed += len(freed)
+        self.freed += len(examined) - len(survivors)
         return survivors
 
     def add(self, x: int) -> None:

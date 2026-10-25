@@ -254,6 +254,26 @@ def test_collecting_a_group_leaves_a_cycle_it_held_alive_and_counted() -> None:
     assert heap.uncollected_garbage == 2
 
 
+def test_collecting_a_group_frees_what_it_kept_for_an_object_the_group_held() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    a, b, outside, s = (heap.allocate() for _ in range(4))
+    heap.link(a, b)
+    heap.link(b, a)
+    heap.link(b, outside)
+    heap.link(outside, s)
+    for x in (b, outside, s):
+        heap.let_go_frame_root(x)
+    heap.let_go_frame_root(a, leaves_unreachable=4)
+
+    assert collector.collect_cycles([a, b, s]) == []
+
+    assert [heap.is_freed(x) for x in (a, b, outside, s)] == [True] * 4
+    assert (collector.survived, collector.freed) == (0, 3)
+    assert list(collector.nursery) == [heap.module_root]
+    assert heap.uncollected_garbage == 0
+
+
 # Around each collection: the alive objects and what the tests' walk reaches,
 # before it and after it.
 type Walks = list[tuple[int, int, int, int]]
