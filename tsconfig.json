@@ -1,12 +1,14 @@
 // tsc checks the site's JavaScript and its tests from their JSDoc and emits
 // nothing: the page's scripts and the tests here, against the DOM, and the
-// worker in tsconfig.worker.json.
+// worker in tsconfig.worker.json. It leaves the packages' declarations
+// unchecked: pyodide's name Node's types, which the project takes no package for.
 {
   "compilerOptions": {
     "allowJs": true,
     "checkJs": true,
     "noEmit": true,
     "strict": true,
+    "skipLibCheck": true,
     "target": "es2023",
     "module": "esnext",
     "moduleResolution": "bundler",

@@ -1,3 +1,4 @@
+import json
 from itertools import pairwise
 
 import pytest
@@ -16,8 +17,9 @@ from pep848_sim.presets import (
     PRESETS,
     XML_ETREE_PARSE,
 )
+from pep848_sim.widget.request import runs
 from pep848_sim.workload import Workload
-from test_run import digest
+from test_run import PINNED, digest, records
 
 # Placeholder until the rerun's records settle it (#117): how far a preset's yield
 # may sit from its benchmark's, as a share of the objects examined.
@@ -34,26 +36,38 @@ def test_each_preset_is_named_for_its_benchmark() -> None:
     }
 
 
-@pytest.mark.parametrize(
-    ("name", "collector", "pinned"),
-    [
-        ("create_gc_cycles", IncrementalCollector, "056d431af7a2b8f8"),
-        ("create_gc_cycles", LegacyCollector, "3facc140edae9c35"),
-        ("json_loads", IncrementalCollector, "6fafb92dad242ff4"),
-        ("json_loads", LegacyCollector, "0b0de830268571c1"),
-        ("xml_etree_parse", IncrementalCollector, "52482d165ce1db17"),
-        ("xml_etree_parse", LegacyCollector, "19f765838ff779b7"),
-        ("async_tree_io_tg", IncrementalCollector, "bf999cc59d2cdeec"),
-        ("async_tree_io_tg", LegacyCollector, "229fe4e864440024"),
-        ("connected_components", IncrementalCollector, "cac66e2030471849"),
-        ("connected_components", LegacyCollector, "d0038708dfb87957"),
-    ],
-)
-def test_each_presets_records_keep_their_digest(
-    name: str, collector: type[Collector], pinned: str
-) -> None:
-    """Pinned under CPython, which ADR 0007 makes Pyodide's digest too."""
-    assert digest(run_preset(PRESETS[name], collector)) == pinned
+def test_each_preset_has_its_digests_pinned_for_a_request_at_the_peps_settings() -> (
+    None
+):
+    assert {
+        name: pinned["request"] for name, pinned in PINNED.items() if name != "fixed"
+    } == {
+        name: {
+            "preset": name,
+            "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+            "every": 5,
+        }
+        for name in PRESETS
+    }
+
+
+@pytest.mark.parametrize("name", list(PRESETS))
+def test_each_presets_records_keep_their_digest(name: str) -> None:
+    """Through the worker's path, as tests/digests.pyodide.js runs them."""
+    legacy, incremental = runs(json.dumps(PINNED[name]["request"]))
+
+    assert digest(records(legacy)) == PINNED[name]["legacy"]
+    assert digest(records(incremental)) == PINNED[name]["incremental"]
+
+
+@pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
+def test_a_presets_request_runs_as_the_preset_does(collector: type[Collector]) -> None:
+    """The comparison script runs a preset as the worker does."""
+    name = "json_loads"
+    legacy, incremental = runs(json.dumps(PINNED[name]["request"]))
+    parts = legacy if collector is LegacyCollector else incremental
+
+    assert records(parts) == run_preset(PRESETS[name], collector)
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])

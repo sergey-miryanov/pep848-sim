@@ -10,7 +10,7 @@ from pep848_sim.collectors.collector import CollectorSettings, Constants
 from pep848_sim.presets import CREATE_GC_CYCLES
 from pep848_sim.widget.request import Request, dump, expand, parse, runs
 from pep848_sim.workload import WorkloadParameters
-from test_run import collector_settings, constants, digest, records, workloads
+from test_run import PINNED, collector_settings, constants, digest, records, workloads
 
 # test_run's FIXED workload and settings, as a widget sends them.
 FIXED = """{
@@ -40,8 +40,12 @@ def test_a_request_runs_the_legacy_collector_then_the_incremental_one() -> None:
     legacy, incremental = runs(FIXED)
 
     # The digests test_run pins for the same workload.
-    assert digest(records(legacy)) == "8eb3fc9dd9e3d903"
-    assert digest(records(incremental)) == "c679a9492b62551a"
+    assert digest(records(legacy)) == PINNED["fixed"]["legacy"]
+    assert digest(records(incremental)) == PINNED["fixed"]["incremental"]
+
+
+def test_the_fixed_request_is_the_one_its_digests_are_pinned_for() -> None:
+    assert json.loads(FIXED) == PINNED["fixed"]["request"]
 
 
 @pytest.mark.parametrize(

@@ -2,7 +2,8 @@ import hashlib
 import json
 from collections.abc import Iterable
 from fractions import Fraction
-from typing import override
+from pathlib import Path
+from typing import Any, override
 
 import pytest
 from hypothesis import given
@@ -211,17 +212,21 @@ def digest(records: list[Record]) -> str:
     return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
+# Each pinned run's request, as a widget sends it, and its records' digest under
+# each collector. Pinned under CPython, which ADR 0007 makes Pyodide's digests
+# too, and tests/digests.pyodide.js checks them under Pyodide.
+PINNED: dict[str, dict[str, Any]] = json.loads(
+    (Path(__file__).parent / "digests.json").read_text(encoding="utf-8")
+)
+
+
 @pytest.mark.parametrize(
-    ("collector", "pinned"),
-    [
-        (IncrementalCollector, "c679a9492b62551a"),
-        (LegacyCollector, "8eb3fc9dd9e3d903"),
-    ],
+    ("collector", "name"),
+    [(IncrementalCollector, "incremental"), (LegacyCollector, "legacy")],
 )
 def test_a_fixed_workloads_records_keep_their_digest(
-    collector: type[Collector], pinned: str
+    collector: type[Collector], name: str
 ) -> None:
-    """Pinned under CPython, which ADR 0007 makes Pyodide's digest too."""
     parts = run(FIXED, collector, CollectorSettings(threshold0=20), 20_000, every=50)
 
-    assert digest(records(parts)) == pinned
+    assert digest(records(parts)) == PINNED["fixed"][name]
