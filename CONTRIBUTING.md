@@ -112,7 +112,9 @@ they import strategies and helpers from one another.
 ## The site
 
 There is no build step. `site/` holds hand-written HTML, the widget (one Web
-Component, `<gc-widget>`) and the worker. Pyodide, Observable Plot and
+Component, `<gc-widget>`) and the worker. `theme.css` holds the colors of
+every page and the widget, and `theme.js` picks the light or the dark theme
+(ADR 0018). Pyodide, Observable Plot and
 d3-force load from jsDelivr at exact versions. The simulator reaches the browser as
 `sim.zip`, which the worker unpacks into Pyodide and imports.
 

@@ -5,25 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 cycle collector</title>
 <link rel="icon" href="data:,">
+<link rel="stylesheet" href="theme.css">
+<script src="theme.js"></script>
 <style>
-  :root {
-    color-scheme: light;
-    --surface: #fcfcfb;
-    --text-primary: #0b0b0b;
-    --text-secondary: #52514e;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      color-scheme: dark;
-      --surface: #1a1a19;
-      --text-primary: #f0efec;
-      --text-secondary: #c3c2b7;
-    }
-  }
   body {
     margin: 0;
-    background: var(--surface);
-    color: var(--text-primary);
     font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 48px; }
@@ -46,6 +32,7 @@
 <a href="playground.html">Playground</a>
 <a href="widget.html">Stand-in page</a>
 <a href="https://github.com/sergey-miryanov/pep848-sim">GitHub</a>
+<button type="button" class="theme-switch">Dark theme</button>
 </nav>
 <h1>PEP 848: the incremental cycle collector</h1>
 <p><a href="https://peps.python.org/pep-0848/">PEP 848</a> proposes a
