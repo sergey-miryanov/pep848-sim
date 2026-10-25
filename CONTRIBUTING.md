@@ -59,6 +59,11 @@ lists them.
 `test` passes its arguments to pytest. To run one test file, leave the
 coverage gate out: `poetry run just test tests/test_smoke.py --no-cov`.
 
+CI runs each recipe `check` runs as a job of its own, named for the recipe, so
+a pull request's checks list names the recipe that failed. Branch protection
+requires one more job, `check`, which passes once they all pass.
+`tests/test_ci.py` fails when the jobs and `check`'s recipes drift apart.
+
 ## Checks
 
 - ruff checks and formats the Python.
@@ -192,6 +197,6 @@ poetry run just check
 poetry run just check
 ```
 
-Then say what you changed and how you checked it. CI runs the same `check`,
+Then say what you changed and how you checked it. CI runs the same recipes,
 and merging deploys. pre-commit.ci runs the hooks on the pull request and
 pushes a commit with whatever they fix, so pull before you push again.
