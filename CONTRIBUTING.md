@@ -49,7 +49,7 @@ lists them.
 | `test` | pytest, Hypothesis invariants included, with the coverage gate |
 | `lint` | ruff's checker and formatter |
 | `typecheck` | mypy and pyrefly, both strict |
-| `site` | assembles `_site/`: copies `site/`, zips `src/pep848_sim` into `_site/sim.zip` |
+| `site` | assembles `_site/`: the pages at the top, and the rest of `site/` with `src/pep848_sim` zipped as `sim.zip` in `v/<commit>/`; `--keep REF` keeps the folder the site at `REF` serves too |
 | `serve` | runs `site`, then serves `_site/` on `http://localhost:8000` |
 | `compare` | runs each preset under both collectors and prints its collections beside its benchmark's in `data/` |
 
@@ -116,7 +116,10 @@ Component, `<gc-widget>`) and the worker. `theme.css` holds the colors of
 every page and the widget, and `theme.js` picks the light or the dark theme
 (ADR 0018). Pyodide, Observable Plot and
 d3-force load from jsDelivr at exact versions. The simulator reaches the browser as
-`sim.zip`, which the worker unpacks into Pyodide and imports.
+`sim.zip`, which the worker unpacks into Pyodide and imports. `just site`
+copies the pages to the top of `_site/` and every other file into a folder
+named for the commit, which the pages' links name, so each page loads the
+files it was deployed with (ADR 0019).
 
 The simulator package never imports from the browser (`js`, `pyodide`): it
 is plain Python, which is what lets the tests run it under CPython.
@@ -124,8 +127,9 @@ is plain Python, which is what lets the tests run it under CPython.
 ## Publishing
 
 A GitHub Actions workflow runs on every push to `main`: `just check`, then
-`just site`, then pushes `_site/` to the `gh-pages` branch, which GitHub
-Pages serves at <https://sergey-miryanov.github.io/pep848-sim/>. A failing
+`just site --keep` on the live `gh-pages` branch, which keeps the folder the
+live site serves beside the new one, then pushes `_site/` to `gh-pages`, which
+GitHub Pages serves at <https://sergey-miryanov.github.io/pep848-sim/>. A failing
 check deploys nothing. `site/.nojekyll` stops Pages running Jekyll over the
 files.
 
