@@ -188,6 +188,65 @@ each two steps, so objects wait longer before a young collection examines them.
 The notes under the controls give the young generation's size. threshold1 also
 sets how many gen 0 collections the legacy collector runs before each gen 1.</p>
 </section>
+
+<section id="the-old-generation">
+<h2>The old generation</h2>
+<p>The incremental collector splits the old generation into two spaces, pending
+and visited. Young collections move their survivors into visited. Each old
+collection, between two young ones, moves objects from pending to visited. When
+pending runs empty, the two swap: visited, holding the whole old generation,
+becomes the new pending, and a new sweep starts. Over a sweep the collector
+marks or examines once each object that was old at the swap.</p>
+<p>An old collection takes pending objects in two ways. First it marks: it moves
+the pending objects sys reaches, directly or through others, to visited without
+examining them, since an object sys reaches cannot be cyclic garbage. Once
+marking has reached all it can, the old collection takes increments: the least
+recently scanned pending object, with every pending object it reaches, examined
+together for cycles. The PEP's text describes the increments, and its
+pseudocode marks first.</p>
+<p>The work budget sets how much each old collection takes. Each young collection
+adds its survivors to it, and an old collection marks or examines until it has
+spent it, so the collector scans the old generation as fast as young
+collections move objects in. The budget starts below zero, so the first old
+collections wait until young collections have moved enough objects in.</p>
+<p>The widget below runs connected_components again, now at the PEP's threshold0
+of 2,000 kB. sys reaches the whole graph, so the old collections only mark, and
+no increment forms. Increments take only what sys does not reach, which a later
+section shows.</p>
+
+<gc-widget id="old-widget" controls="workload.structures.2.size">
+<script type="application/json">
+{
+  "preset": "connected_components",
+  "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+  "every": 5
+}
+</script>
+</gc-widget>
+
+<p>In the incremental column's heap panel, the old generation fills as young
+collections move the graph in from the aging lane. At each swap, visited turns
+into pending, and pending then drains back into visited, an old collection at a
+time. Each sweep runs longer than the last, since the old generation has grown
+since the one before. In the work panel the bars hold steady: each young
+collection's survivors, and the marking of the old collection after it. The
+legacy column's bars rise every twelfth collection, where a gen 1 collection
+examines the nursery and the aging generation together. Work per MB comes out
+close for the two collectors, and the incremental collector spends its share in
+pieces the size of what young collections promote.</p>
+<p>The work budget panel shows the pacing. Each young collection lifts the budget
+by what it moved in, and the old collection after it spends the budget back to
+zero. Once the module has loaded the whole graph, young collections stop moving
+objects in, the budget stays at zero, and the old collections go idle. The last
+sweep stops part way, and part of the graph is still in pending when the run
+ends.</p>
+<p>Move the graph's size and the sweeps change length. A larger graph keeps young
+collections promoting for longer, so more sweeps run, each longer than the
+last. The incremental collector's bars stay the same height, while the legacy
+collector's gen 1 bars grow with the graph until each examines a full nursery
+and aging generation. At a few thousand kB the graph never lifts the budget
+above zero, and no sweep runs.</p>
+</section>
 </main>
 </body>
 </html>
