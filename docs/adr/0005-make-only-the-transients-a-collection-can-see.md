@@ -26,7 +26,7 @@ scheduled, the builds waiting and when each repeating structure next falls
 due. A transient that outlasts that clock or the next automatic collection
 gets made. The bound errs early: churn makes some transients no collection
 sees, and never skips one a collection could see. Shutdown lets go of every
-frame root before its two full collections, so the transients alive at a
+frame root before its three full collections, so the transients alive at a
 run's end never reach them.
 
 ## Considered Options

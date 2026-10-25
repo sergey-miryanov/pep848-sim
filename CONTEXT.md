@@ -36,9 +36,9 @@ each worker's collections, and a preset models one worker.
 _Avoid_: process (bare), run (that is the simulator's), job
 
 **Shutdown**:
-The end of a worker. Its frames have returned, and `finalize_modules` lets go
-of the modules and runs two full collections. A run ends in shutdown when its
-workload asks for one.
+The end of a worker. Its frames have returned, `_Py_Finalize` runs a full
+collection, and `finalize_modules` lets go of the modules and runs two more. A
+run ends in shutdown when its workload asks for one.
 _Avoid_: exit, teardown, finalization (bare)
 
 **Workload parameter**:
@@ -355,7 +355,7 @@ full collection (that takes the whole heap in one go)
 
 **Full collection**:
 A collection of the whole heap in one go, which a workload asks for with
-`gc.collect()` and shutdown runs twice. The legacy collector runs a gen 2
+`gc.collect()` and shutdown runs three times. The legacy collector runs a gen 2
 collection; the incremental collector marks what the module root reaches and
 examines everything else, whatever space it sits in.
 _Avoid_: major GC, whole-heap collection, gen 2 collection (that names the

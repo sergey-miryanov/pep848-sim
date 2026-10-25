@@ -143,7 +143,7 @@ def test_a_run_that_ends_on_a_boundary_collects_there(
 
 
 @pytest.mark.parametrize("collector", COLLECTORS)
-def test_a_run_that_asks_for_shutdown_ends_with_two_full_collections(
+def test_a_run_that_asks_for_shutdown_ends_with_three_full_collections(
     collector: type[Collector],
 ) -> None:
     parameters = WorkloadParameters(CHURN, (), seed=1, shutdown=True)
@@ -154,14 +154,13 @@ def test_a_run_that_asks_for_shutdown_ends_with_two_full_collections(
     whole = records(parts)
     assert [(record.clock, record.kind) for record in whole[2:]] == [
         (29, "shutdown"),
-        (29, "shutdown"),
-    ]
+    ] * 3
     assert [record.clock for record in whole[:2]] == [10, 20]
     # The first frees all the cyclic garbage, the cycles the frames held among it,
-    # and leaves the second none.
-    first, second = whole[2:]
+    # and leaves the others none.
+    first, second, third = whole[2:]
     assert sum(first.spaces_after) == first.reachable_after
-    assert second.freed == 0
+    assert second.freed == third.freed == 0
 
 
 @given(

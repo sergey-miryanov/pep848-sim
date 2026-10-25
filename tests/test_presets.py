@@ -75,13 +75,13 @@ def test_create_gc_cycles_runs_its_loops_between_start_up_and_shutdown(
     collector: type[Collector],
 ) -> None:
     preset = CREATE_GC_CYCLES
-    rings = preset.workload.structures[-1]
+    start_up_tree, rings = preset.workload.structures[1:]
 
     whole = run_preset(preset, collector)
 
     kinds = [record.kind for record in whole]
     first_loop = kinds.index("full")
-    loops, shutdown = whole[first_loop:-2], whole[-2:]
+    loops, shutdown = whole[first_loop:-3], whole[-3:]
     # gc.collect() comes too often for the runtime to start a collection once the
     # loops begin, and the last loop's second call ends the run.
     assert {record.kind for record in loops} == {"full"}
@@ -90,11 +90,15 @@ def test_create_gc_cycles_runs_its_loops_between_start_up_and_shutdown(
     # Each loop's second gc.collect() frees the rings it dropped.
     rings_garbage = rings.shape.cyclic_garbage(rings.size)
     assert all(record.freed >= rings_garbage for record in loops[1::2])
-    # Shutdown's first full collection leaves no cyclic garbage for the second.
-    assert [record.kind for record in shutdown] == ["shutdown", "shutdown"]
-    first, second = shutdown
-    assert sum(first.spaces_after) == first.reachable_after
-    assert second.freed == 0
+    # The last loop freed its rings, so shutdown's first full collection finds no
+    # cyclic garbage the frames left. The second frees the start-up tree once the
+    # modules go, and leaves the third none.
+    assert [record.kind for record in shutdown] == ["shutdown"] * 3
+    first, second, third = shutdown
+    assert first.freed == 0
+    assert second.freed == start_up_tree.shape.cyclic_garbage(start_up_tree.size)
+    assert sum(second.spaces_after) == second.reachable_after
+    assert third.freed == 0
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
@@ -104,7 +108,7 @@ def test_json_loads_finds_no_cyclic_garbage_before_shutdown(
     preset = JSON_LOADS
     tree = preset.workload.structures[1]
 
-    *automatic, first, second = run_preset(preset, collector)
+    *automatic, first, second, third = run_preset(preset, collector)
 
     # Nothing calls gc.collect(), so the runtime starts every collection before
     # shutdown, one each threshold0 kB, and no result json.loads returns leaves a
@@ -112,11 +116,13 @@ def test_json_loads_finds_no_cyclic_garbage_before_shutdown(
     assert len(automatic) == preset.run_length // CollectorSettings().threshold0
     assert {record.kind for record in automatic}.isdisjoint({"full", "shutdown"})
     assert all(record.freed == 0 for record in automatic)
-    # Shutdown's first full collection frees the start-up tree, and leaves the
-    # second nothing.
-    assert [first.kind, second.kind] == ["shutdown", "shutdown"]
-    assert first.freed == tree.shape.cyclic_garbage(tree.size)
-    assert second.freed == 0
+    # Shutdown's first full collection finds no cyclic garbage the frames left. The
+    # second frees the start-up tree once the modules go, and leaves the third
+    # nothing.
+    assert [first.kind, second.kind, third.kind] == ["shutdown"] * 3
+    assert first.freed == 0
+    assert second.freed == tree.shape.cyclic_garbage(tree.size)
+    assert third.freed == 0
 
 
 def test_xml_etree_parse_builds_a_tree_then_parses_60_in_each_value() -> None:
@@ -157,12 +163,12 @@ def test_async_tree_io_tg_drops_each_runs_tree_as_the_next_run_starts() -> None:
 def test_async_tree_io_tg_finds_no_cyclic_garbage_before_shutdown(
     collector: type[Collector],
 ) -> None:
-    *automatic, first, second = run_preset(ASYNC_TREE_IO_TG, collector)
+    *automatic, first, second, third = run_preset(ASYNC_TREE_IO_TG, collector)
 
     # Refcounting frees each tree, and nothing calls gc.collect().
     assert {record.kind for record in automatic}.isdisjoint({"full", "shutdown"})
     assert all(record.freed == 0 for record in automatic)
-    assert [first.kind, second.kind] == ["shutdown", "shutdown"]
+    assert [first.kind, second.kind, third.kind] == ["shutdown"] * 3
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
@@ -171,15 +177,17 @@ def test_connected_components_frees_its_graph_with_its_module_at_shutdown(
 ) -> None:
     _, start_up_tree, graph = CONNECTED_COMPONENTS.workload.structures
 
-    *automatic, first, second = run_preset(CONNECTED_COMPONENTS, collector)
+    *automatic, first, second, third = run_preset(CONNECTED_COMPONENTS, collector)
 
     # The walks make no cycles, and the graph stays in its module's globals.
     assert all(record.freed == 0 for record in automatic)
-    # Shutdown's first full collection frees the graph and the start-up tree, which
-    # its module's cycles keep, and leaves the second nothing.
-    assert [first.kind, second.kind] == ["shutdown", "shutdown"]
-    assert first.freed == graph.size + start_up_tree.size
-    assert second.freed == 0
+    # Shutdown's first full collection comes while the modules still hold the graph
+    # and the start-up tree, and frees neither. The second frees both, which their
+    # cycles keep once the modules go, and leaves the third nothing.
+    assert [first.kind, second.kind, third.kind] == ["shutdown"] * 3
+    assert first.freed == 0
+    assert second.freed == graph.size + start_up_tree.size
+    assert third.freed == 0
 
 
 @pytest.mark.skipif(mock(), reason="the records in data/ are mock until the rerun")
