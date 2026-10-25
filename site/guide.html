@@ -351,6 +351,55 @@ collector's young collections stay nearly idle: each <code>gc.collect()</code>
 takes the whole young generation with it, so its aging spaces hold little when
 a young collection reaches them.</p>
 </section>
+
+<section id="tuning">
+<h2>Tuning with <code>gc.set_threshold()</code></h2>
+<p>The PEP keeps <code>gc.set_threshold()</code> and its three numbers, and
+changes what they mean. In the legacy collector that 3.15 ships, threshold0
+counts net objects, those allocated less those freed, since the last
+collection; threshold1 counts gen 0 collections before a gen 1 collection; and
+threshold2 counts gen 1 collections before a gen 2. Under the PEP, threshold0
+is the size of a half-space in kB, the unit the young generation comes in: the
+nursery is two half-spaces, and a collection comes each time the program
+allocates threshold0 kB. threshold1 counts the aging generation's half-spaces,
+rounded up to an even number, and the incremental collector does not read
+threshold2.</p>
+<p>The young generation comes to threshold0 × (threshold1 + 2) kB, 24 MB at the
+defaults of 2,000 and 10. The PEP expects small, short-lived programs to use
+more memory for it, and bounds the extra at 24 MB by default. The bound counts
+freed objects as well as live ones, so most programs use much less.</p>
+<p>The reference branch counts threshold0 in kB allocated for the legacy collector
+too, which <code>-X gc=legacy</code> picks. So both columns of each widget
+collect at the same clocks, and only threshold1 and threshold2 mean different
+things to them.</p>
+<p>The widget below runs connected_components at the PEP's defaults again, this
+time with threshold0 and threshold1 as its controls.</p>
+
+<gc-widget id="tuning-widget" controls="settings.threshold0 settings.threshold1">
+<script type="application/json">
+{
+  "preset": "connected_components",
+  "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+  "every": 5
+}
+</script>
+</gc-widget>
+
+<p>threshold0 trades the incremental collector's collections against their size.
+Halve it and the collections figure doubles, while each collection takes half
+as much, so peak work halves too and work per MB holds. The notes under the
+controls give the nursery's and the aging generation's sizes as they change.
+The legacy collector answers less evenly: a lower threshold0 adds to its work
+per MB, and its peak work jumps whenever one of its collections comes to take
+the whole graph.</p>
+<p>threshold1 sets how long an object ages before a young collection examines it.
+Here it changes nothing in the incremental column: the graph outlives any young
+generation, so all of it reaches the old generation however long it waits.
+threshold1 matters for objects that die before they would reach the old
+generation, as the <a href="#the-young-generation">young generation's
+section</a> shows. For the legacy collector, threshold1 still spaces out its
+gen 1 collections, and at 2 it brings gen 2 collections into the run.</p>
+</section>
 </main>
 </body>
 </html>
