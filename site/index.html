@@ -29,6 +29,7 @@
 <main>
 <nav aria-label="Pages">
 <a href="./" aria-current="page">PEP 848 simulator</a>
+<a href="guide.html">Guide</a>
 <a href="playground.html">Playground</a>
 <a href="https://github.com/sergey-miryanov/pep848-sim">GitHub</a>
 <button type="button" class="theme-switch">Dark theme</button>
@@ -40,7 +41,8 @@ Python simulator of it, and of the legacy collector beside it, in your
 browser: the widget below runs the workload you pick under both collectors
 and draws what each does. In <a href="playground.html">the playground</a> you
 can change any part of a workload, write a shape of your own in Python and
-send a run by its link. A guide built on such widgets comes later.</p>
+send a run by its link. <a href="guide.html">The guide</a> explains the PEP
+a part at a time.</p>
 <p>The first runs wait a few seconds while Pyodide, the Python that runs in
 the browser, downloads and starts.</p>
 
@@ -133,7 +135,7 @@ the browser, downloads and starts.</p>
 </script>
 </gc-widget>
 
-<h2>Reading the widget</h2>
+<h2 id="reading-the-widget">Reading the widget</h2>
 <p>Both runs allocate the same objects in the same order: the legacy collector
 on the left, the incremental collector on the right. Each simulated object
 stands for 1 kB of real objects, and the allocation clock along the bottom
@@ -193,7 +195,7 @@ or below, old collections do no work until young ones raise it again.</dd>
 <p>The stand-in has 8 MB of module globals, a 20 MB tree rebuilt every 80 MB,
 and churn with 3% of its allocations in cycles. Presets will replace it, each
 modelled on a pyperformance benchmark and checked against that benchmark's
-yield. The guide comes after them.</p>
+yield. The guide's sections will run them.</p>
 <p>create_gc_cycles, the first preset, models one worker of the
 pyperformance benchmark of that name. After start-up, each of its 512 loops
 calls <code>gc.collect()</code>, builds 100 rings of 21 objects, drops them
@@ -245,6 +247,8 @@ the benchmark runs again under gcmon, the start-up heap, the load's churn and
 each loop's length are placeholders.</p>
 
 <h2>More</h2>
+<p><a href="guide.html">The guide</a> takes PEP 848 a part at a time, starting
+from why CPython needs a cycle collector.</p>
 <p><a href="playground.html">The playground</a> runs the same workloads and
 lets you change any part of them, in the widget's legend or as Python: each
 structure, the churn, the run, and the collector constants no Python API
