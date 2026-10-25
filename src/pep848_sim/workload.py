@@ -207,8 +207,8 @@ class WorkloadParameters:
     churn: ChurnParameters
     structures: tuple[StructureParameters, ...]
     seed: int
-    # Whether the run ends as a worker does, in shutdown: its frames return, and
-    # finalize_modules runs two full collections.
+    # Whether the run ends as a worker does, in shutdown: its frames return,
+    # _Py_Finalize runs a full collection, and finalize_modules runs two more.
     shutdown: bool = False
 
 
@@ -281,10 +281,11 @@ class Workload:
                 heap.collect_full("full")
 
     def shut_down(self) -> None:
-        """End as a worker does: its frames have returned, and finalize_modules lets
-        go of the modules and runs two full collections."""
+        """End as a worker does: its frames have returned, _Py_Finalize runs a full
+        collection, and finalize_modules lets go of the modules and runs two more."""
         heap = self._heap
         heap.let_go_every_frame_root()
+        heap.collect_full("shutdown")
         heap.let_go_of_the_modules()
         for _ in range(2):
             heap.collect_full("shutdown")

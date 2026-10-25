@@ -485,20 +485,20 @@ def test_a_structure_that_asks_gets_a_full_collection_around_each_build() -> Non
     ]
 
 
-def test_shutdown_lets_go_of_frames_and_modules_then_collects_twice() -> None:
+def long_lived(shape: Chains | Tree, size: int, root: Root) -> StructureParameters:
+    return StructureParameters(
+        shape=shape,
+        size=size,
+        root=root,
+        lifetime=None,
+        rebuild_interval=None,
+        build_churn=0,
+    )
+
+
+def test_shutdown_lets_go_of_frames_and_modules_and_collects_three_times() -> None:
     collector = Recording(threshold0=1_000)
     heap = Heap(collector)
-
-    def long_lived(shape: Chains | Tree, size: int, root: Root) -> StructureParameters:
-        return StructureParameters(
-            shape=shape,
-            size=size,
-            root=root,
-            lifetime=None,
-            rebuild_interval=None,
-            build_churn=0,
-        )
-
     structures = (
         long_lived(Tree(), 3, "frame"),
         long_lived(Tree(), 2, "module"),
@@ -514,4 +514,22 @@ def test_shutdown_lets_go_of_frames_and_modules_then_collects_twice() -> None:
     assert heap.references(heap.module_root) == ()
     assert heap.uncollected_garbage == 5
     assert len(heap) == 6
-    assert collector.full == [(9, "shutdown"), (9, "shutdown")]
+    assert collector.full == [(9, "shutdown")] * 3
+
+
+def test_shutdown_collects_once_its_frames_go_and_again_once_its_modules_go() -> None:
+    collector = LegacyCollector(CollectorSettings(threshold0=1_000))
+    heap = Heap(collector)
+    structures = (long_lived(Tree(), 3, "frame"), long_lived(Tree(), 2, "module"))
+    workload = Workload(heap, WorkloadParameters(QUIET, structures, seed=848))
+    workload.run_to(5)
+
+    workload.shut_down()
+
+    # As _Py_Finalize's PyGC_Collect() frees what the frames left before
+    # finalize_modules lets go of the modules and collects twice.
+    assert [(record.kind, record.freed) for record in collector.records] == [
+        ("shutdown", 3),
+        ("shutdown", 2),
+        ("shutdown", 0),
+    ]

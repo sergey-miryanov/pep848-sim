@@ -20,12 +20,14 @@ before.
 Two things call a full collection. A structure can ask for one before each
 build and one after each drop, as create_gc_cycles calls `gc.collect()`
 around each loop. A run can end in shutdown, as a worker does. By the time
-`finalize_modules` runs, the worker's frames have returned, so the heap lets
-go of every frame root. `finalize_modules` takes each module out of
-`sys.modules`, so sys lets go of everything it holds, and two full
-collections follow. The record names the
-kind: `full` for `gc.collect()` and `shutdown` for the last two, in both
-collectors. `gen 2` stays the legacy collector's automatic collection, so a
+`_Py_Finalize` runs, the worker's frames have returned, so the heap lets go of
+every frame root, and `_Py_Finalize` runs a full collection with
+`PyGC_Collect()`. Then `finalize_modules` takes each module out of
+`sys.modules`, so sys lets go of everything it holds, and two more full
+collections follow. The record names the kind: `full` for `gc.collect()` and
+`shutdown` for shutdown's three, in both collectors. The branch files the
+first of the three under `gc.collect()`'s reason, manual, and the record names
+shutdown, which started it. `gen 2` stays the legacy collector's automatic collection, so a
 preset's records split into automatic and explicit collections the way #117
 splits its benchmark's. The figures count a full collection like any other,
 and leave it out of the gen 2 count.

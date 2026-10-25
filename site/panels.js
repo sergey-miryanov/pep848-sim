@@ -31,7 +31,7 @@ export const CLOCK = 0, KIND = 1, MARKED = 2, WORK_TO_DO = 5;
 const SPACES_BEFORE = 7, SPACES_AFTER = 8, REACHABLE_BEFORE = 9, REACHABLE_AFTER = 10;
 
 // The kinds of a full collection's record: the workload's gc.collect() calls,
-// and shutdown's two (ADR 0012).
+// and shutdown's three (ADR 0012).
 export const FULL = ["full", "shutdown"];
 // How opaque a full collection's work stands beside the runtime's own collections'.
 export const FADED = 0.45;
@@ -137,7 +137,7 @@ export function work(records, binKb) {
 
 /**
  * The records at the collection clock nearest `kb`, the earlier of two as near.
- * Several collections can share a clock, as shutdown's two do.
+ * Several collections can share a clock, as shutdown's three do.
  * @param {Record[]} records
  * @param {number} kb
  */
