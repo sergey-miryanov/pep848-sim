@@ -61,6 +61,31 @@ chart: marking every panel of both columns took about 0.5 ms at 1,028
 collections. Each redraw while runs stream draws the overlay again from the
 records so far, so the tooltip holds and its values follow the run.
 
+A reader can read the panels from the keyboard too (#141). They tab to each
+panel with a tooltip, five in all, as the legacy column has no budget, and a
+focused panel shows a ring in the text color. On the heap and the budget, the
+arrow keys step to the collection before or after; on the work panel, to the
+bin before or after. Home and End go to the first and the last, and up and
+down step as on any slider. A bin reads at the clock that ends it, where the
+collection that closed it ran. A collection's clock reads the bin that holds
+its work, so the outline and the crosshairs mark the same collection. The keys
+move the same clock as the pointer, so they mark every panel of both columns,
+and the focused panel shows its tooltip in both at once. Escape hides it until
+the next key. A panel that takes focus starts at the clock the keys last read
+or the pointer last rested on, in any panel, or else at its first collection
+or bin, so Tab carries the clock from panel to panel. Leaving the panel hides
+the marks. A click focuses a panel as well, but the pointer reads it then, and
+its marks go when the pointer leaves.
+
+A screen reader takes each panel for a slider along the allocation clock,
+named by its column's heading and its caption. Its value is the tooltip's
+readout as one sentence: "gen 0 collection at 6 MB, in MB, before and after:
+heap 6.00, 6.00; reachable 6.00, 6.00; …". The widget sets the value on focus
+and at each key, and leaves it alone when a redraw or the pointer moves the
+marks, so a screen reader says nothing while runs stream or the pointer moves.
+The slider's role also hands the arrow keys to the panel, which in a screen
+reader's browse mode would read the page instead.
+
 Beside the select and the controls, the widget draws a sample of the
 request's object graph (#151): a few objects of each structure, linked as its
 shape links them, under sys or the frame that holds it, with each link that
@@ -110,6 +135,14 @@ playground the legend edits the workload (ADR 0013).
   no keys.
 - The crosshair alone in the column the pointer is not in: comparing the two
   runs at one clock would take a move to the other column and back.
+- A live region that says each step aloud: in browse mode a screen reader
+  keeps the arrow keys for reading the page, and a panel without a widget's
+  role would not get them.
+- A clock for each panel, from its first collection: a reader who tabbed from
+  the legacy heap to the incremental heap would lose the point they compared.
+- The work panel reading a clock in the bin that starts there, as the pointer
+  first did: a collection at a bin's end would read the bin after its work,
+  and a step on the heap would outline the wrong bar.
 - A small diagram for each structure, laid out level by level under the
   controls: it showed each shape plainly, but read as a strip of thumbnails
   that ran past the widget's edge.
