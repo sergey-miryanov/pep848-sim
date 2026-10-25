@@ -18,9 +18,17 @@ permissions:
   contents: read
 
 jobs:
-  check:
+  # Each recipe `just check` runs is a job of its own, named for the recipe, so
+  # the checks list names the recipe that failed, and one failing leaves the
+  # others to finish. tests/test_ci.py keeps the list in step with `just check`.
+  recipe:
+    name: ${{ matrix.recipe }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        recipe: [lint, typecheck, test, check-ts, test-js, test-pyodide]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,12 +36,26 @@ jobs:
 
       - uses: $/.github/actions/setup
 
-      - name: Check
-        run: poetry run just check
+      - name: Run the recipe
+        run: poetry run just ${{ matrix.recipe }}
 
       - name: Upload coverage to Codecov
-        if: always()
+        if: always() && matrix.recipe == 'test'
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
+
+  # Branch protection requires this one check. It runs when a recipe's job
+  # fails too, since a skipped job counts as passed, and it fails unless every
+  # recipe's job passed.
+  check:
+    if: always()
+    needs: recipe
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Check that every recipe passed
+        env:
+          RESULT: ${{ needs.recipe.result }}
+        run: test "$RESULT" = success
