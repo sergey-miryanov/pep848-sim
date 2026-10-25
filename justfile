@@ -32,9 +32,11 @@ typecheck:
     mypy
     pyrefly check --min-severity=warn
 
-# assemble _site/: copy site/, zip src/pep848_sim into _site/sim.zip
-site:
-    python tools/assemble_site.py
+# assemble _site/: the pages at the top, the rest of site/ and src/pep848_sim
+# zipped as sim.zip in v/<commit>/; --keep REF keeps the folder the site at REF
+# serves too
+site *args:
+    python tools/assemble_site.py {{args}}
 
 # run site, then serve _site/ on http://localhost:8000
 serve: site

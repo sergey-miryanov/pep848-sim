@@ -30,8 +30,13 @@ jobs:
       - name: Check
         run: poetry run just check
 
+      # The live site's folder stays beside this deploy's, so a page a browser
+      # cached before the deploy still finds its files (ADR 0019).
+      - name: Fetch the live site
+        run: git fetch --depth=1 origin gh-pages
+
       - name: Assemble the site
-        run: poetry run just site
+        run: poetry run just site --keep FETCH_HEAD
 
       # The pull requests' previews live in pr-preview/ on the same branch.
       - uses: JamesIves/github-pages-deploy-action@fa24774553152dd7873cd16ebd8d959b010c5445 # v4.9.0
