@@ -247,6 +247,54 @@ collector's gen 1 bars grow with the graph until each examines a full nursery
 and aging generation. At a few thousand kB the graph never lifts the budget
 above zero, and no sweep runs.</p>
 </section>
+
+<section id="a-large-increment">
+<h2>A large increment</h2>
+<p>An increment is a transitive closure: the least recently scanned pending object
+and every pending object it reaches, directly or through others. An old
+collection examines an increment whole, however little of the work budget is
+left, and debits the budget with all of it. When one object of a structure
+reaches all the rest, and sys does not reach the structure, the first increment
+to start from that object takes everything of the structure in pending.</p>
+<p>The PEP names this cost in its future work: the reference implementation "can
+still have long pause times if the transitive closure needed for an increment
+is large". It suggests scanning an increment over several collections, and
+calls that challenging, since the program can change the increment's objects
+between them.</p>
+<p>The widget below runs async_tree_io_tg, which models a worker of the benchmark
+of that name. Four times over, it starts a tree of asyncio tasks six levels
+deep, and a frame holds the tree until its tasks finish. sys does not reach the
+tree, so marking leaves it in pending, and the tree's root reaches every task
+in it. No task links back to the one that started it, so refcounting frees each
+tree as the frame lets go, and the collections find no cyclic garbage before
+shutdown.</p>
+
+<gc-widget id="increment-widget" controls="workload.structures.2.size">
+<script type="application/json">
+{
+  "preset": "async_tree_io_tg",
+  "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+  "every": 10
+}
+</script>
+</gc-widget>
+
+<p>In the incremental column's work panel, the tallest bars each hold an old
+collection whose increment starts from a tree's root and examines every task
+that young collections have moved in so far. While a tree grows, each such
+increment is larger than the last, and the peak work figure reads the largest,
+above the legacy collector's. The legacy collector's largest collections here
+are gen 1 collections, which take only the nursery and the aging generation.
+Its one gen 2 collection comes just after a tree has gone.</p>
+<p>The work budget panel shows what each large increment costs the old collections
+after it. The budget drops by the whole increment, far below zero, and the old
+collections stay idle until young collections have paid it back.</p>
+<p>Move the Hierarchy size, the task tree's, and the comparison turns. With a
+smaller tree, the legacy collector's gen 1 collections are the larger, and its
+peak work passes the incremental collector's. At the largest size, a gen 2
+collection comes while a tree lives and examines all of it, and the legacy
+collector's peak work passes the incremental collector's again.</p>
+</section>
 </main>
 </body>
 </html>
