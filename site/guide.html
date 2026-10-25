@@ -127,6 +127,67 @@ last, then stop once the graph stops growing: the quarter holds them back.
 threshold2 moves the legacy column alone, since the incremental collector
 ignores it. Lower it and the first gen 2 collection comes sooner.</p>
 </section>
+
+<section id="the-young-generation">
+<h2>The young generation</h2>
+<p>The incremental collector holds new objects in its young generation: the
+nursery, then the aging generation. The aging generation holds threshold1 / 2
+aging spaces, rounded up, five at the default of 10, and each aging space is a
+former nursery. Young and old collections take turns. A young collection
+examines the oldest aging space and moves what survives into the old
+generation's visited space. The nursery then joins the aging generation as its
+newest space, unexamined, and a new nursery starts. A collection first examines
+an object when its aging space is the oldest: at the PEP's defaults, 20 to 24
+MB after its allocation. No other collection examines it in the young
+generation.</p>
+<p>The legacy collector examines a new object sooner, and twice. A gen 0
+collection examines the nursery every threshold0 kB, the objects allocated
+since the last collection, and a gen 1 collection examines the survivors again
+before they reach the old generation. The PEP counts both against it. The first
+examination frees no cycle the second would miss. And a cycle needs time to
+form and come loose from the objects that use it, so a collection that meets
+objects soon after their allocation finds few cycles to free.</p>
+<p>The widget below runs json_loads, which models a worker of the benchmark of
+that name: it calls <code>json.loads</code> 60 times a loop. No result holds a
+cycle, and each goes as its call returns, so neither collector frees anything
+before shutdown. Until then, every object a collection examines is work that
+frees nothing. As it starts, the worker builds the long-lived objects it keeps
+to the end, and between loops a few objects stay alive a while longer.</p>
+
+<gc-widget id="young-widget" controls="settings.threshold0 settings.threshold1">
+<script type="application/json">
+{
+  "preset": "json_loads",
+  "settings": {"threshold0": 1000, "threshold1": 10, "threshold2": 10},
+  "every": 1
+}
+</script>
+</gc-widget>
+
+<p>The widget starts at a threshold0 of 1,000 kB, as the last one does: at 2,000
+kB the young generation outlasts the run, and the incremental collector
+examines nothing. Once the worker has built its long-lived objects, both heap
+panels hold them in the aging lane. The legacy collector moves them all into
+the old generation in one gen 1 collection. The incremental collector moves
+them into the visited space a young collection at a time, as their aging spaces
+come up.</p>
+<p>The work panels show what each move cost. The legacy column's gen 0 collections
+examine the long-lived objects while the worker builds them, and its gen 1
+collection examines them all again. The incremental column stays idle until its
+first aging space comes up, then examines each object once. Work per MB adds up
+the difference. The incremental collector's old collections, between its young
+ones, stay idle all run: its work budget starts far below zero, and the young
+collections' credits leave it there.</p>
+<p>Lower threshold0 and the legacy collector meets objects younger still. More of
+the objects the worker keeps between loops meet a gen 0 collection before they
+go, and the legacy collector's work per MB climbs, while the incremental
+collector's changes little. Move threshold0 back toward 2,000 and the
+incremental collector's young collections come later, until the run ends before
+they do. Raise threshold1 and the aging generation grows by an aging space for
+each two steps, so objects wait longer before a young collection examines them.
+The notes under the controls give the young generation's size. threshold1 also
+sets how many gen 0 collections the legacy collector runs before each gen 1.</p>
+</section>
 </main>
 </body>
 </html>
