@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Widget stand-in</title>
+<link rel="stylesheet" href="v/5cec13546451/theme.css">
+<script src="v/5cec13546451/theme.js"></script>
+<script type="module" src="v/5cec13546451/gc-widget.js"></script>
+<script type="module" src="v/5cec13546451/stand-in.js"></script>
+<style>
+  nav { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+  nav [aria-current] { font-weight: 600; text-decoration: none; color: inherit; }
+  /* A narrow page scrolls the table alone. */
+  table { display: block; max-width: 100%; overflow-x: auto; }
+</style>
+</head>
+<body>
+<nav aria-label="Pages">
+<a href="./">PEP 848 simulator</a>
+<a href="playground.html">Playground</a>
+<a href="widget.html" aria-current="page">Stand-in page</a>
+<a href="https://github.com/sergey-miryanov/pep848-sim">GitHub</a>
+<button type="button" class="theme-switch">Dark theme</button>
+</nav>
+<h1>Widget stand-in</h1>
+<p>The first widget offers two workloads through its select. The stand-in,
+close to prototype #6's, runs both collectors at the PEP's thresholds over
+8 MB of module globals, a 20 MB tree rebuilt every 80 MB, and churn with 3%
+of its allocations in cycles. It is no preset, and it goes once presets take
+its place. The create_gc_cycles entry names its preset in place of a workload
+and a run length; the worker sends the preset back spelled out, and the
+entry's control edits what it sent.</p>
+<p>Each widget shows a few controls. Moving one changes only the value it
+shows; releasing it starts that widget's runs again, and the other widget's
+runs go on.</p>
+<gc-widget id="workloads-widget">
+<script type="application/json">
+{
+  "entries": [
+    {
+      "name": "stand-in",
+      "title": "Stand-in",
+      "controls": ["settings.threshold0", "workload.churn.cycle_share",
+                   "workload.churn.lifetime_mean", "workload.structures.1.size",
+                   "workload.structures.1.rebuild_interval"],
+      "request": {
+        "workload": {
+          "churn": {
+            "cycle_share": "3/100", "cycle_size": 3, "lifetime_mean": 5,
+            "long_share": "1/20", "long_lifetimes": [100, 1000]
+          },
+          "structures": [
+            {"shape": {"chains": 16}, "size": 8000, "root": "module",
+             "lifetime": null, "rebuild_interval": null, "build_churn": 0,
+             "full_collections": false},
+            {"shape": "tree", "size": 20000, "root": "frame",
+             "lifetime": 40000, "rebuild_interval": 80000, "build_churn": 1,
+             "full_collections": false}
+          ],
+          "seed": 848,
+          "shutdown": false
+        },
+        "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+        "run_length": 150000,
+        "every": 5
+      }
+    },
+    {
+      "name": "create_gc_cycles",
+      "title": "create_gc_cycles",
+      "controls": ["workload.structures.2.size"],
+      "request": {
+        "preset": "create_gc_cycles",
+        "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+        "every": 20
+      }
+    }
+  ]
+}
+</script>
+</gc-widget>
+<p>The second widget runs the workload <code>tests/test_run.py</code> pins: a
+20 MB run with <code>threshold0</code> at 20 kB, 1 MB of module globals, and a
+100 kB tree rebuilt every 1 MB.</p>
+<gc-widget id="fixed-widget" controls="settings.threshold0 workload.churn.cycle_share workload.churn.lifetime_mean workload.structures.0.size">
+<script type="application/json">
+{
+  "workload": {
+    "churn": {
+      "cycle_share": "1/4", "cycle_size": 3, "lifetime_mean": 200,
+      "long_share": "1/20", "long_lifetimes": [100, 1000]
+    },
+    "structures": [
+      {"shape": {"chains": 16}, "size": 1000, "root": "module",
+       "lifetime": null, "rebuild_interval": null, "build_churn": 0,
+       "full_collections": false},
+      {"shape": "tree", "size": 100, "root": "frame",
+       "lifetime": 400, "rebuild_interval": 1000, "build_churn": 1,
+       "full_collections": false}
+    ],
+    "seed": 848,
+    "shutdown": false
+  },
+  "settings": {"threshold0": 20, "threshold1": 10, "threshold2": 10},
+  "run_length": 20000,
+  "every": 50
+}
+</script>
+</gc-widget>
+<h2>Digests</h2>
+<p>The page's worker also runs the pinned workload on its own, so each digest
+should match the pinned one.</p>
+<p>The first request waits for Pyodide to start. <em>Run again</em> times the
+runs without that wait, and a click while they run drops them and starts both
+again.</p>
+<p><button id="again" type="button">Run again</button> <span id="status"></span></p>
+<table>
+<thead>
+<tr><th>Run</th><th>Records</th><th>Last clock (kB)</th><th>Digest</th><th>Pinned</th></tr>
+</thead>
+<tbody>
+<tr id="legacy"><th>legacy</th><td></td><td></td><td></td><td>8eb3fc9dd9e3d903</td></tr>
+<tr id="incremental"><th>incremental</th><td></td><td></td><td></td><td>c679a9492b62551a</td></tr>
+</tbody>
+</table>
+</body>
+</html>
