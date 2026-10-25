@@ -183,48 +183,16 @@ const linkKey = (/** @type {string} */ id) => `${id}.request`;
 // What the workload source says while a link's code waits for Run.
 const HELD = "This link carries Python, which runs in your browser once you press Run. Read it first.";
 
-// The colors come from the dataviz skill's reference palette, assigned so that
-// neighbors in each stack pass its validator in both modes.
+// The colors come from the page's theme.css, through the custom properties the
+// shadow root inherits (ADR 0018).
 const TEMPLATE = `
 <style>
   :host {
     display: block;
-    color-scheme: light;
-    --surface: #fcfcfb;
-    --text-primary: #0b0b0b;
-    --text-secondary: #52514e;
-    --text-muted: #898781;
-    --grid: #e1e0d9;
-    --baseline: #c3c2b7;
-    --nursery: #2a78d6;
-    --aging: #eda100;
-    --pending: #1baf7a;
-    --visited: #eb6834;
-    --old: #e87ba4;
-    --marked: #008300;
-    --survived: #6250d6;
-    --freed: #e34948;
     padding: 16px;
     background: var(--surface);
     color: var(--text-primary);
     font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
-  }
-  @media (prefers-color-scheme: dark) {
-    :host {
-      color-scheme: dark;
-      --surface: #1a1a19;
-      --text-primary: #f0efec;
-      --text-secondary: #c3c2b7;
-      --grid: #2c2c2a;
-      --baseline: #383835;
-      --nursery: #3987e5;
-      --aging: #c98500;
-      --pending: #199e70;
-      --visited: #d95926;
-      --old: #d55181;
-      --survived: #9085e9;
-      --freed: #e66767;
-    }
   }
   .picks { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; margin: 0 0 16px; font-size: 13px; color: var(--text-secondary); }
   .entries { display: flex; align-items: center; gap: 8px; }
@@ -570,7 +538,8 @@ class GcWidget extends HTMLElement {
     }
     if (this.#entries.length > 1 || this.#editor) addEventListener("hashchange", () => this.#follow());
     new ResizeObserver(() => this.#schedule()).observe(this);
-    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.#schedule());
+    // Plot bakes each color into a chart, so the widget draws them again when the theme changes.
+    new MutationObserver(() => this.#schedule()).observe(document.documentElement, { attributeFilter: ["data-theme"] });
     this.#follow();
   }
 
