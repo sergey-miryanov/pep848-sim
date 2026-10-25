@@ -1,7 +1,8 @@
 // @ts-check
 // <gc-widget>: one embedding of the simulator on a page. It reads its request
-// from the JSON script inside it, asks the page's worker for both runs, and draws
-// them as they stream in, as ADR 0008 lays them out: a row of figures, then a
+// from the JSON script inside it, asks the page's worker for both runs once a
+// reader comes near it, and draws them as they stream in, as ADR 0008 lays them
+// out: a row of figures, then a
 // column per collector, each with the heap by space, work in bins and the work
 // budget, on y-scales the two columns share. Above the figures it shows the
 // controls its `controls` attribute names, and releasing one asks for both runs
@@ -75,6 +76,10 @@ const LANE_HEIGHT = 64;
 const LANE_MARGIN = 12;
 // About how many ticks a lane's y-axis takes.
 const LANE_TICKS = 3;
+// The heap panel's height: the whole heap's lane over the spaces', the margin
+// between each two, and the axes' margins above the first and below the last.
+const HEAP_HEIGHT = (LANES.legacy.length + 1) * (LANE_HEIGHT + 2 * LANE_MARGIN) - 2 * LANE_MARGIN
+  + MARGINS.marginTop + MARGINS.marginBottom;
 // The widest a bar of work grows, in px. A wider bin pads its bar on both sides.
 const BAR = 24;
 // How far, in px, a tooltip stands off the crosshair or bar it reads, and how far
@@ -245,6 +250,11 @@ const TEMPLATE = `
   .key.line { height: 2px; width: 14px; border-radius: 1px; vertical-align: 3px; }
   .none { margin: 8px 0 0; color: var(--text-secondary); font-size: 13px; }
   .plot { position: relative; }
+  /* Each chart keeps the height it draws at from the start, so a widget that
+     has not asked for its runs yet takes its full room on the page. */
+  [data-panel="heap"] .chart { min-height: ${HEAP_HEIGHT}px; }
+  [data-panel="work"] .chart { min-height: ${HEIGHTS.work}px; }
+  [data-panel="budget"] .chart { min-height: ${HEIGHTS.budget}px; }
   .plot:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; border-radius: 4px; }
   .crosshair, .outline, .tip { position: absolute; pointer-events: none; }
   .crosshair { width: 1px; background: var(--text-secondary); }
@@ -564,7 +574,19 @@ class GcWidget extends HTMLElement {
     new ResizeObserver(() => this.#schedule()).observe(this);
     // Plot bakes each color into a chart, so the widget draws them again when the theme changes.
     new MutationObserver(() => this.#schedule()).observe(document.documentElement, { attributeFilter: ["data-theme"] });
-    this.#follow();
+    // The widget asks the page's one worker for its runs once a reader comes
+    // within about a screen of it, or at once if the URL fragment names it
+    // (ADR 0009).
+    const named = fragment();
+    if (this.id && (named.has(this.id) || named.has(linkKey(this.id)))) this.#follow();
+    else {
+      const near = new IntersectionObserver((seen) => {
+        if (!seen.some((entry) => entry.isIntersecting)) return;
+        near.disconnect();
+        this.#follow();
+      }, { rootMargin: "100% 0px" });
+      near.observe(this);
+    }
   }
 
   /**
