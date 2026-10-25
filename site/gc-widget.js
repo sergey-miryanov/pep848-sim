@@ -194,6 +194,9 @@ const TEMPLATE = `
     color: var(--text-primary);
     font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
+  /* The parts below lay out by the width they have, which the playground's
+     source shares on a wide screen (#171). */
+  .content { container: widget / inline-size; }
   .picks { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; margin: 0 0 16px; font-size: 13px; color: var(--text-secondary); }
   .entries { display: flex; align-items: center; gap: 8px; }
   .entries select { font: inherit; color: var(--text-primary); background: var(--surface); }
@@ -257,8 +260,29 @@ const TEMPLATE = `
   .tip thead th:not(:first-child) { text-align: right; padding-left: 12px; }
   .tip td { padding: 0 0 0 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); }
   .error { color: var(--text-primary); }
+  /* Too narrow for three controls beside the graph: the select and the
+     controls, then the graph, then its legend. */
+  @container widget (width < 780px) {
+    .top { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .top > div:first-child { display: contents; }
+    .graph { max-width: 520px; margin: 0 0 16px; }
+    .key-list { order: 1; }
+  }
+  /* Six figures in a row, then three, then two, each legacy beside incremental:
+     a figure takes up to about 120 px. */
+  @container widget (width < 840px) {
+    .figures { grid-template-columns: repeat(3, 1fr); }
+  }
+  @container widget (width < 420px) {
+    .figures { grid-template-columns: repeat(2, 1fr); }
+  }
+  /* Too narrow for two charts that each keep about 220 px of plot: the
+     incremental column under the legacy one. */
+  @container widget (width < 700px) {
+    .columns { grid-template-columns: minmax(0, 1fr); }
+  }
 </style>
-<div class="frame"><div>
+<div class="frame"><div class="content">
 <p class="error" hidden></p>
 <div class="top">
   <div>
@@ -1347,10 +1371,10 @@ class GcWidget extends HTMLElement {
     if (y === null) return content;
     tip.replaceChildren(...readout(...content()));
     tip.hidden = false;
-    // Right of the mark, or left of it where the chart ends; level with the
-    // pointer, inside the panel.
+    // Right of the mark, or left of it where the chart ends, or over the mark
+    // where neither side has room; level with the pointer, inside the panel.
     const toRight = right + GAP + tip.offsetWidth <= width;
-    tip.style.left = `${toRight ? right + GAP : left - GAP - tip.offsetWidth}px`;
+    tip.style.left = `${toRight ? right + GAP : Math.max(0, left - GAP - tip.offsetWidth)}px`;
     tip.style.top = `${Math.min(Math.max(0, y - tip.offsetHeight / 2), plot.clientHeight - tip.offsetHeight)}px`;
     return content;
   }

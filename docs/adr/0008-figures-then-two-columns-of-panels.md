@@ -11,10 +11,20 @@ allocation clock; work, binned into about forty bins a run, each a whole
 number of collection intervals, stacked as marked, survived and freed; and
 the work budget, a step line with a bold zero line and the negative stretch
 shaded, which the legacy column replaces with a line saying it keeps none.
-The layout is for the desktop, and the Guide milestone takes up the phone
-layout. We chose this layout as a starting point, on records from a rough
-simulator. Once the widget draws the real simulator's presets, the layout is
-open to change, and whoever changes it amends this record.
+We chose this layout as a starting point, on records from a rough simulator.
+Once the widget draws the real simulator's presets, the layout is open to
+change, and whoever changes it amends this record.
+
+The layout began on the desktop, and the widget now fits a phone's width too
+(#171). It lays out by its own width, since the playground's source takes a
+third of a wide screen and leaves the widget the rest. The figures run six to a row, three
+below 840 px and two below 420 px, each legacy beside incremental. Below
+780 px the top row stacks: the select and the controls, the object graph, then
+its legend. Below 700 px a chart beside another would keep less than about
+220 px of plot, so the incremental column moves under the legacy one. The
+crosshair still marks both columns at one clock, and a reader who scrolls to
+the other column finds the same clock marked there. A tooltip with no
+room on either side of its mark covers the mark.
 
 The heap panel's top lane draws the whole heap and its reachable part, and
 shades the gap between them, the uncollected garbage. Below it, the nursery,
@@ -117,6 +127,10 @@ playground the legend edits the workload (ADR 0013).
   generation's tangled near zero, under the old generation's.
 - Lanes with a y-scale each: the nursery's sawtooth filled its lane, but the
   same height read as 4 MB in one lane and 60 MB in another.
+- One collector at a time behind a switch on a phone: a reader compares the
+  two runs at one clock, and a switch would hide one of them.
+- Widths taken from the window: beside the playground's source, the widget
+  would lay out for the whole screen and overflow its share of it.
 - Plot's pointer and tip marks in each chart: each pointer move would rebuild
   every chart, 20 to 65 ms at 600 to 2,000 collections, and Plot's pointer
   reads one chart, where the heap panel is four.
