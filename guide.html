@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 guide</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="v/8189f48529ea/theme.css">
-<script src="v/8189f48529ea/theme.js"></script>
+<link rel="stylesheet" href="v/2101ce12104e/theme.css">
+<script src="v/2101ce12104e/theme.js"></script>
 <style>
   body {
     margin: 0;
@@ -22,7 +22,7 @@
   nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 20px; font-size: 14px; color: var(--text-secondary); }
   nav [aria-current] { color: var(--text-primary); font-weight: 600; text-decoration: none; }
 </style>
-<script type="module" src="v/8189f48529ea/gc-widget.js"></script>
+<script type="module" src="v/2101ce12104e/gc-widget.js"></script>
 </head>
 <body>
 <main>
@@ -294,6 +294,62 @@ smaller tree, the legacy collector's gen 1 collections are the larger, and its
 peak work passes the incremental collector's. At the largest size, a gen 2
 collection comes while a tree lives and examines all of it, and the legacy
 collector's peak work passes the incremental collector's again.</p>
+</section>
+
+<section id="gc-collect-and-shutdown">
+<h2><code>gc.collect()</code> and shutdown</h2>
+<p>A program can start a collection itself with <code>gc.collect()</code>. With no
+argument, it takes the whole heap in one go under either collector. The legacy
+collector runs a gen 2 collection. The incremental collector puts every object
+in pending, marks what sys reaches and examines the rest, as an old collection
+would, all at once. The PEP keeps the arguments 0 and 1, for a young collection
+and for an increment of the old generation, and deprecates passing any
+argument, since it interferes with the collector's own pacing.</p>
+<p>Every collection resets the countdown to the next one the runtime starts, a
+full one included: the next automatic collection comes threshold0 kB after it.
+A program that calls <code>gc.collect()</code> more often than every threshold0
+kB never lets the runtime start one of its own.</p>
+<p>Shutdown runs three full collections. Once the worker's frames have returned,
+<code>_Py_Finalize</code> runs one, which frees the cyclic garbage the frames
+left. Then <code>finalize_modules</code> takes each module out of
+<code>sys.modules</code>, so sys lets go of everything it held, and runs two
+more, which free the cycles the modules' globals leave behind.</p>
+<p>The widget below runs create_gc_cycles, which models a worker of the benchmark
+of that name. After start-up, each of its loops calls
+<code>gc.collect()</code>, builds 100 rings of 21 objects, drops them and calls
+<code>gc.collect()</code> again. The calls come closer together than threshold0
+kB, so once the loops begin the runtime starts no collection of its own.</p>
+
+<gc-widget id="collect-widget" controls="settings.threshold0">
+<script type="application/json">
+{
+  "preset": "create_gc_cycles",
+  "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+  "every": 20
+}
+</script>
+</gc-widget>
+
+<p>In each heap panel, the band of ticks under the top lane marks the calls, one
+tick to a pixel at most, and the dashed line marks shutdown. Each call takes
+the whole heap, so the two work panels show faded bars of the same height, and
+work per MB comes out the same: when a program calls <code>gc.collect()</code>
+this often, the collector it runs makes no difference to the work. Yield
+differs. The incremental collector marks what sys reaches without examining it,
+and yield counts only the objects a collection examined, so nearly all the
+incremental collector examines is rings it frees. Peak work counts only the
+collections the runtime started, here the few at start-up.</p>
+<p>At the dashed line, the heap falls to almost nothing. Shutdown's first
+collection frees nothing, since the last loop's second call freed its rings.
+When the modules go, refcounting frees the chains that start-up built, and the
+second collection frees the tree with parent pointers, cyclic garbage once sys
+lets go of it. The third finds nothing left.</p>
+<p>Lower threshold0 below the kB a loop's rings take to build, and the runtime's
+own collections come back inside each build. The legacy collector's gen 0
+collections examine rings still being built and free nothing. The incremental
+collector's young collections stay nearly idle: each <code>gc.collect()</code>
+takes the whole young generation with it, so its aging spaces hold little when
+a young collection reaches them.</p>
 </section>
 </main>
 </body>
