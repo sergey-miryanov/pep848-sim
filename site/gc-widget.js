@@ -19,6 +19,11 @@
 // widget shows, as widget-id=entry-name pairs. An editing widget with an id also
 // writes the request of its last runs there, as a widget-id.request pair, which
 // makes the address a link that opens the same runs (ADR 0016).
+//
+// Each panel reads its values under the pointer, and from the keys once it has
+// focus: the arrows step from one collection or bin to the next. A screen reader
+// takes each panel for a slider along the allocation clock, and hears the
+// tooltip's readout at each step.
 
 // @ts-expect-error: an editor cannot fetch Plot's types from jsDelivr.
 import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+esm";
@@ -31,7 +36,8 @@ import { Source, SOURCE_STYLE } from "./source.js";
 import { FOREIGN, decode, encode, holdsCode, LINK_STYLE } from "./link.js";
 import { describe, describeChurn, describeYoung, fit, network } from "./graph.js";
 import {
-  CLOCK, FADED, FULL, KIND, LANES, PARTS, SPACES, WORK_TO_DO, budgetAt, ceiling, collections, heap, heapAt, work, workAt,
+  CLOCK, FADED, FULL, KEYS, KIND, LANES, PARTS, SPACES, WORK_TO_DO,
+  budgetAt, ceiling, collections, heap, heapAt, spoken, step, work, workAt,
 } from "./panels.js";
 import { dropRuns, requestRuns, stopRuns } from "./runs.js";
 
@@ -39,6 +45,7 @@ import { dropRuns, requestRuns, stopRuns } from "./runs.js";
 /** @typedef {import("./runs.js").Figures} Figures */
 /** @typedef {import("./runs.js").Control} Control */
 /** @typedef {import("./panels.js").Collector} Collector */
+/** @typedef {import("./panels.js").Readout} Readout */
 /** @typedef {import("./graph.js").Graph} Graph */
 /**
  * What a redraw laid out, in MB and px: the clock's length, the charts' width,
@@ -267,6 +274,7 @@ const TEMPLATE = `
   .key.line { height: 2px; width: 14px; border-radius: 1px; vertical-align: 3px; }
   .none { margin: 8px 0 0; color: var(--text-secondary); font-size: 13px; }
   .plot { position: relative; }
+  .plot:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; border-radius: 4px; }
   .crosshair, .outline, .tip { position: absolute; pointer-events: none; }
   .crosshair { width: 1px; background: var(--text-secondary); }
   .outline { box-sizing: border-box; border: 1.5px solid var(--text-secondary); border-radius: 5px 5px 0 0; border-bottom: 0; }
@@ -372,6 +380,15 @@ class GcWidget extends HTMLElement {
   #rest = null;
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   #dwell = undefined;
+  /**
+   * The panel the keys read, while it has focus, and whether Escape has hidden
+   * its tooltip since the last key.
+   * @type {{ panel: string, plot: HTMLElement, hidden: boolean } | null}
+   */
+  #keys = null;
+  /** The clock, in kB, the keys read, or where the pointer last rested; null until either reads one. */
+  /** @type {number | null} */
+  #clock = null;
   /** The legend's editor, on a widget with the `editor` attribute. */
   /** @type {Editor | null} */
   #editor = null;
@@ -430,6 +447,7 @@ class GcWidget extends HTMLElement {
     });
     for (const collector of COLLECTORS) {
       const column = this.#column(collector);
+      /** @type {HTMLElement} */ (column.querySelector("h2")).id = collector;
       // In the lanes' order, top to bottom.
       /** @type {HTMLElement} */ (column.querySelector('[data-panel="heap"] .legend')).append(
         key("heap", "var(--text-muted)", true),
@@ -444,8 +462,10 @@ class GcWidget extends HTMLElement {
       // Each panel reads its values under the pointer: a crosshair on the heap and
       // the budget, an outline round a bar of work, and, once the pointer rests,
       // a tooltip beside either.
-      for (const plot of column.querySelectorAll(".plot")) {
-        const panel = /** @type {string} */ (/** @type {HTMLElement} */ (plot.closest("figure")).dataset.panel);
+      for (const element of column.querySelectorAll(".plot")) {
+        const plot = /** @type {HTMLElement} */ (element);
+        const figure = /** @type {HTMLElement} */ (plot.closest("figure"));
+        const panel = /** @type {string} */ (figure.dataset.panel);
         const mark = document.createElement("div");
         mark.className = panel === "work" ? "outline" : "crosshair";
         const tip = document.createElement("div");
@@ -464,6 +484,8 @@ class GcWidget extends HTMLElement {
             clearTimeout(this.#dwell);
             this.#dwell = setTimeout(() => {
               this.#rest = { x, y, hidden: false };
+              // The keys start where the pointer last rested.
+              this.#clock = this.#kbAt(x) ?? this.#clock;
               this.#hover();
             }, DWELL);
           }
@@ -473,6 +495,41 @@ class GcWidget extends HTMLElement {
           this.#pointer = this.#rest = null;
           clearTimeout(this.#dwell);
           this.#hover();
+        });
+        // The keys read a panel too, once it has focus (#141). A screen reader
+        // takes it for a slider along the allocation clock, named by its column's
+        // heading and its caption, and hears its tooltip's readout as its value.
+        const caption = /** @type {HTMLElement} */ (figure.querySelector("figcaption"));
+        caption.id = `${collector}-${panel}`;
+        plot.tabIndex = 0;
+        plot.setAttribute("role", "slider");
+        plot.setAttribute("aria-labelledby", `${collector} ${caption.id}`);
+        plot.setAttribute("aria-valuemin", "0");
+        plot.setAttribute("aria-valuemax", "0");
+        plot.setAttribute("aria-valuenow", "0");
+        plot.setAttribute("aria-valuetext", "no collections yet");
+        plot.addEventListener("focus", () => {
+          // A click focuses a panel too, but the pointer reads it then.
+          if (plot.matches(":focus-visible")) this.#press(collector, panel, plot, null);
+        });
+        plot.addEventListener("blur", () => {
+          if (this.#keys?.plot !== plot) return;
+          this.#keys = null;
+          this.#hover();
+        });
+        plot.addEventListener("keydown", (event) => {
+          const { key, altKey, ctrlKey, metaKey } = /** @type {KeyboardEvent} */ (event);
+          // Alt with an arrow goes back a page.
+          if (altKey || ctrlKey || metaKey) return;
+          // Escape hides the tooltip until the next key.
+          if (key === "Escape" && this.#keys?.plot === plot && !this.#keys.hidden) {
+            this.#keys.hidden = true;
+            this.#hover();
+          }
+          if (!KEYS.includes(key)) return;
+          // Home and End would scroll the page, and the arrows too.
+          event.preventDefault();
+          this.#press(collector, panel, plot, key);
         });
       }
     }
@@ -1171,41 +1228,103 @@ class GcWidget extends HTMLElement {
   }
 
   /**
-   * Mark the clock under the pointer in every panel of both columns, from the
-   * records drawn so far: both runs share the clock. The panel the pointer is in
-   * shows its tooltip in both columns, once the pointer rests and until Escape. A
-   * redraw leaves the marks alone and calls this again, so they hold while runs
-   * stream.
+   * Read a panel from the keys: move the clock the pointer or the keys last read,
+   * as `key` says, or keep it on focus; with no clock yet, start at the panel's
+   * first collection or bin. The marks follow the keys until the pointer moves,
+   * and the panel tells a screen reader its tooltip's readout. Only a key or
+   * focus changes what it says, never a redraw while runs stream.
+   * @param {Collector} collector
+   * @param {string} panel
+   * @param {HTMLElement} plot
+   * @param {string | null} key null on focus
+   */
+  #press(collector, panel, plot, key) {
+    const layout = this.#layout;
+    if (!layout) return;
+    const { binKb, runLength, xMax } = layout;
+    let kb = this.#clock;
+    if (kb === null) kb = step("Home", 0, panel, this.#records[collector], binKb, runLength);
+    else if (key) kb = step(key, kb, panel, this.#records[collector], binKb, runLength);
+    if (kb === null) return;
+    this.#clock = kb;
+    this.#keys = { panel, plot, hidden: false };
+    this.#pointer = this.#rest = null;
+    clearTimeout(this.#dwell);
+    const readout = this.#hover();
+    plot.setAttribute("aria-valuemax", String(xMax));
+    plot.setAttribute("aria-valuenow", String(Math.min(kb, runLength) / 1000));
+    if (readout) plot.setAttribute("aria-valuetext", spoken(...readout()));
+  }
+
+  /** The clock, in kB, `x` px across a panel reads, or null past its plot. */
+  #kbAt(/** @type {number} */ x) {
+    const layout = this.#layout;
+    if (!layout) return null;
+    const { width, runLength } = layout;
+    const { marginLeft, marginRight } = MARGINS;
+    if (x < marginLeft - SLACK || x > width - marginRight + SLACK) return null;
+    return Math.min(Math.max(0, ((x - marginLeft) / (width - marginLeft - marginRight)) * runLength), runLength);
+  }
+
+  /**
+   * Where the marks read: the panel under the pointer, or else the one the keys
+   * read, the clock, in kB, and the height of the panel's tooltips, in px, or
+   * null while they hide. Null when nothing reads.
+   * @returns {{ panel: string, kb: number, y: number | null } | null}
+   */
+  #where() {
+    const layout = this.#layout, pointer = this.#pointer, keys = this.#keys, clock = this.#clock;
+    if (!layout) return null;
+    if (pointer) {
+      const kb = this.#kbAt(pointer.x);
+      if (kb === null) return null;
+      return { panel: pointer.panel, kb, y: this.#rest && !this.#rest.hidden ? pointer.y : null };
+    }
+    if (!keys || clock === null) return null;
+    // A clock from a longer run reads this run's end.
+    return { panel: keys.panel, kb: Math.min(clock, layout.runLength), y: keys.hidden ? null : keys.plot.clientHeight / 2 };
+  }
+
+  /**
+   * Mark the clock the pointer or the keys read in every panel of both columns,
+   * from the records drawn so far: both runs share the clock. The panel they
+   * read shows its tooltip in both columns, once the pointer rests or at once
+   * for the keys, and until Escape. A redraw leaves the marks alone and calls
+   * this again, so they hold while runs stream. Returns the readout of the
+   * panel the keys read, if it has one.
+   * @returns {(() => Readout) | null}
    */
   #hover() {
     const root = /** @type {ShadowRoot} */ (this.shadowRoot);
     for (const mark of root.querySelectorAll(".crosshair, .outline, .tip")) /** @type {HTMLElement} */ (mark).hidden = true;
-    const pointer = this.#pointer, layout = this.#layout;
-    if (!pointer || !layout) return;
-    const { panel: hovered, x, y } = pointer;
-    const { width, runLength } = layout;
-    const { marginLeft, marginRight } = MARGINS;
-    if (x < marginLeft - SLACK || x > width - marginRight + SLACK) return;
-    const kb = Math.min(Math.max(0, ((x - marginLeft) / (width - marginLeft - marginRight)) * runLength), runLength - 1);
-    const resting = this.#rest !== null && !this.#rest.hidden;
+    const where = this.#where();
+    if (!where) return null;
+    const { panel: read, kb, y } = where;
+    /** @type {(() => Readout) | null} */
+    let keyed = null;
     for (const collector of COLLECTORS) {
-      for (const plot of this.#column(collector).querySelectorAll(".plot")) {
+      for (const element of this.#column(collector).querySelectorAll(".plot")) {
+        const plot = /** @type {HTMLElement} */ (element);
         const panel = /** @type {string} */ (/** @type {HTMLElement} */ (plot.closest("figure")).dataset.panel);
-        this.#mark(collector, panel, /** @type {HTMLElement} */ (plot), kb, resting && panel === hovered ? y : null);
+        const readout = this.#mark(collector, panel, plot, kb, panel === read ? y : null);
+        if (plot === this.#keys?.plot) keyed = readout;
       }
     }
+    return keyed;
   }
 
   /**
    * Mark what one panel reads at clock `kb`, in kB: the heap or the budget at the
    * nearest collection, with a crosshair, or the work of the bin that holds it,
    * with an outline round its bar. Given a height `y`, in px, show its tooltip
-   * there too.
+   * there too. Returns what the tooltip reads out, or null before the panel has
+   * a collection to read.
    * @param {Collector} collector
    * @param {string} panel
    * @param {HTMLElement} plot
    * @param {number} kb
    * @param {number | null} y
+   * @returns {(() => Readout) | null}
    */
   #mark(collector, panel, plot, kb, y) {
     const { xMax, width, binKb, workMax } = /** @type {Layout} */ (this.#layout);
@@ -1217,8 +1336,8 @@ class GcWidget extends HTMLElement {
     const records = this.#records[collector];
     // The span the tooltip stands beside: a crosshair's x, or a bar's two edges.
     let left, right;
-    // What the tooltip reads, built only when it shows.
-    /** @type {() => Node[]} */
+    // What the tooltip reads out, built only when it shows or a screen reader hears it.
+    /** @type {() => Readout} */
     let content;
     if (panel === "work") {
       const at = workAt(records, binKb, kb);
@@ -1229,41 +1348,42 @@ class GcWidget extends HTMLElement {
       Object.assign(mark.style, { left: `${left}px`, width: `${right - left}px`, top: `${top}px`, height: `${HEIGHTS.work - marginBottom - top}px` });
       mark.hidden = !total;
       const fulls = at.full.some(Boolean);
-      content = () => readout(
+      content = () => [
         `${megabytes(at.x1)}–${megabytes(at.x2)} MB allocated`,
         fulls ? ["objects", "automatic", "full"] : ["objects"],
         PARTS.map((part, i) => [part, `var(--${part})`, (fulls ? [at.automatic[i], at.full[i]] : [at.automatic[i]]).map(whole)]),
-      );
+      ];
     } else {
       const at = panel === "heap" ? heapAt(records, kb) : budgetAt(records, kb);
-      if (!at) return;
+      if (!at) return null;
       left = right = px(at.clock / 1000);
       Object.assign(mark.style, { left: `${left}px`, top: `${marginTop}px`, height: `${plot.clientHeight - marginTop - marginBottom}px` });
       mark.hidden = false;
       const where = `${collections(at.kinds)} at ${megabytes(at.clock / 1000)} MB`;
       if ("budget" in at) {
-        content = () => readout(where, ["objects"], [["work budget", "var(--text-primary)", [whole(at.budget)]]]);
+        content = () => [where, ["objects"], [["work budget", "var(--text-primary)", [whole(at.budget)]]]];
       } else {
         const { before, after } = at;
         /** @returns {[string, string, string[]]} */
         const row = (/** @type {string} */ name, /** @type {string} */ color, /** @type {(read: typeof before) => number} */ value) =>
           [name, color, [hundredths(value(before)), hundredths(value(after))]];
-        content = () => readout(where, ["MB", "before", "after"], [
+        content = () => [where, ["MB", "before", "after"], [
           row("heap", "var(--text-muted)", (read) => read.heap),
           row("reachable", "var(--text-primary)", (read) => read.reachable),
           row("uncollected garbage", "transparent", (read) => read.garbage),
           ...SPACES[collector].map((space, i) => row(space, `var(--${space})`, (read) => read.spaces[i])),
-        ]);
+        ]];
       }
     }
-    if (y === null) return;
-    tip.replaceChildren(...content());
+    if (y === null) return content;
+    tip.replaceChildren(...readout(...content()));
     tip.hidden = false;
     // Right of the mark, or left of it where the chart ends; level with the
     // pointer, inside the panel.
     const toRight = right + GAP + tip.offsetWidth <= width;
     tip.style.left = `${toRight ? right + GAP : left - GAP - tip.offsetWidth}px`;
     tip.style.top = `${Math.min(Math.max(0, y - tip.offsetHeight / 2), plot.clientHeight - tip.offsetHeight)}px`;
+    return content;
   }
 }
 

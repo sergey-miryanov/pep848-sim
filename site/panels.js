@@ -1,11 +1,18 @@
 // @ts-check
 // What the widget's panels draw from a run's records: the heap by space, work in
-// bins and where each y-scale ends. Also what each panel reads under the pointer.
+// bins and where each y-scale ends. Also what each panel reads under the pointer
+// or where the keys take it, and how a screen reader hears it.
 // The module imports neither Plot nor the DOM, so Node's test runner can load it:
 // see tests/panels.test.js.
 
 /** @typedef {import("./runs.js").Record} Record */
 /** @typedef {"legacy" | "incremental"} Collector */
+/**
+ * What a tooltip reads out: where, the unit over its quantities and each
+ * column's head, then a row a quantity, with its name, its mark's color and a
+ * value under each column.
+ * @typedef {[string, string[], [string, string, string[]][]]} Readout
+ */
 
 // Each collector's spaces in the order its records hold them.
 export const SPACES = {
@@ -28,6 +35,11 @@ const SPACES_BEFORE = 7, SPACES_AFTER = 8, REACHABLE_BEFORE = 9, REACHABLE_AFTER
 export const FULL = ["full", "shutdown"];
 // How opaque a full collection's work stands beside the runtime's own collections'.
 export const FADED = 0.45;
+
+// The keys that move a panel's reading, and which way: back, on, to the first,
+// to the last. Up and down move it too, as on any slider.
+const MOVES = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1, Home: -Infinity, End: Infinity };
+export const KEYS = Object.keys(MOVES);
 
 // Each y-scale grows to the next of these times a power of ten (ADR 0008).
 const STEPS = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
@@ -71,10 +83,18 @@ export function heap(collector, records) {
 }
 
 /**
+ * The bin that holds the kB a clock ends: an automatic collection's clock ends
+ * the threshold0 kB it covers, a full one's the kB the workload called it in. A
+ * gc.collect() can come before the first allocation, at clock 0.
+ * @param {number} kb
+ * @param {number} binKb
+ */
+const binOf = (kb, binKb) => Math.max(0, Math.floor((kb - 1) / binKb));
+
+/**
  * Each bin's work, by the bin's index: marked, survived and freed by the
  * runtime's own collections, then by the full collections. A collection falls in
- * the bin of the kB it ran after: an automatic one ends the threshold0 kB it
- * covers, a full one the kB the workload called it in.
+ * the bin of the kB it ran after.
  * @param {Record[]} records
  * @param {number} binKb
  */
@@ -82,8 +102,7 @@ function bins(records, binKb) {
   /** @type {Map<number, number[]>} */
   const byBin = new Map();
   for (const record of records) {
-    // A gc.collect() can come before the first allocation, at clock 0.
-    const bin = Math.max(0, Math.floor((record[CLOCK] - 1) / binKb));
+    const bin = binOf(record[CLOCK], binKb);
     const sums = byBin.get(bin) ?? [0, 0, 0, 0, 0, 0];
     const first = FULL.includes(/** @type {string} */ (record[KIND])) ? PARTS.length : 0;
     for (let part = 0; part < PARTS.length; part++) sums[first + part] += /** @type {number} */ (record[MARKED + part]);
@@ -177,15 +196,16 @@ export function budgetAt(records, kb) {
 }
 
 /**
- * What the work panel reads under the pointer: the bin that holds `kb`, its
- * clocks in MB, and its work as the runtime's own collections and the full
- * collections did it, each as marked, survived and freed.
+ * What the work panel reads under the pointer: the bin that holds the kB `kb`
+ * ends, so that a collection's clock reads the bin of its work, the bin's clocks
+ * in MB, and its work as the runtime's own collections and the full collections
+ * did it, each as marked, survived and freed.
  * @param {Record[]} records
  * @param {number} binKb
  * @param {number} kb
  */
 export function workAt(records, binKb, kb) {
-  const bin = Math.max(0, Math.floor(kb / binKb));
+  const bin = binOf(kb, binKb);
   const sums = bins(records, binKb).get(bin) ?? [0, 0, 0, 0, 0, 0];
   return {
     x1: (bin * binKb) / 1000,
@@ -193,4 +213,46 @@ export function workAt(records, binKb, kb) {
     automatic: sums.slice(0, PARTS.length),
     full: sums.slice(PARTS.length),
   };
+}
+
+/**
+ * Where a key moves a panel's reading from clock `kb`, in kB: the arrows to the
+ * collection before or after, or on the work panel the bin before or after, and
+ * Home and End to the first and the last. A bin reads at the clock that ends it,
+ * where the collection that closes it ran. Null for any other key, and on the
+ * heap or the budget before the run's first record.
+ * @param {string} key
+ * @param {number} kb
+ * @param {string} panel
+ * @param {Record[]} records
+ * @param {number} binKb
+ * @param {number} runLength
+ * @returns {number | null}
+ */
+export function step(key, kb, panel, records, binKb, runLength) {
+  if (!Object.hasOwn(MOVES, key)) return null;
+  const stops = panel === "work"
+    ? Array.from({ length: Math.ceil(runLength / binKb) }, (_, bin) => Math.min((bin + 1) * binKb, runLength))
+    : [...new Set(records.map((record) => record[CLOCK]))];
+  if (!stops.length) return null;
+  // The stop the reading stands at: the bin that holds `kb`, or the nearest
+  // collection, the earlier of two as near.
+  const at = panel === "work"
+    ? Math.min(binOf(kb, binKb), stops.length - 1)
+    : stops.reduce((best, stop, i) => (Math.abs(stop - kb) < Math.abs(stops[best] - kb) ? i : best), 0);
+  const to = at + MOVES[/** @type {keyof typeof MOVES} */ (key)];
+  return stops[Math.min(Math.max(0, to), stops.length - 1)];
+}
+
+/**
+ * What a screen reader hears of a tooltip's readout, as one sentence: "young
+ * collection at 4 MB, in MB, before and after: heap 5.80, 5.20; reachable 3.00,
+ * 2.80."
+ * @param {Readout[0]} where
+ * @param {Readout[1]} columns
+ * @param {Readout[2]} rows
+ */
+export function spoken(where, [unit, ...heads], rows) {
+  const columns = heads.length ? `${unit}, ${heads.join(" and ")}` : unit;
+  return `${where}, in ${columns}: ${rows.map(([name, , values]) => `${name} ${values.join(", ")}`).join("; ")}.`;
 }
