@@ -201,7 +201,8 @@ _Avoid_: demo, applet, visualization, simulator (that is what it runs)
 A slider the page puts on a widget for one workload parameter, collector
 setting or collector constant. The widget groups them: the workload's, then the
 collector's. Moving one changes only the value it shows; releasing it starts
-the widget's two runs again. Its range keeps the workload valid.
+the widget's two runs again, or draws the ones it kept for the same values.
+Its range keeps the workload valid.
 _Avoid_: knob (that is the parameter, setting or constant it moves), input,
 option
 
