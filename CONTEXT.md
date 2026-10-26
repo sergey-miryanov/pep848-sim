@@ -57,7 +57,8 @@ config
 A number fixed inside a collector that no Python API changes: the initial
 work budget and the freed-credit multiplier of the incremental collector, the
 25% long-lived ratio of the legacy collector. The home page's widget and the
-playground unlock them.
+playground unlock them, and the guide's section on the work budget unlocks
+the incremental collector's two.
 _Avoid_: setting (that is what Python can change), magic number, tunable
 
 ### Scale and time

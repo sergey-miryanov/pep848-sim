@@ -1,11 +1,15 @@
+import base64
 import json
+import re
+import zlib
 from itertools import pairwise
+from pathlib import Path
 
 import pytest
 
 from benchmarks import Tally, load_data
 from compare_presets import COLLECTORS, run_preset, tally
-from pep848_sim.collectors.collector import Collector, CollectorSettings
+from pep848_sim.collectors.collector import Collector, CollectorSettings, Record
 from pep848_sim.collectors.heap import Heap
 from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.collectors.legacy import LegacyCollector
@@ -17,9 +21,19 @@ from pep848_sim.presets import (
     PRESETS,
     XML_ETREE_PARSE,
 )
-from pep848_sim.widget.request import runs
+from pep848_sim.widget.request import expand, runs
 from pep848_sim.workload import Workload
 from test_run import PINNED, digest, records
+
+ROOT = Path(__file__).parent.parent
+# The request the guide's widgets send for async_tree_io_tg.
+GUIDES_ASYNC_TREE_IO_TG = json.dumps(
+    {
+        "preset": "async_tree_io_tg",
+        "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+        "every": 10,
+    }
+)
 
 # How far a preset's yield may sit from its benchmark's: a fifth of the
 # benchmark's, or half a point of the objects examined, whichever is wider. A
@@ -177,6 +191,38 @@ def test_async_tree_io_tg_runs_leave_no_cyclic_garbage(
     assert [first.kind, second.kind, third.kind] == ["shutdown"] * 3
     freed = sum(record.freed for record in automatic) + first.freed
     assert freed == garbage.shape.cyclic_garbage(garbage.size)
+
+
+def test_async_tree_io_tg_runs_alike_whatever_the_freed_credit() -> None:
+    """Its old collections free nothing, as no benchmark's did on the reference
+    branch, so the freed-credit multiplier changes no record (the guide's section
+    on the work budget)."""
+    spelled = json.loads(expand(GUIDES_ASYNC_TREE_IO_TG))
+
+    def incremental(freed_credit: int) -> list[Record]:
+        spelled["constants"]["freed_credit"] = freed_credit
+        _, run = runs(json.dumps(spelled))
+        return [record for part in run for record in part]
+
+    assert incremental(0) == incremental(10)
+
+
+def test_the_guides_link_opens_async_tree_io_tg_with_parent_pointers() -> None:
+    """The guide's section on the work budget links to the playground with the
+    preset's workload, its task tree given parent pointers, as the playground
+    writes a link (site/link.js): deflate-raw JSON in base64url."""
+    guide = (ROOT / "site" / "guide.html").read_text(encoding="utf-8")
+    [text] = re.findall(
+        r"playground=async_tree_io_tg&amp;playground\.request=([\w-]+)", guide
+    )
+    padded = text + "=" * (-len(text) % 4)
+    request = json.loads(zlib.decompress(base64.urlsafe_b64decode(padded), -15))
+
+    wanted = json.loads(expand(GUIDES_ASYNC_TREE_IO_TG))
+    tree = wanted["workload"]["structures"][4]
+    assert tree["shape"] == {"hierarchy": 6}
+    tree["shape"] = "tree"
+    assert request == wanted
 
 
 def test_connected_components_examines_its_graph_in_increments_while_it_loads() -> None:

@@ -372,7 +372,10 @@ class GcWidget extends HTMLElement {
    * @type {Map<string, { input: HTMLInputElement, note: HTMLElement | null, read: (value: number) => void, moving: boolean }>}
    */
   #sliders = new Map();
-  /** Whether the reader opened the collector constants' controls, kept from one entry to the next. */
+  /**
+   * Whether the collector constants' controls show, kept from one entry to the
+   * next. They start open only on a widget that offers no collector settings.
+   */
   #constantsOpen = false;
   #frame = 0;
   /** What the last redraw laid out, which the pointer's marks follow; null before the clock has a length. */
@@ -434,6 +437,8 @@ class GcWidget extends HTMLElement {
       this.#fail(String(error instanceof Error ? error.message : error));
       return;
     }
+    // A widget that offers no collector settings shows its constants at once (ADR 0017).
+    this.#constantsOpen = !this.#entries.some(({ controls }) => controls.some((control) => control.startsWith("settings.")));
     const row = /** @type {HTMLElement} */ (root.querySelector(".figures"));
     this.#values = FIGURES.map(({ label }) => {
       const figure = document.createElement("div");
@@ -976,7 +981,9 @@ class GcWidget extends HTMLElement {
       const summary = document.createElement("summary");
       summary.textContent = "Collector constants, which no Python API changes";
       toggle.append(summary, group);
-      this.#group("settings").append(toggle);
+      // Under the collector settings, or in their place where the entry shows none.
+      const settings = /** @type {Entry} */ (this.#entry).controls.some((control) => control.startsWith("settings."));
+      (settings ? this.#group("settings") : row).append(toggle);
       return group;
     }
     const heading = document.createElement("h3");
