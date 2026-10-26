@@ -19,7 +19,9 @@
 // titles and runs one entry at a time, and the URL fragment names the entry each
 // widget shows, as widget-id=entry-name pairs. An editing widget with an id also
 // writes the request of its last runs there, as a widget-id.request pair, which
-// makes the address a link that opens the same runs (ADR 0016).
+// makes the address a link that opens the same runs (ADR 0016). The widget keeps
+// the runs of its last requests while the page stays open, so picking an entry
+// again, or moving a control back, draws them at once (#135).
 //
 // Each panel reads its values under the pointer, and from the keys once it has
 // focus: the arrows step from one collection or bin to the next. A screen reader
@@ -41,10 +43,13 @@ import {
   budgetAt, ceiling, collections, cuts, heap, heapAt, spoken, step, work, workAt, workEnd,
 } from "./panels.js";
 import { dropRuns, requestRuns, stopRuns } from "./runs.js";
+import { Kept } from "./kept.js";
 
 /** @typedef {import("./runs.js").Record} Record */
 /** @typedef {import("./runs.js").Figures} Figures */
 /** @typedef {import("./runs.js").Control} Control */
+/** @typedef {import("./runs.js").Listener} Listener */
+/** @typedef {import("./kept.js").Runs} Runs */
 /** @typedef {import("./panels.js").Collector} Collector */
 /** @typedef {import("./panels.js").Readout} Readout */
 /** @typedef {import("./graph.js").Graph} Graph */
@@ -358,6 +363,8 @@ class GcWidget extends HTMLElement {
   /** The request whose records the charts show, until a newer one's first records arrive. */
   /** @type {any} */
   #drawn = null;
+  /** The runs of the widget's last requests that finished, which draw at once when asked for again. */
+  #kept = new Kept();
   #name = "";
   /**
    * Each control's slider, by path, what it says it makes, if anything, and
@@ -693,7 +700,8 @@ class GcWidget extends HTMLElement {
   /**
    * Ask for both runs of the request as the controls have set it, or of another
    * request for the entry, in place of any runs asked for before. The charts keep
-   * the old runs until the new runs' first records arrive.
+   * the old runs until the new runs' first records arrive. If the widget kept the
+   * request's runs, they draw at once, and the worker hears nothing.
    * @param {any} sent the request, the entry's own unless another is given
    * @param {() => void} made what follows once the worker spells the request out
    */
@@ -703,8 +711,18 @@ class GcWidget extends HTMLElement {
     let fresh = true;
     const root = /** @type {ShadowRoot} */ (this.shadowRoot);
     /** @type {HTMLElement} */ (root.querySelector(".error")).hidden = true;
-    requestRuns(this.#name, request, {
+    // What the worker sends for the request, which the widget keeps once both
+    // runs finish.
+    /** @type {Omit<Runs, "records" | "figures"> | null} */
+    let spelled = null;
+    /** @type {{ legacy: Record[], incremental: Record[] }} */
+    const records = { legacy: [], incremental: [] };
+    /** @type {{ legacy?: Figures, incremental?: Figures }} */
+    const figures = {};
+    /** @type {Required<Listener>} */
+    const listener = {
       controls: (controls, expanded, graph) => {
+        spelled = { controls, request: expanded, graph };
         // A request that names a preset, carries a workload source or leaves
         // out the constants comes back spelled out: its workload, run length and
         // constants, which the controls and the editors edit from then on.
@@ -724,18 +742,21 @@ class GcWidget extends HTMLElement {
         this.#show(controls);
         this.#graph(graph);
       },
-      records: (collector, records, figures) => {
+      records: (collector, part, last) => {
         if (fresh) {
           fresh = false;
           this.#drawn = request;
-          this.#records = { legacy: [], incremental: [] };
-          this.#figures = {};
+          this.#records = records;
+          this.#figures = figures;
         }
-        this.#records[collector].push(...records);
-        this.#figures[collector] = figures;
+        records[collector].push(...part);
+        figures[collector] = last;
         this.#schedule();
       },
-      done: () => {},
+      done: () => {
+        const { legacy, incremental } = figures;
+        if (spelled && legacy && incremental) this.#kept.keep(request, entry.controls, { ...spelled, records, figures: { legacy, incremental } });
+      },
       // The legend's editor shows a refusal beside the field the reader changed,
       // and the source under its box, setting back a switch that waited on it.
       error: (message) => {
@@ -743,7 +764,18 @@ class GcWidget extends HTMLElement {
         this.#view("source");
         return this.#source?.fail(message) || this.#fail(message);
       },
-    }, entry.controls);
+    };
+    const kept = this.#kept.find(sent, entry.controls);
+    if (!kept) {
+      requestRuns(this.#name, request, listener, entry.controls);
+      return;
+    }
+    // Runs the widget kept go through the same steps as the worker's, at once,
+    // and the runs asked for last would draw over them.
+    dropRuns(this.#name);
+    listener.controls(kept.controls, structuredClone(kept.request), kept.graph);
+    for (const collector of COLLECTORS) listener.records(collector, kept.records[collector], kept.figures[collector]);
+    listener.done();
   }
 
   /**

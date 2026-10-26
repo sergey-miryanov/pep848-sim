@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 cycle collector</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="v/b46c9b0ca95f/theme.css">
-<script src="v/b46c9b0ca95f/theme.js"></script>
+<link rel="stylesheet" href="v/1fc682268e3e/theme.css">
+<script src="v/1fc682268e3e/theme.js"></script>
 <style>
   body {
     margin: 0;
@@ -23,7 +23,7 @@
   nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 20px; font-size: 14px; color: var(--text-secondary); }
   nav [aria-current] { color: var(--text-primary); font-weight: 600; text-decoration: none; }
 </style>
-<script type="module" src="v/b46c9b0ca95f/gc-widget.js"></script>
+<script type="module" src="v/1fc682268e3e/gc-widget.js"></script>
 </head>
 <body>
 <main>
@@ -122,7 +122,8 @@ A screen reader reads each step aloud.</p>
 <dt>Workload</dt>
 <dd>Pick the workload both runs share. Each keeps the values you gave its
 controls while the page stays open, and the page's address names the one
-shown, so a link opens it.</dd>
+shown, so a link opens it. The widget holds the runs of the last 16 workloads
+and values you tried, and draws them at once when you come back to one.</dd>
 <dt>Controls</dt>
 <dd>Move a slider to pick a value, and release it to run both collectors
 again with it. The workload's sliders come first, then the collector
