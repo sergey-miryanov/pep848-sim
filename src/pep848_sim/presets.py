@@ -2,8 +2,8 @@
 from interpreter start-up to shutdown, over the worker's own length (ADR 0011).
 
 Each number's comment names its source: the benchmark's code, at pyperformance
-1.14.0, or the records it is fitted to (#117). A number its comment calls a
-placeholder waits for its preset's issue to fit it to the records in data/.
+1.14.0, or the records we fitted it to (#117). A number its comment calls a
+placeholder has no source yet: neither the code nor the records in data/ fix it.
 """
 
 from dataclasses import dataclass
@@ -37,7 +37,7 @@ class Preset:
 @dataclass(frozen=True)
 class _StartUp:
     """A worker's start-up and imports, as four structures (ADR 0011): a tree that
-    start-up lets go of as soon as it is built, which its first collections find as
+    start-up lets go of as soon as it builds, which its first collections find as
     cyclic garbage; under the module root, chains that refcounting frees at
     shutdown and a tree that shutdown leaves as cyclic garbage; and chains that sys
     does not reach, which a full collection examines where it marks the rest. A
@@ -104,8 +104,8 @@ _START_UP = _StartUp(
 # create_gc_cycles, in bm_gc_collect: each loop calls gc.collect(), builds 100 rings
 # of 21 Node objects in a list, drops the list and calls gc.collect() again.
 
-# Code: 2,100 nodes, 131 simulated objects (ADR 0002), each ring of 21 rounded to
-# one, and the list.
+# Code: the list, and the rings' 2,100 nodes as 131 simulated objects (ADR 0002),
+# each a ring of its own, as a ring of 21 comes to about one.
 _RINGS = 132
 # Records: a loop allocates its rings and nothing else that outlives it. At each
 # gc.collect() the heap holds 18,291 or 20,391 real objects in every worker, the
@@ -192,8 +192,8 @@ JSON_LOADS = Preset(
 
 # Code: 5,103 elements and the dicts of the 53 with attributes, 322 simulated
 # objects (ADR 0002). The root holds 50 children of 100 subchildren each, so 50
-# branches keep the tree two levels deep, as nearly all its elements are, and no
-# element links back to its parent.
+# branches keep the tree two levels deep, as all its elements are but a chain of
+# 50, and no element links back to its parent.
 _XML_TREE = 322
 _XML_SHAPE = Hierarchy(branches=50)
 # Records: the automatic collections per worker. Each marks threshold0 kB of
@@ -239,8 +239,8 @@ XML_ETREE_PARSE = Preset(
                 rebuild_interval=_XML_VALUE,
                 build_churn=0,
             ),
-            # Code: the parsed trees, from the file and from the bytes in turn, each
-            # dropped as the next of its kind, the next build but one, is built. A
+            # Code: the parsed trees, from the file and from the bytes in turn. Each
+            # goes as the next of its kind, the next build but one, builds. A
             # value's first parse waits for its own tree and runs into the next
             # slot, which it takes, so a value parses 60.
             StructureParameters(

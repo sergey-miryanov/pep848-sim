@@ -124,7 +124,7 @@ class Graph:
     """A networkx graph in a module's globals, as connected_components loads it. The
     root, the globals, lies on a cycle with a function that reads them, as each
     function's __globals__ makes one. The root holds each node, and each node holds
-    the data of its `edges` edges to the nodes read just before it, which it shares
+    the data of its edges to the `edges` nodes read before it, which it shares
     with them. Nothing in the graph links back, so only the root's cycle keeps it:
     once its module goes, all of it stays as cyclic garbage."""
 
@@ -340,7 +340,7 @@ class Build:
     def add(self) -> None:
         """Allocate the next object and link it in, then let go of its frame root.
         A frame-rooted structure's root keeps its frame root, and a module-rooted
-        structure's root hangs off sys instead, unless it is built in a frame."""
+        structure's root hangs off sys instead, unless a frame builds it."""
         heap = self._heap
         objects = self._objects
         x = heap.allocate()

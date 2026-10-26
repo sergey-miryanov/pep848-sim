@@ -91,8 +91,8 @@ const BAR = 24;
 // past a chart's plot the pointer still reads it.
 const GAP = 12;
 const SLACK = 4;
-// How long, in ms, the pointer rests before a tooltip shows, so that a sweep
-// across a panel leaves its plot in view, and how far, in px, the pointer can
+// How long, in ms, the pointer rests before a tooltip shows, so that a pointer
+// crossing a panel leaves its plot in view, and how far, in px, the pointer can
 // drift then before the tooltip goes.
 const DWELL = 350;
 const DRIFT = 3;
@@ -1478,7 +1478,7 @@ function readout(where, columns, rows) {
   return [caption, table];
 }
 
-/** Put freshly drawn charts in their panel, in place of the ones before. */
+/** Put the charts a redraw made in their panel, in place of the ones before. */
 function chart(/** @type {HTMLElement} */ column, /** @type {string} */ panel, /** @type {Element[]} */ ...svgs) {
   /** @type {HTMLElement} */ (column.querySelector(`[data-panel="${panel}"] .chart`)).replaceChildren(...svgs);
 }

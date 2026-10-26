@@ -23,25 +23,26 @@ automatic collection to count, so we take its length from the code's counts.
 A preset runs for its worker's own length on the clock: start-up, the
 benchmark's loops as many times as the records show, and shutdown. The loops
 begin as start-up ends: a repeating structure counts its interval from there,
-so its first build starts the first loop, whatever start-up's length. Where the
-loops leave no count in the records, as json_loads' calls leave none, the
-worker's automatic collections give its length: it ends within `threshold0` kB
-of the last one, and the preset ends halfway. A target of
-so many sweeps fails for a benchmark that calls `gc.collect()` more often than
-every `threshold0` kB, as create_gc_cycles does. Each call resets the budget,
-so no automatic collection comes during its loops, and no sweep ends.
+so its first build starts the first loop, whatever start-up's length. The
+worker's automatic collections give its length if the loops leave no count in
+the records, as json_loads' calls leave none: it ends within `threshold0` kB of
+the last one, and the preset ends halfway. A length set by a count of sweeps
+would fail for a benchmark that calls `gc.collect()` more often than every
+`threshold0` kB, as create_gc_cycles does: each call resets the budget, so no
+automatic collection comes during its loops, and no sweep ends.
 
-Some parameters neither source fixes, such as the start-up heap's shape or the
-churn inside a library. The five benchmarks' workers start up alike: in #117's
-rerun, their first two collections agree within 5%. Their presets share one
-start-up of four structures. Under the module root hang a tree, which shutdown
-leaves as cyclic garbage, and chains, which refcounting frees. Shutdown's
-collections set no target: gcmon reads a worker once a tick, and a worker can
-exit before gcmon reads them (#117). Where gcmon caught `finalize_modules`'
-first collection, what it frees sizes the tree. Under a frame root hang chains
-for the objects sys does not reach, which the branch's full collections
-examine and keep while they mark the rest. A tree that start-up lets go of as
-soon as it is built gives its first collections the cyclic garbage they free.
+Some workload parameters neither source fixes, such as the start-up heap's
+shape or the churn inside a library. The five benchmarks' workers start up
+alike: in #117's rerun, their first two collections agree within 5%. Their
+presets share one start-up of four structures. Under the module root hang a
+tree, which shutdown leaves as cyclic garbage, and chains, which refcounting
+frees. Shutdown's collections set no target: gcmon reads a worker once a tick,
+and a worker can end before gcmon reads them (#117). The tree's size comes from
+what `finalize_modules`' first collection frees, in the workers where gcmon
+caught it. Under a frame root hang chains for the objects sys does not reach,
+which the branch's full collections examine where they mark the rest. A tree
+that start-up lets go of as soon as it builds gives its first collections the
+cyclic garbage they free.
 
 The objects a worker's first collection examines under the legacy collector
 set start-up's size, where the heap that collection reads would count more. A
@@ -52,16 +53,16 @@ start-up's build churn takes in those tuples: they move the allocation clock,
 and leave the heap before a collection sees them. The branch's incremental
 collector examines nothing at start-up, and keeps them tracked until a
 collection examines them: a json_loads worker's heap holds 29,700 real objects
-all run, where its preset's holds about 18,300.
+all run, where its preset's holds about 18,500.
 
 A script in `tools/` prints beside its benchmark's a preset's collections, the
 objects one of them examines on average, their yields, and the objects its
-first collection examines. We change the open
-parameters until the two agree within #117's tolerance, a fifth of the
-benchmark's yield or half a point, whichever is wider, and leave the rest as
-the code and the records set them. Each parameter's comment names its source:
-the code, at the pyperformance version #117's metadata records, or the record
-we fitted it to.
+first collection examines. We change the workload parameters left open until
+the two agree within #117's tolerance, a fifth of the benchmark's yield or half
+a point, whichever is wider, and leave the rest as the code and the records set
+them. Each one's comment names its source: the code, at the pyperformance
+version #117's metadata records, or the record we fitted it to. A placeholder's
+comment says neither fixes it yet.
 
 ## Considered Options
 
@@ -75,7 +76,7 @@ we fitted it to.
 - A tolerance from how far a benchmark's workers spread: they agree to within
   0.01 points, so it would ask a coarse model for an exact fit.
 - A tolerance of 5 points, the placeholder before the rerun: wider than every
-  target but one, it would pass a preset that finds no garbage against a
+  target but one, it would pass a preset that finds no cyclic garbage against a
   benchmark whose collections find 1.4%.
 - A share of the benchmark's yield alone: most targets sit at 0.05% or under,
   where a share of them leaves a preset no room.

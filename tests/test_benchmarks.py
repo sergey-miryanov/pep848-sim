@@ -104,7 +104,7 @@ def test_each_worker_keeps_its_own_running_totals(tmp_path: Path) -> None:
 
 
 def test_a_worker_is_its_pid_and_its_pid_epoch(tmp_path: Path) -> None:
-    # The system gave pid 7 to a second process once the first had exited.
+    # The system gave pid 7 to a second worker once the first had ended.
     csv = write(
         tmp_path / "trace.csv",
         "json_loads,7,1,0,100,0,1,0,1,100,10",

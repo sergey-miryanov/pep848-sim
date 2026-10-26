@@ -23,8 +23,8 @@ one before each build and after each drop of a structure that asks for it,
 so churn can't always know the next one's clock in advance. It takes the
 earliest clock the workload could call one at, from the drops already
 scheduled, the builds waiting and when each repeating structure next falls
-due. A transient that outlasts that clock or the next automatic collection
-gets made. The bound errs early: churn makes some transients no collection
+due. Churn makes a transient that outlasts that clock or the next automatic
+collection. The bound errs early: churn makes some transients no collection
 sees, and never skips one a collection could see. Shutdown lets go of every
 frame root before its three full collections, so the transients alive at a
 run's end never reach them.

@@ -2,7 +2,7 @@
 its benchmark's, as #117 loads them: by generation and kind, the collections a
 worker makes, the real objects one of them examines on average and their yield,
 and the objects its first collection examines. We change a preset's open
-parameters until the two agree (ADR 0011).
+workload parameters until the two agree (ADR 0011).
 """
 
 from collections.abc import Iterable

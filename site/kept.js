@@ -52,7 +52,7 @@ export function key(request, controls) {
  * or kept longest ago go first.
  */
 export class Kept {
-  /** In the order they were found or kept, the latest last. */
+  /** In the order the widget found or kept them, the latest last. */
   /** @type {Map<string, Runs>} */
   #runs = new Map();
   #most;
