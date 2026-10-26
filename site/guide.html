@@ -156,8 +156,8 @@ that name: it calls <code>json.loads</code> 60 times a loop. No result holds a
 cycle, and each goes as its call returns, so before shutdown both collectors
 free only a few cycles that start-up lets go of. Every other object a
 collection examines is work that frees nothing. As it starts, the worker builds
-the long-lived objects it keeps to the end, and between loops a few objects
-stay alive a while longer.</p>
+the long-lived objects it keeps to the end. After that, each collection finds a
+handful of the loops' objects still alive.</p>
 
 <gc-widget id="young-widget" controls="settings.threshold0 settings.threshold1">
 <script type="application/json">
@@ -183,13 +183,15 @@ first aging space comes up, then examines each object once. Work per MB adds up
 the difference. The incremental collector's old collections, between its young
 ones, stay idle all run: its work budget starts far below zero, and the young
 collections' credits leave it there.</p>
-<p>Lower threshold0 and the legacy collector meets objects younger still. More of
-the objects the worker keeps between loops meet a gen 0 collection before they
-go, and the legacy collector's work per MB climbs, while the incremental
-collector's changes little. Move threshold0 back toward 2,000 and the
-incremental collector's young collections come later, until the run ends before
-they do. Raise threshold1 and the aging generation grows by an aging space for
-each two steps, so objects wait longer before a young collection examines them.
+<p>Lower threshold0 and the legacy collector's work per MB holds near 190 down to
+about 160 kB. It examines each long-lived object twice, as before, and its extra
+gen 0 collections find few of the loops' objects alive. Below that, gen 1
+collections come often enough for gen 2 collections to fit in the run, and each
+examines the long-lived objects again. The incremental collector's work per MB
+stays at about 136. Move threshold0 back toward 2,000 and the incremental
+collector's young collections come later, until the run ends before they do.
+Raise threshold1 and the aging generation grows by an aging space for each two
+steps, so objects wait longer before a young collection examines them.
 The notes under the controls give the young generation's size. threshold1 also
 sets how many gen 0 collections the legacy collector runs before each gen 1.</p>
 </section>

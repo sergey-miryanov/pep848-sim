@@ -156,9 +156,9 @@ CREATE_GC_CYCLES = Preset(
 # globals, DICT, TUPLE and the copies of DICT, come to a few real objects, which
 # start-up takes in.
 
-# Placeholder: the records' automatic collections per worker. Each marks threshold0
-# kB of allocation (ADR 0011), and the records cannot tell where before the next
-# one the worker ends, so the run ends halfway.
+# Records: the automatic collections per worker. Each marks threshold0 kB of
+# allocation (ADR 0011), and the records cannot tell where before the next one the
+# worker ends, so the run ends halfway.
 _JSON_LOADS_COLLECTIONS = 10
 
 JSON_LOADS = Preset(
@@ -170,10 +170,11 @@ JSON_LOADS = Preset(
             cycle_share=Fraction(0),
             cycle_size=1,
             lifetime_mean=1,
-            # Placeholders: pyperf's bookkeeping between loops, which keeps some
-            # objects alive across a collection.
-            long_share=Fraction(1, 50),
-            long_lifetimes=(100, 1000),
+            # Records: no churn outlives a collection. Past start-up, each legacy
+            # gen 0 collection examines 2 to 6 real objects, 65 at the last, and
+            # the heap holds 18,890 real objects at each, give or take 4.
+            long_share=Fraction(0),
+            long_lifetimes=(1, 1),
         ),
         structures=_START_UP.structures,
         seed=848,

@@ -209,8 +209,7 @@ no cyclic garbage beyond a few cycles that start-up lets go of. Nothing calls
 <code>gc.collect()</code> before shutdown. Over so few collections, each one
 the incremental collector runs before shutdown is idle: its young collections
 take aging spaces still empty this early, and its old collections have no work
-budget to spend. Lower threshold0 to give it more collections. The churn that
-outlives a collection and the run's length remain placeholders.</p>
+budget to spend. Lower threshold0 to give it more collections.</p>
 <p>xml_etree_parse models a worker of the xml_etree benchmark's parse task.
 Four times over, it builds a tree of 5,103 elements, then parses it 60 times,
 from a file and from bytes in turn, and each parsed tree replaces the last of
