@@ -4,6 +4,7 @@ import re
 import zlib
 from itertools import pairwise
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -26,12 +27,20 @@ from pep848_sim.workload import Workload
 from test_run import PINNED, digest, records
 
 ROOT = Path(__file__).parent.parent
-# The request the guide's widgets send for async_tree_io_tg.
+# The requests the guide's widgets send for async_tree_io_tg and, in the section
+# on uncollected garbage, for json_loads.
 GUIDES_ASYNC_TREE_IO_TG = json.dumps(
     {
         "preset": "async_tree_io_tg",
         "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
         "every": 10,
+    }
+)
+GUIDES_JSON_LOADS = json.dumps(
+    {
+        "preset": "json_loads",
+        "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+        "every": 1,
     }
 )
 
@@ -207,22 +216,58 @@ def test_async_tree_io_tg_runs_alike_whatever_the_freed_credit() -> None:
     assert incremental(0) == incremental(10)
 
 
-def test_the_guides_link_opens_async_tree_io_tg_with_parent_pointers() -> None:
-    """The guide's section on the work budget links to the playground with the
-    preset's workload, its task tree given parent pointers, as the playground
-    writes a link (site/link.js): deflate-raw JSON in base64url."""
+def guides_link(section: str) -> Any:
+    """The request of the one link to the playground's async_tree_io_tg in the
+    guide's section of that id, as the playground writes a link (site/link.js):
+    deflate-raw JSON in base64url."""
     guide = (ROOT / "site" / "guide.html").read_text(encoding="utf-8")
+    [body] = re.findall(rf'<section id="{section}">(.*?)</section>', guide, re.DOTALL)
     [text] = re.findall(
-        r"playground=async_tree_io_tg&amp;playground\.request=([\w-]+)", guide
+        r"playground=async_tree_io_tg&amp;playground\.request=([\w-]+)", body
     )
     padded = text + "=" * (-len(text) % 4)
-    request = json.loads(zlib.decompress(base64.urlsafe_b64decode(padded), -15))
+    return json.loads(zlib.decompress(base64.urlsafe_b64decode(padded), -15))
 
+
+def test_the_guides_link_opens_async_tree_io_tg_with_parent_pointers() -> None:
+    """The section on the work budget links to the preset's workload with its task
+    tree given parent pointers."""
     wanted = json.loads(expand(GUIDES_ASYNC_TREE_IO_TG))
     tree = wanted["workload"]["structures"][4]
     assert tree["shape"] == {"hierarchy": 6}
     tree["shape"] = "tree"
-    assert request == wanted
+    assert guides_link("the-work-budget") == wanted
+
+
+def test_json_loads_cycles_wait_for_shutdown_under_the_incremental_collector() -> None:
+    """Its run ends before its young generation fills, so the incremental collector
+    examines nothing before shutdown, where the legacy collector's gen 0
+    collections free cycles as they come loose (the guide's section on
+    uncollected garbage)."""
+    spelled = json.loads(expand(GUIDES_JSON_LOADS))
+    spelled["workload"]["churn"]["cycle_share"] = "1/10"
+    legacy, incremental = (
+        [record for part in run for record in part] for run in runs(json.dumps(spelled))
+    )
+
+    garbage = JSON_LOADS.workload.structures[0]
+    start_up = garbage.shape.cyclic_garbage(garbage.size)
+    assert all(
+        record.marked + record.survived + record.freed == 0
+        for record in incremental
+        if record.kind != "shutdown"
+    )
+    assert sum(r.freed for r in legacy if r.kind != "shutdown") > 10 * start_up
+
+
+def test_the_guides_link_opens_async_tree_io_tg_with_long_lived_cycles() -> None:
+    """The section on uncollected garbage links to the preset's workload with a
+    tenth of its churn starting cycles, and its churn living 10 MB on average."""
+    wanted = json.loads(expand(GUIDES_ASYNC_TREE_IO_TG))
+    churn = wanted["workload"]["churn"]
+    assert (churn["cycle_share"], churn["lifetime_mean"]) == ("0", 4)
+    churn.update(cycle_share="1/10", lifetime_mean=10_000)
+    assert guides_link("uncollected-garbage-and-peak-memory") == wanted
 
 
 def test_connected_components_examines_its_graph_in_increments_while_it_loads() -> None:
