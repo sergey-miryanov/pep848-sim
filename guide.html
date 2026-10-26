@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 guide</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="v/1fc682268e3e/theme.css">
-<script src="v/1fc682268e3e/theme.js"></script>
+<link rel="stylesheet" href="v/5706cf319828/theme.css">
+<script src="v/5706cf319828/theme.js"></script>
 <style>
   body {
     margin: 0;
@@ -22,7 +22,7 @@
   nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 20px; font-size: 14px; color: var(--text-secondary); }
   nav [aria-current] { color: var(--text-primary); font-weight: 600; text-decoration: none; }
 </style>
-<script type="module" src="v/1fc682268e3e/gc-widget.js"></script>
+<script type="module" src="v/5706cf319828/gc-widget.js"></script>
 </head>
 <body>
 <main>
@@ -119,11 +119,10 @@ which examines the whole graph, where a gen 1 collection examines only the
 nursery and the aging generation. The peak work figure reads that collection's
 work. The incremental column's tallest bars come while the module loads the
 graph, from old collections whose increments take what has loaded so far, as a
-later section shows. They stay well below the gen 2 bar. The faded bar at the
-end of both columns is
-shutdown's collections: the first takes the graph while the module still holds
-it, and the next frees it once the module goes. The panel cuts that bar at its
-top and writes its work above it.</p>
+later section shows. They reach about three fifths of the gen 2 bar. The faded
+bar at the end of both columns is shutdown's collections: the first takes the
+graph while the module still holds it, and the next frees it once the module
+goes. The panel cuts that bar at its top and writes its work above it.</p>
 <p>Move threshold0 back toward 2,000 and fewer collections fit in the run, so the
 gen 2 collection comes later or not before shutdown. Move it lower and gen 2
 collections come while the module still loads the graph, each larger than the
@@ -190,8 +189,8 @@ collections come often enough for gen 2 collections to fit in the run, and each
 examines the long-lived objects again. The incremental collector's work per MB
 stays at about 136. Move threshold0 back toward 2,000 and the incremental
 collector's young collections come later, until the run ends before they do.
-Raise threshold1 and the aging generation grows by an aging space for each two
-steps, so objects wait longer before a young collection examines them.
+Raise threshold1 and the aging generation grows by an aging space for every 2
+you add, so objects wait longer before a young collection examines them.
 The notes under the controls give the young generation's size. threshold1 also
 sets how many gen 0 collections the legacy collector runs before each gen 1.</p>
 </section>
@@ -244,9 +243,9 @@ before. In the work panel, each old collection marks what the young collection
 before it moved in, so no collection's work outgrows the work budget. The
 legacy column's tallest bars hold its gen 1 collections, which examine the
 nursery and the aging generation together, and its one gen 2 collection comes
-just after a tree has gone. Work per MB comes out close for the two collectors,
-and the incremental collector spends its share in pieces the size of what young
-collections promote.</p>
+between two trees. Work per MB comes out close for the two collectors, and the
+incremental collector spends its share in pieces the size of what young
+collections move in.</p>
 <p>The work budget panel shows the pacing. Each young collection lifts the budget
 by what it moved in, and the old collection after it spends the budget back to
 zero. The benchmark's records agree: the reference branch's old collections
@@ -305,10 +304,11 @@ collections stay idle until young collections have paid it back.</p>
 <p>async_tree_io_tg's task tree, in the section before, reaches 53 MB, but sys
 reaches it through the event loop from its first task, so marking takes it and
 no increment forms from it.</p>
-<p>Move the Graph size and the increments follow the graph. Halve it and its
-largest increment halves. At a quarter of its size, the graph has loaded, and
-the module holds it, before the work budget lets an old collection reach it, so
-no increment forms from it. A larger graph loads for longer, and its largest
+<p>Move the Graph size and the increments follow the graph. Halve it and the
+graph has loaded before the second increment comes, so peak work falls from
+32.5K to 8.5K. At a quarter of its size, the graph has loaded, and the module
+holds it, before the work budget lets an old collection reach it, so no
+increment forms from it. A larger graph loads for longer, and its largest
 increment grows with it.</p>
 </section>
 
@@ -360,7 +360,7 @@ start-up.</p>
 <p>At the dashed line, the heap falls to almost nothing. As the frames return,
 refcounting frees the chains start-up keeps out of sys's reach. Shutdown's
 first collection frees nothing, since the last loop's second call freed its
-rings. When the modules go, refcounting frees the chains under sys, and the
+rings. Once the modules go, refcounting frees the chains under sys, and the
 second collection frees the tree with parent pointers, cyclic garbage once sys
 lets go of it. The third finds nothing left.</p>
 <p>Lower threshold0 below the kB a loop's rings take to build, and the runtime's
@@ -410,9 +410,9 @@ each marking takes half as much. Peak work does not follow: it reads the
 largest increment, which depends on how much of the graph has loaded when an
 old collection's increment starts from its root, and here it grows by half.
 The notes under the controls give the nursery's and the aging generation's
-sizes as they change. The legacy collector answers less evenly: a lower
-threshold0 adds to its work per MB, and its peak work jumps whenever one of its
-collections comes to take the whole graph.</p>
+sizes as they change. The legacy collector answers in jumps: a lower threshold0
+adds to its work per MB, and its peak work leaps once one of its collections
+comes to take the whole graph.</p>
 <p>threshold1 sets how long an object ages before a young collection examines it.
 The graph outlives any young generation, so all of it reaches the old
 generation however long it waits, but when it arrives decides when the

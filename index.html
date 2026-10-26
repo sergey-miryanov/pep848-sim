@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 cycle collector</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="v/1fc682268e3e/theme.css">
-<script src="v/1fc682268e3e/theme.js"></script>
+<link rel="stylesheet" href="v/5706cf319828/theme.css">
+<script src="v/5706cf319828/theme.js"></script>
 <style>
   body {
     margin: 0;
@@ -23,7 +23,7 @@
   nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 20px; font-size: 14px; color: var(--text-secondary); }
   nav [aria-current] { color: var(--text-primary); font-weight: 600; text-decoration: none; }
 </style>
-<script type="module" src="v/1fc682268e3e/gc-widget.js"></script>
+<script type="module" src="v/5706cf319828/gc-widget.js"></script>
 </head>
 <body>
 <main>
@@ -141,10 +141,10 @@ when the workload builds and drops it. A red link lies on a cycle, so
 dropping its structure leaves cyclic garbage for a collection to find.</dd>
 <dt>Figures</dt>
 <dd>Each run's peak work, the most work one collection the runtime started
-did, which stands in for the worst pause; its peak uncollected garbage; its work per MB, which
-stands in for the collector's overhead; its yield, the share of the objects
-it examined that were cyclic garbage; its collections; and its gen 2
-collections or sweeps.</dd>
+did, which stands in for the worst pause; its peak uncollected garbage; its
+work per MB, which stands in for the collector's overhead; its yield, the share
+of the objects it examined that were cyclic garbage; its collections; and its
+gen 2 collections or sweeps.</dd>
 <dt>Heap by space</dt>
 <dd>The heap in MB, in lanes on the allocation clock. The top lane draws the
 whole heap and its reachable part, and shades the gap between them, the
