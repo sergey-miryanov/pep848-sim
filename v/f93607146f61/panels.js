@@ -111,28 +111,58 @@ function bins(records, binKb) {
   return byBin;
 }
 
+/** A bin's whole work. */
+const total = (/** @type {number[]} */ sums) => sums.reduce((sum, part) => sum + part, 0);
+
+/**
+ * Where the work panel's y-scale ends, over both columns' runs: past the most
+ * work a bin holds without shutdown's. Shutdown takes the whole heap, and a
+ * scale that fit it would leave the runtime's own bars slivers, so the panel
+ * cuts its bin at the end instead. A run whose only work is shutdown's fits it.
+ * @param {Record[][]} runs
+ * @param {number} binKb
+ */
+export function workEnd(runs, binKb) {
+  const most = (/** @type {(record: Record) => boolean} */ counts) =>
+    Math.max(0, ...runs.flatMap((records) => [...bins(records.filter(counts), binKb).values()].map(total)));
+  return ceiling(most((record) => record[KIND] !== "shutdown") || most(() => true));
+}
+
 /**
  * The work panel's data: each bin's work, stacked as marked, survived and freed,
  * the runtime's own collections' first and the full collections' faded above
- * them.
+ * them, up to the scale's `end`. A bin cut there gets no rounded top.
  * @param {Record[]} records
  * @param {number} binKb
+ * @param {number} [end]
  */
-export function work(records, binKb) {
+export function work(records, binKb, end = Infinity) {
   return [...bins(records, binKb)].flatMap(([bin, sums]) => {
     const top = sums.findLastIndex((sum) => sum > 0);
     let y = 0;
     return sums.flatMap((sum, i) => {
-      if (!sum) return [];
+      if (!sum || y >= end) return [];
       const y1 = y;
       y += sum;
       const faded = i >= PARTS.length;
       return [{
-        x1: (bin * binKb) / 1000, x2: ((bin + 1) * binKb) / 1000, y1, y2: y,
-        part: PARTS[i % PARTS.length], opacity: faded ? FADED : 1, top: i === top,
+        x1: (bin * binKb) / 1000, x2: ((bin + 1) * binKb) / 1000, y1, y2: Math.min(y, end),
+        part: PARTS[i % PARTS.length], opacity: faded ? FADED : 1, top: i === top && y <= end,
       }];
     });
   });
+}
+
+/**
+ * The bins whose work runs past the scale's `end`, which the work panel cuts
+ * there: each bin's clocks in MB and its whole work.
+ * @param {Record[]} records
+ * @param {number} binKb
+ * @param {number} end
+ */
+export function cuts(records, binKb, end) {
+  return [...bins(records, binKb)].flatMap(([bin, sums]) =>
+    total(sums) > end ? [{ x1: (bin * binKb) / 1000, x2: ((bin + 1) * binKb) / 1000, work: total(sums) }] : []);
 }
 
 /**
