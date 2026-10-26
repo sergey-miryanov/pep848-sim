@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 cycle collector</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="v/8b3bc46fcb75/theme.css">
-<script src="v/8b3bc46fcb75/theme.js"></script>
+<link rel="stylesheet" href="v/8a31e1e5a358/theme.css">
+<script src="v/8a31e1e5a358/theme.js"></script>
 <style>
   body {
     margin: 0;
@@ -23,7 +23,7 @@
   nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 20px; font-size: 14px; color: var(--text-secondary); }
   nav [aria-current] { color: var(--text-primary); font-weight: 600; text-decoration: none; }
 </style>
-<script type="module" src="v/8b3bc46fcb75/gc-widget.js"></script>
+<script type="module" src="v/8a31e1e5a358/gc-widget.js"></script>
 </head>
 <body>
 <main>
@@ -234,14 +234,17 @@ churn remains a placeholder.</p>
 name. As its module loads, it reads the Amazon co-purchasing graph, 262,111
 products and 899,792 edges, into 1.4 million dicts that stay in the module's
 globals. Each of its four loops then walks the graph to count its components,
-and each iterator the walk makes goes once a node's neighbours run out. The
-incremental collector marks the graph from sys while it loads. After that, no
-young collection finds a survivor to add to the work budget, so the old
-collections go idle as a sweep ends, with the whole graph back in pending. The
-legacy collector runs no gen 2 collection before shutdown. The graph's dicts
-hold no cycle, but the module's globals lie on one with its functions, so the
-graph turns into cyclic garbage at shutdown and the first shutdown collection
-frees it. The load's churn and each loop's length remain placeholders.</p>
+and each iterator the walk makes goes once a node's neighbours run out.
+read_adjlist's frame holds the graph while it loads, so sys reaches none of it,
+and the incremental collector's old collections examine it in increments, each
+about twice the last: its peak work passes the legacy collector's. Once the
+module holds the graph, no young collection finds a survivor to add to the work
+budget, and the old collections go idle with the whole graph back in pending.
+The legacy collector runs no gen 2 collection before shutdown. The graph's
+dicts hold no cycle, but the module's globals lie on one with its functions, so
+the graph turns into cyclic garbage once the module goes, and the second
+shutdown collection frees it. The churn that outlives a collection remains a
+placeholder.</p>
 
 <h2>More</h2>
 <p><a href="guide.html">The guide</a> takes PEP 848 a part at a time, starting
