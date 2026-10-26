@@ -119,7 +119,9 @@ which examines the whole graph, where a gen 1 collection examines only the
 nursery and the aging generation. The peak work figure reads that collection's
 work. The incremental column's bars stay low, since its old collections mark
 the graph a part at a time. The faded bar at the end of both columns is
-shutdown's collections, which free the graph once the module goes.</p>
+shutdown's collections: the first takes the graph while the module still holds
+it, and the next frees it once the module goes. The panel cuts that bar at its
+top and writes its work above it.</p>
 <p>Move threshold0 back toward 2,000 and fewer collections fit in the run, so the
 gen 2 collection comes later or not before shutdown. Move it lower and gen 2
 collections come while the module still loads the graph, each larger than the
