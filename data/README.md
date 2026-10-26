@@ -1,17 +1,29 @@
 # Benchmark data
 
-The presets' yield targets come from these files. Each collector has a table,
-a row per collection, with its metadata beside it. `tools/benchmarks.py` loads
-them for the tests, and `sim.zip` never ships them. `poetry run just compare`
+The presets' yield targets come from these files. gcmon traced pyperformance
+1.14.0 on the reference branch, at revision 5542f2021c2, once under each
+collector, and extracted each trace into a CSV file, a row per collection,
+with its metadata beside it.
+
+| Files | Collector |
+|---|---|
+| `pp-inc.csv`, `pp-inc.meta.json` | incremental |
+| `pp-legacy.csv`, `pp-legacy.meta.json` | legacy, under `-X gc=legacy` |
+
+Each metadata file names its trace and the trace's SHA-256, the Python build,
+pyperformance's and pyperf's versions and the date. The traces stay out of the
+repo. The collector and the thresholds are columns: `gc_type`, 2 for the
+incremental collector and 1 for the legacy one, and `threshold0` to
+`threshold2`, the PEP's 2000, 10 and 10.
+
+`tools/benchmarks.py` loads the CSV files for the tests, and `sim.zip` never
+ships them. It leaves out pyperf's calibration workers, the processes with no
+benchmark's name, and shutdown's collections: gcmon reads a worker once a tick,
+and a worker can exit before gcmon reads them. `poetry run just compare`
 prints each preset's collections beside its benchmark's, for fitting a preset
-by hand (ADR 0011), and the yield test holds them together.
+by hand (ADR 0011), and the yield test holds them together. Besides the five
+benchmarks the presets model, the files hold shortest_path and three more
+xml_etree benchmarks.
 
-**The files here are mock.** `tools/mock_data.py` wrote them in the layout
-#117 sets out, so the loader and the tests that read it could land before the
-rerun. The script made up every number in them, and each metadata file says
-`"mock": true`, so don't fit a preset to them. The yield test skips while
-they say so.
-
-The rerun of pyperformance under gcmon on the reference branch, once with the
-incremental collector and once with `-X gc=legacy`, replaces them (#117).
-`tools/mock_data.py` goes in the same change.
+A fresh trace replaces both pairs of files whole, under the same names, and
+moves every target with it.

@@ -27,10 +27,12 @@ every frame root, and `_Py_Finalize` runs a full collection with
 collections follow. The record names the kind: `full` for `gc.collect()` and
 `shutdown` for shutdown's three, in both collectors. The branch files the
 first of the three under `gc.collect()`'s reason, manual, and the record names
-shutdown, which started it. `gen 2` stays the legacy collector's automatic collection, so a
-preset's records split into automatic and explicit collections the way #117
-splits its benchmark's. The figures count a full collection like any other,
-and leave it out of the gen 2 count.
+shutdown, which started it. `gen 2` stays the legacy collector's automatic
+collection, so a preset's records split into automatic and explicit
+collections the way #117 splits its benchmark's. Neither side counts
+shutdown's toward a target: gcmon can miss them, so #117 leaves them out, and
+takes a worker's last manual collection for the first of them. The figures
+count a full collection like any other, and leave it out of the gen 2 count.
 
 ## Considered Options
 

@@ -2,8 +2,8 @@
 from interpreter start-up to shutdown, over the worker's own length (ADR 0011).
 
 Each number's comment names its source: the benchmark's code, at pyperformance
-1.14.0, or the records it is fitted to (#117). The records in data/ are mock until
-the rerun, so every number fitted to records is a placeholder for now.
+1.14.0, or the records it is fitted to (#117). A number its comment calls a
+placeholder waits for its preset's issue to fit it to the records in data/.
 """
 
 from dataclasses import dataclass
@@ -75,8 +75,8 @@ class _StartUp:
 # create_gc_cycles, in bm_gc_collect: each loop calls gc.collect(), builds 100 rings
 # of 21 Node objects in a list, drops the list and calls gc.collect() again.
 
-# Start-up and imports: the interpreter, pyperf and gc. Placeholders until the
-# rerun, which holds two automatic collections before the first loop.
+# Start-up and imports: the interpreter, pyperf and gc. Placeholders until #118.
+# The records hold two automatic collections before the first loop.
 _CREATE_GC_CYCLES_START_UP = _StartUp(acyclic=350, cyclic=350, churn=6)
 # Code: 2,100 nodes, 131 simulated objects (ADR 0002), each ring of 21 rounded to
 # one, and the list.
@@ -127,7 +127,7 @@ CREATE_GC_CYCLES = Preset(
 
 # Start-up and imports: the interpreter, pyperf, json and random. The module's
 # globals, DICT, TUPLE and the copies of DICT, come to a few real objects, which
-# start-up's size takes in. Placeholders until the rerun.
+# start-up's size takes in. Placeholders until #119.
 _JSON_LOADS_START_UP = _StartUp(acyclic=350, cyclic=350, churn=6)
 # Placeholder: the records' automatic collections per worker. Each marks threshold0
 # kB of allocation (ADR 0011), and the records cannot tell where before the next
@@ -163,7 +163,7 @@ JSON_LOADS = Preset(
 # the tree's bytes 30 times each. Each parse's tree replaces the last of its kind.
 
 # Start-up and imports: the interpreter, pyperf, xml.etree.ElementTree with its C
-# accelerator, and tempfile. Placeholders until the rerun.
+# accelerator, and tempfile. Placeholders until #120.
 _XML_ETREE_PARSE_START_UP = _StartUp(acyclic=350, cyclic=350, churn=6)
 # Code: 5,103 elements and the dicts of the 53 with attributes, 322 simulated
 # objects (ADR 0002). The root holds 50 children of 100 subchildren each, so 50
@@ -229,8 +229,8 @@ XML_ETREE_PARSE = Preset(
 # parent's, and each leaf sleeps 50 ms. A task goes as it finishes, and the whole
 # tree by the run's end.
 
-# Start-up and imports: the interpreter, pyperf and asyncio. Placeholders until the
-# rerun.
+# Start-up and imports: the interpreter, pyperf and asyncio. Placeholders until
+# #121.
 _ASYNC_TREE_IO_TG_START_UP = _StartUp(acyclic=350, cyclic=350, churn=6)
 # Code: the root task and six levels of six branches under it.
 _TASKS = sum(6**level for level in range(7))
@@ -284,8 +284,8 @@ ASYNC_TREE_IO_TG = Preset(
 # graph into its globals before pyperf starts, and each loop counts the graph's
 # connected components with a breadth-first walk.
 
-# Start-up and imports: the interpreter, pyperf and networkx. Placeholders until the
-# rerun.
+# Start-up and imports: the interpreter, pyperf and networkx. Placeholders until
+# #122.
 _CONNECTED_COMPONENTS_START_UP = _StartUp(acyclic=350, cyclic=350, churn=6)
 # Code: read_adjlist's 262,111 nodes with two dicts each and 899,792 edges with one,
 # 1,424,118 tracked objects in all under networkx 3.4.2: 89,007 simulated objects

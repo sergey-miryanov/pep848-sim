@@ -35,12 +35,15 @@ Some parameters neither source fixes, such as the start-up heap's shape or the
 churn inside a library. The start-up heap hangs off the module root as two
 structures: a tree, which shutdown leaves as cyclic garbage, and chains, which
 refcounting frees. Their sizes set the share of it that shutdown's collections
-find. A script in `tools/` prints a preset's yields,
-collections and heap sizes beside its benchmark's. We change the open
-parameters until the two agree within #117's tolerance, and leave the rest as
-the code and the records set them. Each parameter's comment names its source:
-the code, at the pyperformance version #117's metadata records, or the record
-we fitted it to.
+find. Shutdown's collections set no target, though: gcmon reads a worker once
+a tick, and a worker can exit before gcmon reads them (#117). The heap that a
+worker's first collection reads sets start-up's size. A script in `tools/`
+prints a preset's yields, collections and heap sizes beside its benchmark's.
+We change the open parameters until the two agree within #117's tolerance, a
+fifth of the benchmark's yield or half a point, whichever is wider, and leave
+the rest as the code and the records set them. Each parameter's comment names
+its source: the code, at the pyperformance version #117's metadata records, or
+the record we fitted it to.
 
 ## Considered Options
 
@@ -51,6 +54,13 @@ we fitted it to.
   short scripts whose code shows what they build.
 - tracemalloc: it counts bytes by allocation site and records no references
   between objects, so it shows no shapes.
+- A tolerance from how far a benchmark's workers spread: they agree to within
+  0.01 points, so it would ask a coarse model for an exact fit.
+- A tolerance of 5 points, the placeholder before the rerun: wider than every
+  target but one, it would pass a preset that finds no garbage against a
+  benchmark whose collections find 1.4%.
+- A share of the benchmark's yield alone: most targets sit at 0.05% or under,
+  where a share of them leaves a preset no room.
 - An optimiser over the workload parameters: a preset leaves few of them open,
   a run takes seconds, and a fit by hand keeps a reason for each number.
 - About three sweeps for every preset, as CONTEXT.md first had it:

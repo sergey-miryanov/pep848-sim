@@ -19,7 +19,8 @@ def test_tally_files_each_record_where_the_runtimes_stats_would() -> None:
             # Marking examines nothing, so it adds no candidate.
             (1, "automatic"): Tally(1, 5, 0),
             (2, "automatic"): Tally(1, 4, 2),
-            (2, "explicit"): Tally(2, 12, 6),
+            # Shutdown's sets no target, as #117 loads its benchmark's.
+            (2, "explicit"): Tally(1, 8, 2),
         },
         # 6 simulated objects of 16 real objects each.
         first_heap=96,

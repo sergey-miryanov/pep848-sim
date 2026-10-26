@@ -3,7 +3,7 @@ from itertools import pairwise
 
 import pytest
 
-from benchmarks import Tally, load_data, mock
+from benchmarks import Tally, load_data
 from compare_presets import COLLECTORS, run_preset, tally
 from pep848_sim.collectors.collector import Collector, CollectorSettings
 from pep848_sim.collectors.heap import Heap
@@ -21,9 +21,23 @@ from pep848_sim.widget.request import runs
 from pep848_sim.workload import Workload
 from test_run import PINNED, digest, records
 
-# Placeholder until the rerun's records settle it (#117): how far a preset's yield
-# may sit from its benchmark's, as a share of the objects examined.
-YIELD_TOLERANCE = 0.05
+# How far a preset's yield may sit from its benchmark's: a fifth of the
+# benchmark's, or half a point of the objects examined, whichever is wider. A
+# benchmark's workers agree to within 0.01 points, so the width goes to the
+# preset's coarser model (#117). Half a point keeps a preset that finds no
+# garbage apart from a benchmark whose collections find 1%.
+YIELD_REL, YIELD_ABS = 0.2, 0.005
+
+# The presets whose yields still miss their benchmark's, each with the issue that
+# fits it to the records.
+UNFITTED = {
+    ("create_gc_cycles", "incremental"): "#118",
+    ("create_gc_cycles", "legacy"): "#118",
+    ("json_loads", "legacy"): "#119",
+    ("xml_etree_parse", "incremental"): "#120",
+    ("xml_etree_parse", "legacy"): "#120",
+    ("connected_components", "incremental"): "#122",
+}
 
 
 def test_each_preset_is_named_for_its_benchmark() -> None:
@@ -190,9 +204,26 @@ def test_connected_components_frees_its_graph_with_its_module_at_shutdown(
     assert third.freed == 0
 
 
-@pytest.mark.skipif(mock(), reason="the records in data/ are mock until the rerun")
-@pytest.mark.parametrize("collector", COLLECTORS)
-@pytest.mark.parametrize("name", PRESETS)
+@pytest.mark.parametrize(
+    ("name", "collector"),
+    [
+        pytest.param(
+            name,
+            collector,
+            marks=[
+                pytest.mark.xfail(
+                    raises=AssertionError,
+                    reason=f"unfitted until {UNFITTED[name, collector]}",
+                    strict=True,
+                )
+            ]
+            if (name, collector) in UNFITTED
+            else [],
+        )
+        for name in PRESETS
+        for collector in COLLECTORS
+    ],
+)
 def test_each_presets_yields_match_its_benchmarks(name: str, collector: str) -> None:
     """By generation and kind, wherever the benchmark's collections examined an
     object (#117)."""
@@ -204,4 +235,5 @@ def test_each_presets_yields_match_its_benchmarks(name: str, collector: str) -> 
     for key, target in sorted(benchmark.tallies.items()):
         if target.yield_ is not None:
             got = simulated.tallies.get(key, Tally()).yield_
-            assert got == pytest.approx(target.yield_, abs=YIELD_TOLERANCE), key
+            wanted = pytest.approx(target.yield_, rel=YIELD_REL, abs=YIELD_ABS)
+            assert got == wanted, key
