@@ -135,6 +135,7 @@ def _structure(
     rebuild_interval: int | None = None,
     build_churn: int = 0,
     full_collections: bool = False,
+    built_in_frame: bool = False,
 ) -> StructureParameters:
     """A structure, as `Structure(Tree(), size=1_000, root="frame")` sets one."""
     if not isinstance(shape, get_args(Shape.__value__)):
@@ -143,7 +144,14 @@ def _structure(
             " Rings(...) or Own(...) gives one"
         )
     return StructureParameters(
-        shape, size, root, lifetime, rebuild_interval, build_churn, full_collections
+        shape,
+        size,
+        root,
+        lifetime,
+        rebuild_interval,
+        build_churn,
+        full_collections,
+        built_in_frame,
     )
 
 

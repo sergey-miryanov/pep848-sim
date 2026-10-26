@@ -200,7 +200,10 @@ def _workload(values: dict[str, Any]) -> WorkloadParameters:
 
 
 def _structure(values: dict[str, Any]) -> StructureParameters:
-    values = _values(values, _names(StructureParameters), "structure")
+    # Links written before a structure could be built in a frame leave it out.
+    values = _values(
+        values, _names(StructureParameters), "structure", optional=["built_in_frame"]
+    )
     return _check(StructureParameters(**values | {"shape": _shape(values["shape"])}))
 
 

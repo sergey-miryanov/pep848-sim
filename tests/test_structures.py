@@ -80,6 +80,44 @@ def test_a_dropped_tree_with_parent_pointers_becomes_cyclic_garbage(
     assert len(set(collector.nursery) - reachable(heap)) == 7
 
 
+def test_a_structure_sys_holds_hangs_off_it_from_its_first_object() -> None:
+    heap = Heap(Collector())
+    build = Build(heap, long_lived(Chains(width=2), 3, "module"))
+
+    build.add()
+
+    assert heap.references(heap.module_root) == (1,)
+    assert heap.frame_roots() == {}
+
+
+def test_a_structure_built_in_a_frame_hangs_off_sys_once_its_build_ends() -> None:
+    heap = Heap(Collector())
+    parameters = StructureParameters(
+        shape=Chains(width=2),
+        size=3,
+        root="module",
+        lifetime=None,
+        rebuild_interval=None,
+        build_churn=0,
+        built_in_frame=True,
+    )
+    build = built(heap, parameters)
+    # The frame that builds it holds its root, as a module-level X = build() holds
+    # what build() makes until it returns.
+    assert heap.references(heap.module_root) == ()
+    assert heap.frame_roots() == {1: 1}
+
+    build.finish()
+
+    assert heap.references(heap.module_root) == (1,)
+    assert heap.frame_roots() == {}
+
+
+def test_a_structure_a_frame_holds_is_built_in_one_already() -> None:
+    with pytest.raises(ValueError, match="built in one already"):
+        StructureParameters(Tree(), 3, "frame", None, None, 0, built_in_frame=True)
+
+
 def test_a_lone_tree_root_lies_on_no_cycle_and_goes_on_the_spot() -> None:
     collector = Collector()
     heap = Heap(collector)

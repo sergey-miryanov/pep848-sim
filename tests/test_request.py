@@ -64,6 +64,11 @@ def test_the_fixed_request_is_the_one_its_digests_are_pinned_for() -> None:
         ('"size": 100,', '"size": 0,', "a structure of 0 objects builds nothing"),
         ('"lifetime": 400', '"lifetime": -1', "a structure cannot live -1 kB"),
         (
+            '"build_churn": 1,',
+            '"build_churn": 1, "built_in_frame": true,',
+            "a structure a frame holds is built in one already",
+        ),
+        (
             '"build_churn": 1',
             '"build_churn": -1',
             "a build cannot follow each object with -1 churn allocations",
@@ -101,6 +106,14 @@ def test_a_request_the_simulator_cannot_run_names_what_it_cannot(
 
     with pytest.raises(ValueError, match=message):
         runs(request)
+
+
+def test_a_request_from_before_built_in_frame_opens_and_is_written_with_it() -> None:
+    request = parse(FIXED)
+
+    assert [s.built_in_frame for s in request.workload.structures] == [False, False]
+    written = json.loads(dump(request))["workload"]["structures"]
+    assert [s["built_in_frame"] for s in written] == [False, False]
 
 
 def test_a_request_carries_its_constants_to_both_runs() -> None:

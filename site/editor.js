@@ -22,6 +22,7 @@ import { describe, describeChurn, describeConstants, describeRun } from "./graph
  * @typedef {{
  *   shape: Shape, size: number, root: "module" | "frame", lifetime: number | null,
  *   rebuild_interval: number | null, build_churn: number, full_collections: boolean,
+ *   built_in_frame: boolean,
  * }} Structure
  */
 /**
@@ -111,12 +112,26 @@ export function typeCode(area, commit) {
 }
 
 /**
+ * What can hold a structure, as the legend offers it: sys from the structure's
+ * first object, a frame, or a frame while the structure builds and sys once it
+ * has, as a module-level `X = build()` does.
+ */
+const HOLDERS = { module: "sys", frame: "a frame", built: "a frame, then sys" };
+
+/**
+ * Which of the holders holds the structure.
+ * @param {Structure} structure
+ */
+const holderOf = (structure) => (structure.root === "module" && structure.built_in_frame ? "built" : structure.root);
+
+/**
  * A structure to add: a 1 MB tree in a frame, rebuilt every 4 MB and dropped
  * 2 MB after each build.
  * @returns {Structure}
  */
 export const newStructure = () => ({
   shape: "tree", size: 1000, root: "frame", lifetime: 2000, rebuild_interval: 4000, build_churn: 0, full_collections: false,
+  built_in_frame: false,
 });
 
 /**
@@ -367,8 +382,9 @@ export class Editor {
     }, { min: 1 })));
     if (name === "own" && typeof structure.shape !== "string") fields.append(this.#code(`${i}:code`, structure.shape));
     fields.append(
-      this.#label("Held by", this.#select(`${i}:root`, { module: "sys", frame: "a frame" }, structure.root, (root) => {
-        structure.root = root === "module" ? "module" : "frame";
+      this.#label("Held by", this.#select(`${i}:root`, HOLDERS, holderOf(structure), (holder) => {
+        structure.root = holder === "frame" ? "frame" : "module";
+        structure.built_in_frame = holder === "built";
         return false;
       })),
       this.#label("Lifetime (kB)", this.#number(`${i}:lifetime`, structure.lifetime, (value) => {

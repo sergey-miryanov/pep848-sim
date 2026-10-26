@@ -298,12 +298,18 @@ class StructureParameters:
     # Whether the workload calls `gc.collect()` before each build and after each
     # drop, as create_gc_cycles does.
     full_collections: bool = False
+    # Whether a frame holds a structure sys holds while it builds, as a module-level
+    # `X = build()` holds what build() makes until it returns: sys takes it once the
+    # build ends, its churn included.
+    built_in_frame: bool = False
 
     def __post_init__(self) -> None:
         if self.root not in get_args(Root.__value__):
             raise ValueError(f"no root {self.root!r}")
         if self.size < 1:
             raise ValueError(f"a structure of {self.size} objects builds nothing")
+        if self.built_in_frame and self.root == "frame":
+            raise ValueError("a structure a frame holds is built in one already")
         if self.lifetime is not None and self.lifetime < 0:
             raise ValueError(f"a structure cannot live {self.lifetime} kB")
         if self.build_churn < 0:
@@ -334,7 +340,7 @@ class Build:
     def add(self) -> None:
         """Allocate the next object and link it in, then let go of its frame root.
         A frame-rooted structure's root keeps its frame root, and a module-rooted
-        structure's root hangs off sys instead."""
+        structure's root hangs off sys instead, unless it is built in a frame."""
         heap = self._heap
         objects = self._objects
         x = heap.allocate()
@@ -344,9 +350,19 @@ class Build:
             heap.link(objects[source], objects[target])
         if i:
             heap.let_go_frame_root(x)
-        elif self._parameters.root == "module":
-            heap.link(heap.module_root, x)
-            heap.let_go_frame_root(x)
+        elif self._parameters.root == "module" and not self._parameters.built_in_frame:
+            self._hang_off_sys()
+
+    def finish(self) -> None:
+        """The build has ended: sys takes a structure built in a frame."""
+        if self._parameters.built_in_frame:
+            self._hang_off_sys()
+
+    def _hang_off_sys(self) -> None:
+        heap = self._heap
+        root = self._objects[0]
+        heap.link(heap.module_root, root)
+        heap.let_go_frame_root(root)
 
     def drop(self) -> None:
         """Let go of the structure's root. What lies on its shape's cycles stays as

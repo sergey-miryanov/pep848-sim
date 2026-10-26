@@ -44,8 +44,8 @@ _Avoid_: exit, teardown, finalization (bare)
 **Workload parameter**:
 One knob that shapes a workload: the churn's fate mix, cycle size and
 lifetimes; a structure's shape, size, root, lifetime, rebuild interval and
-full collections; the churn per built object; and whether the run ends in
-shutdown.
+full collections, and whether a frame holds it while it builds before sys takes
+it; the churn per built object; and whether the run ends in shutdown.
 _Avoid_: parameter (bare), setting (that is the collector's side), option
 
 **Collector setting**:

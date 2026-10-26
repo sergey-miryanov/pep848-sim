@@ -337,6 +337,7 @@ class Workload:
 
     def _finish(self, i: int, build: Build, first_kb: int) -> None:
         clock = self._heap.clock
+        build.finish()
         self._builds.append((i, first_kb, clock))
         structure = self._structures[i]
         if structure.lifetime is not None:
