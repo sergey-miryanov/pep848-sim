@@ -262,17 +262,25 @@ XML_ETREE_PARSE = Preset(
 
 # Code: the root task and six levels of six branches under it.
 _TASKS = sum(6**level for level in range(7))
-# Placeholder: real objects to a task, with its coroutine, its group and its sleep's
-# future and timer handle: the records' peak heap over the tasks.
+# Records: real objects to a task, with its coroutine, its group and its sleep's
+# future and timer handle. A worker's heap peaks at 857,000 to 866,000 real
+# objects, less start-up's.
 _REAL_PER_TASK = 15
-# Placeholder: a run's length on the clock, the records' automatic collections over
-# the worker's four runs.
-_ASYNC_RUN = 130_000
 # Placeholder: the event loop's churn after each task it starts.
 _ASYNC_BUILD_CHURN = 1
 _ASYNC_TREE = _TASKS * _REAL_PER_TASK // 16
-# pyperf runs a warmup and three values a worker, one loop each.
+# Records: the automatic collections per worker. Each marks threshold0 kB of
+# allocation (ADR 0011), and the records cannot tell where before the next one the
+# worker ends, so the run ends about halfway, as json_loads' does.
+_ASYNC_COLLECTIONS = 261
+# Code: pyperf runs a warmup and three values a worker, one loop each.
 _ASYNC_RUNS = 4
+# A run's length on the clock: the worker's length after start-up over its runs,
+# 129,594 kB.
+_ASYNC_RUN = (
+    (2 * _ASYNC_COLLECTIONS + 1) * CollectorSettings().threshold0 // 2
+    - _START_UP.length
+) // _ASYNC_RUNS
 
 ASYNC_TREE_IO_TG = Preset(
     benchmark="async_tree_io_tg",
@@ -290,11 +298,14 @@ ASYNC_TREE_IO_TG = Preset(
             *_START_UP.structures,
             # Code: the task tree, built a level at a time as asyncio runs each
             # task after the one that started it. No task links back to its parent,
-            # so refcounting frees the tree as the run ends.
+            # so refcounting frees the tree as the run ends. Records: sys reaches
+            # it, through the event loop that runs it. The branch's old collections
+            # mark from sys alone, and spend their whole budget while they examine
+            # 643 real objects each.
             StructureParameters(
                 shape=Hierarchy(branches=6),
                 size=_ASYNC_TREE,
-                root="frame",
+                root="module",
                 lifetime=_ASYNC_RUN - _ASYNC_TREE * (1 + _ASYNC_BUILD_CHURN),
                 rebuild_interval=_ASYNC_RUN,
                 build_churn=_ASYNC_BUILD_CHURN,
