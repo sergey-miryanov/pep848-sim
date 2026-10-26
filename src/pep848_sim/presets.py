@@ -328,11 +328,19 @@ ASYNC_TREE_IO_TG = Preset(
 # (ADR 0002), with about two edges' dicts to a node's.
 _GRAPH = 1_424_118 // 16
 _GRAPH_SHAPE = Graph(edges=2)
-# Placeholder: a loop's length on the clock, the records' automatic collections
-# after the load over the worker's loops.
-_WALK = 26_500
-# pyperf runs a warmup and three values a worker, one loop each.
+# Records: the automatic collections per worker. Each marks threshold0 kB of
+# allocation (ADR 0011), and the records cannot tell where before the next one the
+# worker ends, so the run ends about halfway, as json_loads' does.
+_CONNECTED_COMPONENTS_COLLECTIONS = 99
+# Code: pyperf runs a warmup and three values a worker, one loop each.
 _WALKS = 4
+# A loop's length on the clock: the worker's length after start-up and the load
+# over its loops, 26,342 kB.
+_WALK = (
+    (2 * _CONNECTED_COMPONENTS_COLLECTIONS + 1) * CollectorSettings().threshold0 // 2
+    - _START_UP.length
+    - _GRAPH
+) // _WALKS
 
 CONNECTED_COMPONENTS = Preset(
     benchmark="connected_components",
@@ -350,8 +358,15 @@ CONNECTED_COMPONENTS = Preset(
         structures=(
             *_START_UP.structures,
             # Code: the graph, a global of the benchmark's module until shutdown.
-            # Placeholder: read_adjlist's lists, tuples and throwaway dicts as its
-            # build churn, none until the records fit them.
+            # G = nx.read_adjlist(...) stores it once read_adjlist returns, and
+            # read_adjlist's frame holds it while it loads. Records: the branch's
+            # old collections examine it in increments as it loads, up to 231,870
+            # real objects in one, and mark it once the module holds it.
+            # Records: the heap tops out after the 61st automatic collection,
+            # about 118 MB after start-up, so read_adjlist's lists, tuples and
+            # throwaway dicts come to about 0.3 kB for each kB of graph. A build's
+            # churn comes in whole kB, so the load leaves it out and ends about
+            # 29 MB early.
             StructureParameters(
                 shape=_GRAPH_SHAPE,
                 size=_GRAPH,
@@ -359,6 +374,7 @@ CONNECTED_COMPONENTS = Preset(
                 lifetime=None,
                 rebuild_interval=None,
                 build_churn=0,
+                built_in_frame=True,
             ),
         ),
         seed=848,
