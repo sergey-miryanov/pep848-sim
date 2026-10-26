@@ -6,7 +6,7 @@ preset's open parameters until the two agree (ADR 0011).
 
 from collections.abc import Iterable
 
-from benchmarks import Benchmark, Kind, Tally, load_data, mock
+from benchmarks import Benchmark, Kind, Tally, load_data
 from pep848_sim.collectors.collector import Collector, CollectorSettings, Record
 from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.collectors.legacy import LegacyCollector
@@ -20,15 +20,16 @@ COLLECTORS: dict[str, type[Collector]] = {
 }
 
 # Where the runtime's stats file each kind of record: its generation, and whether
-# the runtime started the collection on its own.
-FILED: dict[str, tuple[int, Kind]] = {
+# the runtime started the collection on its own. Shutdown's set no target (#117),
+# so they file nowhere.
+FILED: dict[str, tuple[int, Kind] | None] = {
     "young": (0, "automatic"),
     "old": (1, "automatic"),
     "gen 0": (0, "automatic"),
     "gen 1": (1, "automatic"),
     "gen 2": (2, "automatic"),
     "full": (2, "explicit"),
-    "shutdown": (2, "explicit"),
+    "shutdown": None,
 }
 
 # Real objects to a simulated one (ADR 0002).
@@ -51,6 +52,8 @@ def tally(records: Iterable[Record]) -> Benchmark:
         if first_heap is None:
             first_heap = sum(record.spaces_before) * REAL_PER_SIMULATED
         key = FILED[record.kind]
+        if key is None:
+            continue
         examined = Tally(1, record.survived + record.freed, record.freed)
         tallies[key] = tallies.get(key, Tally()).add(examined)
     return Benchmark(1, tallies, first_heap)
@@ -89,8 +92,6 @@ def _count(objects: float | None) -> str:
 
 def main() -> None:
     data = load_data()
-    if mock():
-        print("The records in data/ are mock: fit nothing to them (#117).\n")
     for name, preset in PRESETS.items():
         for collector, make in COLLECTORS.items():
             title = f"{name} under the {collector} collector"
