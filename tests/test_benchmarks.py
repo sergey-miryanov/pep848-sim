@@ -262,6 +262,11 @@ def test_yield_is_none_until_a_collection_had_a_candidate() -> None:
     assert Tally(collections=4).yield_ is None
 
 
+def test_a_collection_examines_its_candidates_on_average() -> None:
+    assert Tally(collections=4, candidates=200, collected=50).examined_each == 50
+    assert Tally().examined_each is None
+
+
 def test_per_worker_is_a_generation_and_kinds_collections_over_the_workers() -> None:
     benchmark = Benchmark(4, {(2, "explicit"): Tally(10, 0, 0)})
 

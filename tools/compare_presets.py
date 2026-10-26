@@ -1,7 +1,8 @@
 """Run each preset under both collectors and print what its collections did beside
 its benchmark's, as #117 loads them: by generation and kind, the collections a
-worker makes and their yield, and the objects its first collection examines. We
-change a preset's open parameters until the two agree (ADR 0011).
+worker makes, the real objects one of them examines on average and their yield,
+and the objects its first collection examines. We change a preset's open
+parameters until the two agree (ADR 0011).
 """
 
 from collections.abc import Iterable
@@ -35,6 +36,9 @@ FILED: dict[str, tuple[int, Kind] | None] = {
 # Real objects to a simulated one (ADR 0002).
 REAL_PER_SIMULATED = 16
 
+# A column's heads: the benchmark's figure, then the preset's.
+_SIDES = f"{'benchmark':>10}{'preset':>10}"
+
 
 def run_preset(preset: Preset, collector: type[Collector]) -> list[Record]:
     """A preset's records under a collector, at the PEP's default settings."""
@@ -44,18 +48,18 @@ def run_preset(preset: Preset, collector: type[Collector]) -> list[Record]:
 
 def tally(records: Iterable[Record]) -> Benchmark:
     """A run's records as one worker's collections, tallied as #117 tallies a
-    benchmark's: the objects a collection examined are its candidates, and those
-    it freed are what it collected."""
+    benchmark's, in real objects: the objects a collection examined are its
+    candidates, and those it freed are what it collected."""
     tallies: dict[tuple[int, Kind], Tally] = {}
     first_examined = None
     for record in records:
-        examined = record.survived + record.freed
+        examined = (record.survived + record.freed) * REAL_PER_SIMULATED
         if first_examined is None:
-            first_examined = examined * REAL_PER_SIMULATED
+            first_examined = examined
         key = FILED[record.kind]
         if key is None:
             continue
-        collection = Tally(1, examined, record.freed)
+        collection = Tally(1, examined, record.freed * REAL_PER_SIMULATED)
         tallies[key] = tallies.get(key, Tally()).add(collection)
     return Benchmark(1, tallies, first_examined)
 
@@ -64,16 +68,18 @@ def report(title: str, benchmark: Benchmark, preset: Benchmark) -> list[str]:
     """The lines that set a preset's collections beside its benchmark's."""
     lines = [
         title,
-        f"  {'':<14}{'per worker':^20}  {'yield':^20}",
-        f"  {'':<14}{'benchmark':>10}{'preset':>10}  {'benchmark':>10}{'preset':>10}",
+        f"  {'':<14}{'per worker':^20}  {'examined each':^20}  {'yield':^20}",
+        f"  {'':<14}{_SIDES}  {_SIDES}  {_SIDES}",
     ]
     for generation, kind in sorted(benchmark.tallies.keys() | preset.tallies.keys()):
+        theirs = benchmark.tallies.get((generation, kind), Tally())
+        ours = preset.tallies.get((generation, kind), Tally())
         lines.append(
             f"  gen {generation} {kind:<9}"
             f"{benchmark.per_worker(generation, kind):>10.1f}"
             f"{preset.per_worker(generation, kind):>10.1f}  "
-            f"{_share(benchmark, generation, kind):>10}"
-            f"{_share(preset, generation, kind):>10}"
+            f"{_count(theirs.examined_each):>10}{_count(ours.examined_each):>10}  "
+            f"{_share(theirs.yield_):>10}{_share(ours.yield_):>10}"
         )
     lines.append(
         "  the first collection examines, in real objects:"
@@ -83,8 +89,7 @@ def report(title: str, benchmark: Benchmark, preset: Benchmark) -> list[str]:
     return lines
 
 
-def _share(benchmark: Benchmark, generation: int, kind: Kind) -> str:
-    share = benchmark.tallies.get((generation, kind), Tally()).yield_
+def _share(share: float | None) -> str:
     return "-" if share is None else f"{share:.1%}"
 
 

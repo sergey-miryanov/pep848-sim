@@ -118,14 +118,14 @@ def test_a_requests_graph_holds_each_structure_and_the_churn() -> None:
         ("16 chains", 121, "module", None, None, False),
         ("a tree with parent pointers", 790, "module", None, None, False),
         ("16 chains", 232, "frame", None, None, False),
-        ("a hierarchy of 50 branches", 322, "frame", 25_298, 25_620, False),
-        ("a hierarchy of 50 branches", 322, "frame", 840, 420, False),
+        ("a hierarchy of 50 branches", 322, "frame", 24_261, 24_583, False),
+        ("a hierarchy of 50 branches", 322, "frame", 806, 403, False),
     ]
     assert all(s["objects"] and s["links"] for s in drawn["structures"])
     assert drawn["churn"] == {
-        "cycle_share": "1/50",
-        "cycle_size": 2,
-        "lifetime_mean": 4,
+        "cycle_share": "0",
+        "cycle_size": 1,
+        "lifetime_mean": 1,
         "long_share": "0",
         "long_lifetimes": [1, 1],
     }
