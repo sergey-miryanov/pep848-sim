@@ -15,6 +15,8 @@ from pep848_sim.structures import (
     Graph,
     Hierarchy,
     Rings,
+    Root,
+    Shape,
     StructureParameters,
     Tree,
 )
@@ -34,55 +36,78 @@ class Preset:
 
 @dataclass(frozen=True)
 class _StartUp:
-    """A worker's start-up and imports, under the module root, as two structures:
-    chains that refcounting frees at shutdown, and a tree that shutdown leaves as
-    cyclic garbage (ADR 0011). The records' first heap_size sets their sum, and
-    shutdown's yield the split between them."""
+    """A worker's start-up and imports, as four structures (ADR 0011): a tree that
+    start-up lets go of as soon as it is built, which its first collections find as
+    cyclic garbage; under the module root, chains that refcounting frees at
+    shutdown and a tree that shutdown leaves as cyclic garbage; and chains that sys
+    does not reach, which a full collection examines where it marks the rest. A
+    frame root holds those until shutdown."""
 
+    garbage: int
     acyclic: int
     cyclic: int
-    # The churn after each object, for the automatic collections the records hold
-    # before the benchmark's loops begin.
+    unreached: int
+    # The churn after each object. It takes in the tuples a collection untracks
+    # without examining them, which the simulator does not model (ADR 0011).
     churn: int
 
     @property
-    def structures(self) -> tuple[StructureParameters, StructureParameters]:
+    def structures(self) -> tuple[StructureParameters, ...]:
+        def built(
+            shape: Shape, size: int, root: Root, lifetime: int | None
+        ) -> StructureParameters:
+            return StructureParameters(
+                shape=shape,
+                size=size,
+                root=root,
+                lifetime=lifetime,
+                rebuild_interval=None,
+                build_churn=self.churn,
+            )
+
         return (
-            StructureParameters(
-                shape=Chains(width=16),
-                size=self.acyclic,
-                root="module",
-                lifetime=None,
-                rebuild_interval=None,
-                build_churn=self.churn,
-            ),
-            StructureParameters(
-                shape=Tree(),
-                size=self.cyclic,
-                root="module",
-                lifetime=None,
-                rebuild_interval=None,
-                build_churn=self.churn,
-            ),
+            built(Tree(), self.garbage, "frame", 0),
+            built(Chains(width=16), self.acyclic, "module", None),
+            built(Tree(), self.cyclic, "module", None),
+            built(Chains(width=16), self.unreached, "frame", None),
         )
 
     @property
     def length(self) -> int:
         """Its length on the allocation clock, in kB."""
-        return (self.acyclic + self.cyclic) * (1 + self.churn)
+        objects = self.garbage + self.acyclic + self.cyclic + self.unreached
+        return objects * (1 + self.churn)
+
+
+# Start-up and imports: the interpreter, pyperf and the benchmark's own imports.
+# The five benchmarks' first collections agree within 5%, so their presets share
+# it. The records give real objects, each 16 to a simulated one (ADR 0002).
+_START_UP = _StartUp(
+    # Records: the 216 the first collections free under the legacy collector, 129,
+    # 84 and 3, and create_gc_cycles' first gc.collect() under the incremental one.
+    garbage=13,
+    # Records: what create_gc_cycles' full collections keep, 18,291, less the
+    # other two.
+    acyclic=121,
+    # Records: the 12,637 finalize_modules' first collection frees, where gcmon
+    # caught it.
+    cyclic=790,
+    # Records: the 3,705 each of create_gc_cycles' gc.collect() calls examines and
+    # keeps under the incremental collector, the rings aside.
+    unreached=232,
+    # Records: the first collection examines 8,141 to 8,845 real objects at 2,000
+    # kB, and start-up ends before the third automatic collection.
+    churn=3,
+)
 
 
 # create_gc_cycles, in bm_gc_collect: each loop calls gc.collect(), builds 100 rings
 # of 21 Node objects in a list, drops the list and calls gc.collect() again.
 
-# Start-up and imports: the interpreter, pyperf and gc. Placeholders until #118.
-# The records hold two automatic collections before the first loop.
-_CREATE_GC_CYCLES_START_UP = _StartUp(acyclic=350, cyclic=350, churn=6)
 # Code: 2,100 nodes, 131 simulated objects (ADR 0002), each ring of 21 rounded to
 # one, and the list.
 _RINGS = 132
 # A loop: the rings' build, and pyperf's bookkeeping as churn, a placeholder 8 kB.
-# Start-up fills whole loops, so each loop starts as its interval comes round.
 _LOOP = 140
 # Placeholder: half the records' gc.collect() calls per worker.
 _LOOPS = 512
@@ -100,7 +125,7 @@ CREATE_GC_CYCLES = Preset(
             long_lifetimes=(1, 1),
         ),
         structures=(
-            *_CREATE_GC_CYCLES_START_UP.structures,
+            *_START_UP.structures,
             # Code: a local of the benchmark's function, dropped as soon as it is
             # built, with gc.collect() before each build and after each drop.
             StructureParameters(
@@ -118,17 +143,15 @@ CREATE_GC_CYCLES = Preset(
     ),
     # The worker's own length: start-up, then its loops, the last ending with its
     # second gc.collect().
-    run_length=_CREATE_GC_CYCLES_START_UP.length + (_LOOPS - 1) * _LOOP + _RINGS,
+    run_length=_START_UP.length + (_LOOPS - 1) * _LOOP + _RINGS,
 )
 
 
 # json_loads, in bm_json_loads: each loop calls json.loads 60 times, 20 times on
-# each of three strings, and drops each result as the call returns.
-
-# Start-up and imports: the interpreter, pyperf, json and random. The module's
+# each of three strings, and drops each result as the call returns. The module's
 # globals, DICT, TUPLE and the copies of DICT, come to a few real objects, which
-# start-up's size takes in. Placeholders until #119.
-_JSON_LOADS_START_UP = _StartUp(acyclic=350, cyclic=350, churn=6)
+# start-up takes in.
+
 # Placeholder: the records' automatic collections per worker. Each marks threshold0
 # kB of allocation (ADR 0011), and the records cannot tell where before the next
 # one the worker ends, so the run ends halfway.
@@ -148,7 +171,7 @@ JSON_LOADS = Preset(
             long_share=Fraction(1, 50),
             long_lifetimes=(100, 1000),
         ),
-        structures=_JSON_LOADS_START_UP.structures,
+        structures=_START_UP.structures,
         seed=848,
         shutdown=True,
     ),
@@ -162,9 +185,6 @@ JSON_LOADS = Preset(
 # tree of elements, writes it to a file and runs one loop, which parses the file and
 # the tree's bytes 30 times each. Each parse's tree replaces the last of its kind.
 
-# Start-up and imports: the interpreter, pyperf, xml.etree.ElementTree with its C
-# accelerator, and tempfile. Placeholders until #120.
-_XML_ETREE_PARSE_START_UP = _StartUp(acyclic=350, cyclic=350, churn=6)
 # Code: 5,103 elements and the dicts of the 53 with attributes, 322 simulated
 # objects (ADR 0002). The root holds 50 children of 100 subchildren each, so 50
 # branches keep the tree two levels deep, as nearly all its elements are, and no
@@ -192,7 +212,7 @@ XML_ETREE_PARSE = Preset(
             long_lifetimes=(1, 1),
         ),
         structures=(
-            *_XML_ETREE_PARSE_START_UP.structures,
+            *_START_UP.structures,
             # Code: build_xml_tree's tree, a local of bench_etree, built as each value
             # starts and dropped as it ends.
             StructureParameters(
@@ -220,7 +240,7 @@ XML_ETREE_PARSE = Preset(
         shutdown=True,
     ),
     # The worker's own length: start-up, then its values.
-    run_length=_XML_ETREE_PARSE_START_UP.length + _XML_VALUES * _XML_VALUE,
+    run_length=_START_UP.length + _XML_VALUES * _XML_VALUE,
 )
 
 
@@ -229,9 +249,6 @@ XML_ETREE_PARSE = Preset(
 # parent's, and each leaf sleeps 50 ms. A task goes as it finishes, and the whole
 # tree by the run's end.
 
-# Start-up and imports: the interpreter, pyperf and asyncio. Placeholders until
-# #121.
-_ASYNC_TREE_IO_TG_START_UP = _StartUp(acyclic=350, cyclic=350, churn=6)
 # Code: the root task and six levels of six branches under it.
 _TASKS = sum(6**level for level in range(7))
 # Placeholder: real objects to a task, with its coroutine, its group and its sleep's
@@ -259,7 +276,7 @@ ASYNC_TREE_IO_TG = Preset(
             long_lifetimes=(1, 1),
         ),
         structures=(
-            *_ASYNC_TREE_IO_TG_START_UP.structures,
+            *_START_UP.structures,
             # Code: the task tree, built a level at a time as asyncio runs each
             # task after the one that started it. No task links back to its parent,
             # so refcounting frees the tree as the run ends.
@@ -276,7 +293,7 @@ ASYNC_TREE_IO_TG = Preset(
         shutdown=True,
     ),
     # The worker's own length: start-up, then its runs.
-    run_length=_ASYNC_TREE_IO_TG_START_UP.length + _ASYNC_RUNS * _ASYNC_RUN,
+    run_length=_START_UP.length + _ASYNC_RUNS * _ASYNC_RUN,
 )
 
 
@@ -284,9 +301,6 @@ ASYNC_TREE_IO_TG = Preset(
 # graph into its globals before pyperf starts, and each loop counts the graph's
 # connected components with a breadth-first walk.
 
-# Start-up and imports: the interpreter, pyperf and networkx. Placeholders until
-# #122.
-_CONNECTED_COMPONENTS_START_UP = _StartUp(acyclic=350, cyclic=350, churn=6)
 # Code: read_adjlist's 262,111 nodes with two dicts each and 899,792 edges with one,
 # 1,424,118 tracked objects in all under networkx 3.4.2: 89,007 simulated objects
 # (ADR 0002), with about two edges' dicts to a node's.
@@ -312,7 +326,7 @@ CONNECTED_COMPONENTS = Preset(
             long_lifetimes=(1, 1),
         ),
         structures=(
-            *_CONNECTED_COMPONENTS_START_UP.structures,
+            *_START_UP.structures,
             # Code: the graph, a global of the benchmark's module until shutdown.
             # Placeholder: read_adjlist's lists, tuples and throwaway dicts as its
             # build churn, none until the records fit them.
@@ -329,7 +343,7 @@ CONNECTED_COMPONENTS = Preset(
         shutdown=True,
     ),
     # The worker's own length: start-up, the load, then its loops.
-    run_length=_CONNECTED_COMPONENTS_START_UP.length + _GRAPH + _WALKS * _WALK,
+    run_length=_START_UP.length + _GRAPH + _WALKS * _WALK,
 )
 
 PRESETS = {

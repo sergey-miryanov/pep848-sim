@@ -1,7 +1,7 @@
 """Run each preset under both collectors and print what its collections did beside
 its benchmark's, as #117 loads them: by generation and kind, the collections a
-worker makes and their yield, and the heap at the first collection. We change a
-preset's open parameters until the two agree (ADR 0011).
+worker makes and their yield, and the objects its first collection examines. We
+change a preset's open parameters until the two agree (ADR 0011).
 """
 
 from collections.abc import Iterable
@@ -47,16 +47,17 @@ def tally(records: Iterable[Record]) -> Benchmark:
     benchmark's: the objects a collection examined are its candidates, and those
     it freed are what it collected."""
     tallies: dict[tuple[int, Kind], Tally] = {}
-    first_heap = None
+    first_examined = None
     for record in records:
-        if first_heap is None:
-            first_heap = sum(record.spaces_before) * REAL_PER_SIMULATED
+        examined = record.survived + record.freed
+        if first_examined is None:
+            first_examined = examined * REAL_PER_SIMULATED
         key = FILED[record.kind]
         if key is None:
             continue
-        examined = Tally(1, record.survived + record.freed, record.freed)
-        tallies[key] = tallies.get(key, Tally()).add(examined)
-    return Benchmark(1, tallies, first_heap)
+        collection = Tally(1, examined, record.freed)
+        tallies[key] = tallies.get(key, Tally()).add(collection)
+    return Benchmark(1, tallies, first_examined)
 
 
 def report(title: str, benchmark: Benchmark, preset: Benchmark) -> list[str]:
@@ -75,8 +76,9 @@ def report(title: str, benchmark: Benchmark, preset: Benchmark) -> list[str]:
             f"{_share(preset, generation, kind):>10}"
         )
     lines.append(
-        f"  first heap, in real objects: benchmark {_count(benchmark.first_heap)},"
-        f" preset {_count(preset.first_heap)}"
+        "  the first collection examines, in real objects:"
+        f" benchmark {_count(benchmark.first_examined)},"
+        f" preset {_count(preset.first_examined)}"
     )
     return lines
 
