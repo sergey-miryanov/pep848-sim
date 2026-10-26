@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 guide</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="v/6e97db84da43/theme.css">
-<script src="v/6e97db84da43/theme.js"></script>
+<link rel="stylesheet" href="v/471f1a09d6f0/theme.css">
+<script src="v/471f1a09d6f0/theme.js"></script>
 <style>
   body {
     margin: 0;
@@ -22,7 +22,7 @@
   nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 20px; font-size: 14px; color: var(--text-secondary); }
   nav [aria-current] { color: var(--text-primary); font-weight: 600; text-decoration: none; }
 </style>
-<script type="module" src="v/6e97db84da43/gc-widget.js"></script>
+<script type="module" src="v/471f1a09d6f0/gc-widget.js"></script>
 </head>
 <body>
 <main>
@@ -215,8 +215,8 @@ collections wait until young collections have moved enough objects in.</p>
 <p>The widget below runs connected_components again, now at the PEP's threshold0
 of 2,000 kB. sys reaches the whole graph, so the old collections mark it.
 Increments take only what sys does not reach: here, a few objects from
-start-up, in one small increment as each sweep ends. A later section shows a
-large one.</p>
+start-up, in one small increment as each sweep ends. A later section shows
+where a large one comes from.</p>
 
 <gc-widget id="old-widget" controls="workload.structures.4.size">
 <script type="application/json">
@@ -268,11 +268,11 @@ calls that challenging, since the program can change the increment's objects
 between them.</p>
 <p>The widget below runs async_tree_io_tg, which models a worker of the benchmark
 of that name. Four times over, it starts a tree of asyncio tasks six levels
-deep, and a frame holds the tree until its tasks finish. sys does not reach the
-tree, so marking leaves it in pending, and the tree's root reaches every task
-in it. No task links back to the one that started it, so refcounting frees each
-tree as the frame lets go. Before shutdown, the collections find no cyclic
-garbage beyond a few cycles that start-up lets go of.</p>
+deep, and the event loop holds the tree until its tasks finish. sys reaches the
+tree through the event loop, so marking takes it, and no increment forms from
+it. No task links back to the one that started it, so refcounting frees each
+tree as the run ends. Before shutdown, the collections find no cyclic garbage
+beyond a few cycles that start-up lets go of.</p>
 
 <gc-widget id="increment-widget" controls="workload.structures.4.size">
 <script type="application/json">
@@ -284,21 +284,28 @@ garbage beyond a few cycles that start-up lets go of.</p>
 </script>
 </gc-widget>
 
-<p>In the incremental column's work panel, the tallest bars each hold an old
-collection whose increment starts from a tree's root and examines every task
-that young collections have moved in so far. While a tree grows, each such
-increment is larger than the last, and the peak work figure reads the largest,
-above the legacy collector's. The legacy collector's largest collections here
-are gen 1 collections, which take only the nursery and the aging generation.
-Its one gen 2 collection comes just after a tree has gone.</p>
-<p>The work budget panel shows what each large increment costs the old collections
-after it. The budget drops by the whole increment, far below zero, and the old
+<p>In the incremental column, each old collection marks what the young collection
+before it moved in, so no collection's work outgrows the work budget. The peak
+work figure stays far below the legacy collector's, whose largest
+collections here are gen 1 collections that take the nursery and the aging
+generation whole. Its one gen 2 collection comes just after a tree has gone.
+The benchmark's records agree: the reference branch's old collections spend
+their whole budget and examine a few hundred objects each.</p>
+<p>A frame root changes that. Hang the same tree off a frame instead, as a
+structure that only a running function's locals hold, and
+<a href="playground.html#playground=async_tree_io_tg&amp;playground.request=vZPdjhshDIXfxddUBTKbTXiVaoUIeDK0BCpjskqjefeKyc821XavVr3DB5vzGfAZXgv9SMUFMGfwU6O8LE4-oa2TIwQDEsRNib8QjBKQ4ogcD2gP6DKYQUAqef9QsQi3vArmmxLqZRZQmZrnRot2hjq5n72ECREEXB1WAqgUBgMjuUPfuJ0ERgog3LWYgo2ZkY4ugcktJQEX9drGSsDYUrK-pISeY8kVzOhSxVncfXvTLvYdtZ7v9lrd_Q8ltPQIcPH6PIbH3p-38n-av3sBeqU_eIDPR5gikiM_ncC8QTzpYfP8AYYe1vrdv6D09mk7_EWi_k3yIqAiBjCbYSOgTo1Dec1gmBp2GmSOeV87KE-EdSopSDBaSineFAVG_RnrHs8CqGWbMO956i2tliI8Ip0u-b7kyi7zcnzMkaNLtg-l3bWwRwbzRUm5VI2EGKwnDJHB6PuIHTFYchwLGFBfB-h34pItu-_o-Tqz62GefwM">open
+it in the playground</a>. sys no longer reaches the tree, so marking leaves it in
+pending, and an old collection whose increment starts from the tree's root
+examines every task that young collections have moved in so far. While a tree
+grows, each such increment is larger than the last, and the incremental
+collector's peak work passes the legacy collector's more than three times over.
+The work budget drops by the whole increment, far below zero, and the old
 collections stay idle until young collections have paid it back.</p>
-<p>Move the Hierarchy size, the task tree's, and the comparison turns. With a
-smaller tree, the legacy collector's gen 1 collections are the larger, and its
-peak work passes the incremental collector's. At the largest size, a gen 2
-collection comes while a tree lives and examines all of it, and the legacy
-collector's peak work passes the incremental collector's again.</p>
+<p>Move the Hierarchy size, the task tree's, and the legacy collector's largest
+collections grow with the tree: its gen 1 collections until each takes a full
+nursery and aging generation, and at the largest size a gen 2 collection that
+comes while a tree lives and examines all of it. The incremental collector's
+stay no larger than what each young collection moves in.</p>
 </section>
 
 <section id="gc-collect-and-shutdown">
