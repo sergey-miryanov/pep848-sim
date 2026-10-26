@@ -151,10 +151,11 @@ form and come loose from the objects that use it, so a collection that meets
 objects soon after their allocation finds few cycles to free.</p>
 <p>The widget below runs json_loads, which models a worker of the benchmark of
 that name: it calls <code>json.loads</code> 60 times a loop. No result holds a
-cycle, and each goes as its call returns, so neither collector frees anything
-before shutdown. Until then, every object a collection examines is work that
-frees nothing. As it starts, the worker builds the long-lived objects it keeps
-to the end, and between loops a few objects stay alive a while longer.</p>
+cycle, and each goes as its call returns, so before shutdown both collectors
+free only a few cycles that start-up lets go of. Every other object a
+collection examines is work that frees nothing. As it starts, the worker builds
+the long-lived objects it keeps to the end, and between loops a few objects
+stay alive a while longer.</p>
 
 <gc-widget id="young-widget" controls="settings.threshold0 settings.threshold1">
 <script type="application/json">
@@ -212,11 +213,12 @@ spent it, so the collector scans the old generation as fast as young
 collections move objects in. The budget starts below zero, so the first old
 collections wait until young collections have moved enough objects in.</p>
 <p>The widget below runs connected_components again, now at the PEP's threshold0
-of 2,000 kB. sys reaches the whole graph, so the old collections only mark, and
-no increment forms. Increments take only what sys does not reach, which a later
-section shows.</p>
+of 2,000 kB. sys reaches the whole graph, so the old collections mark it.
+Increments take only what sys does not reach: here, a few objects from
+start-up, in one small increment as each sweep ends. A later section shows a
+large one.</p>
 
-<gc-widget id="old-widget" controls="workload.structures.2.size">
+<gc-widget id="old-widget" controls="workload.structures.4.size">
 <script type="application/json">
 {
   "preset": "connected_components",
@@ -239,12 +241,13 @@ pieces the size of what young collections promote.</p>
 <p>The work budget panel shows the pacing. Each young collection lifts the budget
 by what it moved in, and the old collection after it spends the budget back to
 zero. Once the module has loaded the whole graph, young collections stop moving
-objects in, the budget stays at zero, and the old collections go idle. The last
-sweep stops part way, and part of the graph is still in pending when the run
-ends.</p>
-<p>Move the graph's size and the sweeps change length. A larger graph keeps young
-collections promoting for longer, so more sweeps run, each longer than the
-last. The incremental collector's bars stay the same height, while the legacy
+objects in, the budget stays at zero, and the old collections go idle. The
+fourth sweep ends just as they do, so the whole graph waits in pending when the
+run ends.</p>
+<p>Move the graph's size and the sweeps change. A smaller graph fits fewer sweeps
+in. A larger one keeps young collections promoting for longer, so the old
+collections carry on into a fifth sweep, and the run ends part way through it.
+The incremental collector's bars stay the same height, while the legacy
 collector's gen 1 bars grow with the graph until each examines a full nursery
 and aging generation. At a few thousand kB the graph never lifts the budget
 above zero, and no sweep runs.</p>
@@ -268,10 +271,10 @@ of that name. Four times over, it starts a tree of asyncio tasks six levels
 deep, and a frame holds the tree until its tasks finish. sys does not reach the
 tree, so marking leaves it in pending, and the tree's root reaches every task
 in it. No task links back to the one that started it, so refcounting frees each
-tree as the frame lets go, and the collections find no cyclic garbage before
-shutdown.</p>
+tree as the frame lets go. Before shutdown, the collections find no cyclic
+garbage beyond a few cycles that start-up lets go of.</p>
 
-<gc-widget id="increment-widget" controls="workload.structures.2.size">
+<gc-widget id="increment-widget" controls="workload.structures.4.size">
 <script type="application/json">
 {
   "preset": "async_tree_io_tg",
@@ -338,12 +341,15 @@ the whole heap, so the two work panels show faded bars of the same height, and
 work per MB comes out the same: when a program calls <code>gc.collect()</code>
 this often, the collector it runs makes no difference to the work. Yield
 differs. The incremental collector marks what sys reaches without examining it,
-and yield counts only the objects a collection examined, so nearly all the
-incremental collector examines is rings it frees. Peak work counts only the
-collections the runtime started, here the few at start-up.</p>
-<p>At the dashed line, the heap falls to almost nothing. Shutdown's first
-collection frees nothing, since the last loop's second call freed its rings.
-When the modules go, refcounting frees the chains that start-up built, and the
+and yield counts only the objects a collection examined. It examines the rings
+and the objects start-up keeps out of sys's reach, so about a fifth of what it
+examines is rings it frees, against a twentieth for the legacy collector. Peak
+work counts only the collections the runtime started, here the few at
+start-up.</p>
+<p>At the dashed line, the heap falls to almost nothing. As the frames return,
+refcounting frees the chains start-up keeps out of sys's reach. Shutdown's
+first collection frees nothing, since the last loop's second call freed its
+rings. When the modules go, refcounting frees the chains under sys, and the
 second collection frees the tree with parent pointers, cyclic garbage once sys
 lets go of it. The third finds nothing left.</p>
 <p>Lower threshold0 below the kB a loop's rings take to build, and the runtime's

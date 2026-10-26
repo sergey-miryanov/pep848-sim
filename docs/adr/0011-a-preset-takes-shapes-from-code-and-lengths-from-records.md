@@ -32,18 +32,35 @@ every `threshold0` kB, as create_gc_cycles does. Each call resets the budget,
 so no automatic collection comes during its loops, and no sweep ends.
 
 Some parameters neither source fixes, such as the start-up heap's shape or the
-churn inside a library. The start-up heap hangs off the module root as two
-structures: a tree, which shutdown leaves as cyclic garbage, and chains, which
-refcounting frees. Their sizes set the share of it that shutdown's collections
-find. Shutdown's collections set no target, though: gcmon reads a worker once
-a tick, and a worker can exit before gcmon reads them (#117). The heap that a
-worker's first collection reads sets start-up's size. A script in `tools/`
-prints a preset's yields, collections and heap sizes beside its benchmark's.
-We change the open parameters until the two agree within #117's tolerance, a
-fifth of the benchmark's yield or half a point, whichever is wider, and leave
-the rest as the code and the records set them. Each parameter's comment names
-its source: the code, at the pyperformance version #117's metadata records, or
-the record we fitted it to.
+churn inside a library. The five benchmarks' workers start up alike: in #117's
+rerun, their first two collections agree within 5%. Their presets share one
+start-up of four structures. Under the module root hang a tree, which shutdown
+leaves as cyclic garbage, and chains, which refcounting frees. Shutdown's
+collections set no target: gcmon reads a worker once a tick, and a worker can
+exit before gcmon reads them (#117). Where gcmon caught `finalize_modules`'
+first collection, what it frees sizes the tree. Under a frame root hang chains
+for the objects sys does not reach, which the branch's full collections
+examine and keep while they mark the rest. A tree that start-up lets go of as
+soon as it is built gives its first collections the cyclic garbage they free.
+
+The objects a worker's first collection examines under the legacy collector
+set start-up's size, where the heap that collection reads would count more. A
+collection untracks a tuple that holds only objects it never sees, without
+examining it, and by start-up's end a third of its heap has gone that way. The
+simulator has no untracking, and the PEP's pseudocode has none (ADR 0003), so
+start-up's build churn takes in those tuples: they move the allocation clock,
+and leave the heap before a collection sees them. The branch's incremental
+collector examines nothing at start-up, and keeps them tracked until a
+collection examines them: a json_loads worker's heap holds 29,700 real objects
+all run, where its preset's holds about 18,300.
+
+A script in `tools/` prints a preset's yields, its collections and the objects
+its first collection examines beside its benchmark's. We change the open
+parameters until the two agree within #117's tolerance, a fifth of the
+benchmark's yield or half a point, whichever is wider, and leave the rest as
+the code and the records set them. Each parameter's comment names its source:
+the code, at the pyperformance version #117's metadata records, or the record
+we fitted it to.
 
 ## Considered Options
 
@@ -67,6 +84,19 @@ the record we fitted it to.
   create_gc_cycles never ends one.
 - A start-up structure with a fitted share of cycles of its own: it needs a
   new shape, where two structures need none.
+- Start-up's size from the heap its first collection reads, as this record
+  first had it. The heap counts the tuples that collection untracks, so a
+  preset's start-up would hold about 29,500 real objects where its benchmark's
+  collections examine about 18,300. create_gc_cycles' `gc.collect()` calls
+  would find 3.4% cyclic garbage where its benchmark's find 5.4%.
+- Untracking in the simulator: a share of each structure that a collection
+  untracks without examining it. It needs a workload parameter, and a step the
+  PEP's pseudocode does not have (ADR 0003).
+- A start-up for each preset: the five agree within 5% through their second
+  collection, and past it the records cannot tell start-up from the
+  benchmark's own work.
+- Start-up's cyclic garbage from the churn: the churn's parameters hold for
+  the whole run, and json_loads' loops make no cycles.
 - Repeating structures that count their intervals from the run's start, with a
   start-up that fills whole intervals, as create_gc_cycles' does:
   xml_etree_parse's values run 25 MB each, and no start-up fills a whole

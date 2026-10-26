@@ -65,9 +65,9 @@ class Benchmark(NamedTuple):
 
     workers: int
     tallies: dict[tuple[int, Kind], Tally]
-    # Real objects in the heap as each worker's first collection read began,
-    # averaged over the workers whose rows report it.
-    first_heap: float | None = None
+    # Real objects each worker's first collection examined, which set start-up's
+    # size (ADR 0011), averaged over the workers whose first collection gcmon read.
+    first_examined: float | None = None
 
     def per_worker(self, generation: int, kind: Kind) -> float:
         """How many collections of a generation and kind a worker makes: for
@@ -87,13 +87,14 @@ def load(path: Path) -> dict[str, Benchmark]:
 
     counts: Counter[str] = Counter()
     tallies: defaultdict[str, dict[tuple[int, Kind], Tally]] = defaultdict(dict)
-    first_heaps: defaultdict[str, list[int]] = defaultdict(list)
+    first_examined: defaultdict[str, list[int]] = defaultdict(list)
     for (benchmark, pid, _), rows in workers.items():
         counts[benchmark] += 1
         rows.sort(key=lambda row: int(row["ts"]))
-        # heap_size is a column the loader can do without.
-        if first_heap := rows[0].get("heap_size"):
-            first_heaps[benchmark].append(int(first_heap))
+        # A worker's first row holds its first collection alone, unless gcmon lost
+        # that one.
+        if rows[0]["collections"] == "1":
+            first_examined[benchmark].append(int(rows[0]["candidates"]))
         shutdown = _shutdown(rows)
         # The runtime keeps running totals per worker and generation. A row
         # counts what they gained since the last row read them, so a record gcmon
@@ -119,7 +120,7 @@ def load(path: Path) -> dict[str, Benchmark]:
             tallies[benchmark][key] = tallies[benchmark].get(key, Tally()).add(gained)
 
     return {
-        name: Benchmark(counts[name], tallies[name], _mean(first_heaps[name]))
+        name: Benchmark(counts[name], tallies[name], _mean(first_examined[name]))
         for name in sorted(counts)
     }
 

@@ -22,12 +22,13 @@ def test_tally_files_each_record_where_the_runtimes_stats_would() -> None:
             # Shutdown's sets no target, as #117 loads its benchmark's.
             (2, "explicit"): Tally(1, 8, 2),
         },
-        # 6 simulated objects of 16 real objects each.
-        first_heap=96,
+        # The young collection examined 4 simulated objects, of 16 real objects
+        # each.
+        first_examined=64,
     )
 
 
-def test_a_run_without_records_has_no_first_heap() -> None:
+def test_a_run_without_records_has_no_first_collection() -> None:
     assert tally([]) == Benchmark(1, {}, None)
 
 
@@ -35,7 +36,7 @@ def test_the_report_sets_each_generation_and_kind_beside_the_benchmarks() -> Non
     benchmark = Benchmark(
         workers=4,
         tallies={(0, "automatic"): Tally(8, 100, 0), (2, "explicit"): Tally(4, 80, 20)},
-        first_heap=12_600,
+        first_examined=8_400,
     )
     preset = Benchmark(1, {(2, "explicit"): Tally(1, 10, 3)}, None)
 
@@ -44,4 +45,6 @@ def test_the_report_sets_each_generation_and_kind_beside_the_benchmarks() -> Non
     assert lines[0] == "json_loads under the legacy collector"
     assert lines[3].split() == ["gen", "0", "automatic", "2.0", "0.0", "0.0%", "-"]
     assert lines[4].split() == ["gen", "2", "explicit", "1.0", "1.0", "25.0%", "30.0%"]
-    assert lines[5] == "  first heap, in real objects: benchmark 12,600, preset -"
+    assert lines[5] == (
+        "  the first collection examines, in real objects: benchmark 8,400, preset -"
+    )

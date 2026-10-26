@@ -54,6 +54,7 @@ def test_a_row_counts_what_its_totals_gained_since_the_last_row_of_its_generatio
                 (0, "automatic"): Tally(collections=2, candidates=250, collected=40),
                 (1, "automatic"): Tally(collections=1, candidates=500, collected=0),
             },
+            first_examined=100,
         )
     }
 
@@ -99,7 +100,7 @@ def test_each_worker_keeps_its_own_running_totals(tmp_path: Path) -> None:
 
     [benchmark] = load(csv).values()
 
-    assert benchmark == Benchmark(2, {(0, "automatic"): Tally(3, 550, 70)})
+    assert benchmark == Benchmark(2, {(0, "automatic"): Tally(3, 550, 70)}, 200)
 
 
 def test_a_worker_is_its_pid_and_its_pid_epoch(tmp_path: Path) -> None:
@@ -112,7 +113,7 @@ def test_a_worker_is_its_pid_and_its_pid_epoch(tmp_path: Path) -> None:
 
     [benchmark] = load(csv).values()
 
-    assert benchmark == Benchmark(2, {(0, "automatic"): Tally(2, 400, 40)})
+    assert benchmark == Benchmark(2, {(0, "automatic"): Tally(2, 400, 40)}, 200)
 
 
 def test_leaves_the_calibration_workers_out(tmp_path: Path) -> None:
@@ -123,7 +124,7 @@ def test_leaves_the_calibration_workers_out(tmp_path: Path) -> None:
     )
 
     assert load(csv) == {
-        "json_loads": Benchmark(1, {(0, "automatic"): Tally(1, 100, 10)})
+        "json_loads": Benchmark(1, {(0, "automatic"): Tally(1, 100, 10)}, 100)
     }
 
 
@@ -146,8 +147,8 @@ def test_keeps_each_benchmark_apart(tmp_path: Path) -> None:
     )
 
     assert load(csv) == {
-        "create_gc_cycles": Benchmark(1, {(0, "automatic"): Tally(1, 300, 30)}),
-        "xml_etree_parse": Benchmark(1, {(0, "automatic"): Tally(1, 100, 10)}),
+        "create_gc_cycles": Benchmark(1, {(0, "automatic"): Tally(1, 300, 30)}, 300),
+        "xml_etree_parse": Benchmark(1, {(0, "automatic"): Tally(1, 100, 10)}, 100),
     }
 
 
@@ -217,29 +218,29 @@ def test_a_manual_row_an_automatic_collection_follows_is_a_call(
     }
 
 
-def test_the_first_heap_is_each_workers_first_heap_size_averaged(
+def test_the_first_collections_candidates_are_averaged_over_the_workers(
     tmp_path: Path,
 ) -> None:
-    csv = tmp_path / "trace.csv"
-    csv.write_text(
-        f"{HEADER},heap_size\n"
-        "json_loads,7,1,0,200,0,1,0,2,250,40,1500\n"
-        "json_loads,7,1,0,100,0,1,0,1,100,10,1000\n"
-        "json_loads,8,1,0,150,0,1,0,1,300,30,2000\n",
-        newline="",
+    csv = write(
+        tmp_path / "trace.csv",
+        "json_loads,7,1,0,200,0,1,0,2,250,40",
+        "json_loads,7,1,0,100,0,1,0,1,100,10",
+        "json_loads,8,1,0,150,0,1,0,1,300,30",
     )
 
     [benchmark] = load(csv).values()
 
-    assert benchmark.first_heap == 1500
+    assert benchmark.first_examined == 200
 
 
-def test_without_heap_sizes_there_is_no_first_heap(tmp_path: Path) -> None:
-    csv = write(tmp_path / "trace.csv", "json_loads,7,1,0,100,0,1,0,1,100,10")
+def test_a_worker_whose_first_collection_gcmon_lost_gives_none(
+    tmp_path: Path,
+) -> None:
+    csv = write(tmp_path / "trace.csv", "json_loads,7,1,0,100,0,1,0,2,250,40")
 
     [benchmark] = load(csv).values()
 
-    assert benchmark.first_heap is None
+    assert benchmark.first_examined is None
 
 
 def test_running_totals_that_fall_are_an_error(tmp_path: Path) -> None:
