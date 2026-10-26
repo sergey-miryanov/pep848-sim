@@ -225,10 +225,11 @@ over, it starts a tree of 55,987 asyncio tasks, six levels of six under the
 root, each level under a <code>TaskGroup</code>, and each leaf sleeps 50 ms.
 No task links back to the one that started it, so refcounting frees the tree
 as the run ends, and before shutdown the collections find no cyclic garbage
-beyond a few cycles that start-up lets go of. Here the incremental collector's
-peak work passes the legacy collector's: an old collection takes all of the
-tree in the pending space as one increment, since the tree's root reaches it
-all. The churn, the tree's size and each run's length remain placeholders.</p>
+beyond a few cycles that start-up lets go of. sys reaches the tree through the
+event loop, so the incremental collector's old collections mark it a budget at
+a time, and its peak work stays far below the legacy collector's, whose gen 1
+collections take the nursery and the aging generation whole. The event loop's
+churn remains a placeholder.</p>
 <p>connected_components models a worker of the networkx benchmark of that
 name. As its module loads, it reads the Amazon co-purchasing graph, 262,111
 products and 899,792 edges, into 1.4 million dicts that stay in the module's
