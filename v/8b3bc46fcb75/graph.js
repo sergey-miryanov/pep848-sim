@@ -10,11 +10,11 @@
 /**
  * One structure as pep848_sim.widget.graph gives it: its shape as the legend
  * names it, its size, its root, its lifetime and rebuild interval in kB, whether
- * it calls gc.collect(), and its sample: each object by index with its level, and
- * each link with whether it lies on a cycle.
+ * it calls gc.collect(), whether a frame builds it, and its sample: each object by
+ * index with its level, and each link with whether it lies on a cycle.
  * @typedef {{
  *   shape: string, size: number, root: "module" | "frame", lifetime: number | null,
- *   rebuild_interval: number | null, full_collections: boolean,
+ *   rebuild_interval: number | null, full_collections: boolean, built_in_frame: boolean,
  *   objects: [number, number][], links: [number, number, boolean][],
  * }} Structure
  */
@@ -102,7 +102,8 @@ const size = (/** @type {number} */ kb) =>
  */
 export function describe(structure) {
   const { shape, root, lifetime, rebuild_interval: interval, full_collections: collects } = structure;
-  const held = root === "module" ? "held by sys" : "held by a frame";
+  let held = root === "module" ? "held by sys" : "held by a frame";
+  if (root === "module" && structure.built_in_frame) held = "held by a frame while built, then by sys";
   let when;
   if (interval === null) {
     when = lifetime === null ? "built first, kept to the end" : `built first, dropped ${size(lifetime)} later`;

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 guide</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="v/471f1a09d6f0/theme.css">
-<script src="v/471f1a09d6f0/theme.js"></script>
+<link rel="stylesheet" href="v/8b3bc46fcb75/theme.css">
+<script src="v/8b3bc46fcb75/theme.js"></script>
 <style>
   body {
     margin: 0;
@@ -22,7 +22,7 @@
   nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 20px; font-size: 14px; color: var(--text-secondary); }
   nav [aria-current] { color: var(--text-primary); font-weight: 600; text-decoration: none; }
 </style>
-<script type="module" src="v/471f1a09d6f0/gc-widget.js"></script>
+<script type="module" src="v/8b3bc46fcb75/gc-widget.js"></script>
 </head>
 <body>
 <main>
@@ -293,7 +293,7 @@ The benchmark's records agree: the reference branch's old collections spend
 their whole budget and examine a few hundred objects each.</p>
 <p>A frame root changes that. Hang the same tree off a frame instead, as a
 structure that only a running function's locals hold, and
-<a href="playground.html#playground=async_tree_io_tg&amp;playground.request=vZPdjhshDIXfxddUBTKbTXiVaoUIeDK0BCpjskqjefeKyc821XavVr3DB5vzGfAZXgv9SMUFMGfwU6O8LE4-oa2TIwQDEsRNib8QjBKQ4ogcD2gP6DKYQUAqef9QsQi3vArmmxLqZRZQmZrnRot2hjq5n72ECREEXB1WAqgUBgMjuUPfuJ0ERgog3LWYgo2ZkY4ugcktJQEX9drGSsDYUrK-pISeY8kVzOhSxVncfXvTLvYdtZ7v9lrd_Q8ltPQIcPH6PIbH3p-38n-av3sBeqU_eIDPR5gikiM_ncC8QTzpYfP8AYYe1vrdv6D09mk7_EWi_k3yIqAiBjCbYSOgTo1Dec1gmBp2GmSOeV87KE-EdSopSDBaSineFAVG_RnrHs8CqGWbMO956i2tliI8Ip0u-b7kyi7zcnzMkaNLtg-l3bWwRwbzRUm5VI2EGKwnDJHB6PuIHTFYchwLGFBfB-h34pItu-_o-Tqz62GefwM">open
+<a href="playground.html#playground=async_tree_io_tg&amp;playground.request=zZTdbhshEIXfZa6pCnjj2LxKFSG8zHppMFTD4Mi19t0rdm2nrqJIuUjUO-YwZ_gYfs7wkuk5ZufBnKEfK6V5cOoj2jI6QjAgQVyV8BvBKAExDMjhgPaALoHpBMSc9neOWbjmFTA_lFBPk4DCVHuuNGtnKKP71SxMiCDgssJKAOXMYGAgd2gT10pgpADCXQ3R25AY6egimFRjFLCol22sBAw1RtvnGLHnkFMBM7hYcElkG5Jdyi_yJG44rRcuNINaTzcqrW5Yh-xrvOdaED4d7b5Tj1v5HzC92S690u-c4peRjQHJUT-ewLyyPehu8_gOne7W-s17pvT2Ydv9A6g-DPgkoCB6MJtuI6CMlX1-SWCYKjZIZA5pXxo_j4RlzNFLMFpKKV4VBUb9HesWTwKoJhsx7XlsO13NJjwinZb8PqfCLvFcPqTAwUXb_gG7q36PDOabknJ2DYTobU_oA4PRt1d9RG_JcchgQH3voLXKRZt3P7Hnyzex7qbpDw">open
 it in the playground</a>. sys no longer reaches the tree, so marking leaves it in
 pending, and an old collection whose increment starts from the tree's root
 examines every task that young collections have moved in so far. While a tree
