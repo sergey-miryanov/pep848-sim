@@ -54,8 +54,9 @@ collector examines nothing at start-up, and keeps them tracked until a
 collection examines them: a json_loads worker's heap holds 29,700 real objects
 all run, where its preset's holds about 18,300.
 
-A script in `tools/` prints a preset's yields, its collections and the objects
-its first collection examines beside its benchmark's. We change the open
+A script in `tools/` prints beside its benchmark's a preset's collections, the
+objects one of them examines on average, their yields, and the objects its
+first collection examines. We change the open
 parameters until the two agree within #117's tolerance, a fifth of the
 benchmark's yield or half a point, whichever is wider, and leave the rest as
 the code and the records set them. Each parameter's comment names its source:

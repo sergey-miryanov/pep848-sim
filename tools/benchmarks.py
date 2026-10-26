@@ -44,6 +44,12 @@ class Tally(NamedTuple):
         a collection had a candidate."""
         return self.collected / self.candidates if self.candidates else None
 
+    @property
+    def examined_each(self) -> float | None:
+        """The candidates of one collection on average: the objects it examined.
+        None without a collection."""
+        return self.candidates / self.collections if self.collections else None
+
     def add(self, other: Tally) -> Tally:
         return Tally(
             self.collections + other.collections,

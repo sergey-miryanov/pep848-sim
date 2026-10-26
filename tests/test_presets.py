@@ -28,13 +28,6 @@ from test_run import PINNED, digest, records
 # garbage apart from a benchmark whose collections find 1%.
 YIELD_REL, YIELD_ABS = 0.2, 0.005
 
-# The presets whose yields still miss their benchmark's, each with the issue that
-# fits it to the records.
-UNFITTED = {
-    ("xml_etree_parse", "incremental"): "#120",
-    ("xml_etree_parse", "legacy"): "#120",
-}
-
 
 def test_each_preset_is_named_for_its_benchmark() -> None:
     assert {name: preset.benchmark for name, preset in PRESETS.items()} == {
@@ -208,23 +201,7 @@ def test_connected_components_frees_its_graph_with_its_module_at_shutdown(
 
 @pytest.mark.parametrize(
     ("name", "collector"),
-    [
-        pytest.param(
-            name,
-            collector,
-            marks=[
-                pytest.mark.xfail(
-                    raises=AssertionError,
-                    reason=f"unfitted until {UNFITTED[name, collector]}",
-                    strict=True,
-                )
-            ]
-            if (name, collector) in UNFITTED
-            else [],
-        )
-        for name in PRESETS
-        for collector in COLLECTORS
-    ],
+    [(name, collector) for name in PRESETS for collector in COLLECTORS],
 )
 def test_each_presets_yields_match_its_benchmarks(name: str, collector: str) -> None:
     """By generation and kind, wherever the benchmark's collections examined an

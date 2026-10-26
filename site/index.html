@@ -215,10 +215,11 @@ outlives a collection and the run's length remain placeholders.</p>
 <p>xml_etree_parse models a worker of the xml_etree benchmark's parse task.
 Four times over, it builds a tree of 5,103 elements, then parses it 60 times,
 from a file and from bytes in turn, and each parsed tree replaces the last of
-its kind. No element links back to its parent, so refcounting frees
-each tree as the next replaces it, and a collection that examines a tree finds
-it alive. Its workload's slider sets the parsed trees' size. The churn with its
-cycles and each tree's share of the clock remain placeholders.</p>
+its kind. No element links back to its parent, so refcounting frees each tree
+as the next replaces it, and a collection that examines a tree finds it alive.
+Before shutdown, the collections find no cyclic garbage beyond a few cycles
+that start-up lets go of. Its workload's slider sets the parsed trees'
+size.</p>
 <p>async_tree_io_tg models a worker of the benchmark of that name. Four times
 over, it starts a tree of 55,987 asyncio tasks, six levels of six under the
 root, each level under a <code>TaskGroup</code>, and each leaf sleeps 50 ms.

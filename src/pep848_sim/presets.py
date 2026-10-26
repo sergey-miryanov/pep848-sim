@@ -191,23 +191,34 @@ JSON_LOADS = Preset(
 # element links back to its parent.
 _XML_TREE = 322
 _XML_SHAPE = Hierarchy(branches=50)
-# Placeholder: each tree's slot on the clock, the tree and the parser's other
-# objects: the records' automatic collections over a worker's 244 trees.
-_XML_SLOT = 420
+# Records: the automatic collections per worker. Each marks threshold0 kB of
+# allocation (ADR 0011), and the records cannot tell where before the next one the
+# worker ends, so the run ends about halfway, as json_loads' does.
+_XML_COLLECTIONS = 51
 # Code: a value's own tree and its 60 parses. pyperf runs a warmup and three values
 # a worker, one loop each.
-_XML_VALUE = 61 * _XML_SLOT
+_XML_TREES = 61
 _XML_VALUES = 4
+# Each tree's slot on the clock, the tree and the parser's other objects: the
+# worker's length after start-up over its 244 trees, 403 kB.
+_XML_SLOT = (
+    (2 * _XML_COLLECTIONS + 1) * CollectorSettings().threshold0 // 2 - _START_UP.length
+) // (_XML_VALUES * _XML_TREES)
+_XML_VALUE = _XML_TREES * _XML_SLOT
 
 XML_ETREE_PARSE = Preset(
     benchmark="xml_etree_parse",
     workload=WorkloadParameters(
-        # Placeholders: the parser's own objects, and the cycles the records' young
-        # collections find, which the code does not show.
+        # The parser's own objects.
         churn=ChurnParameters(
-            cycle_share=Fraction(1, 50),
-            cycle_size=2,
-            lifetime_mean=4,
+            # Records: each worker's collections free 249 real objects under either
+            # collector, all start-up's, so the parser makes no cycles. The cycles
+            # xml_etree's young collections find come from its iterparse task.
+            cycle_share=Fraction(0),
+            cycle_size=1,
+            # The records leave it open: a mean of 1 kB and one of 4 kB make the
+            # same collections.
+            lifetime_mean=1,
             long_share=Fraction(0),
             long_lifetimes=(1, 1),
         ),
