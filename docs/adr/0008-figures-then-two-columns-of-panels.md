@@ -53,6 +53,17 @@ runs stream (ADR 0006), the page draws whatever records have arrived, once an
 animation frame, and each y-scale grows to the next of 1, 1.2, 1.5, 2, 2.5, 3,
 4, 5, 6 and 8 times a power of ten.
 
+The work panel's y-scale leaves shutdown's work out (#202). Each of shutdown's
+full collections takes the whole heap, the first while the modules still hold
+it, so in connected_components shutdown's bin holds 179K objects, where the
+runtime's largest bin holds 28K. A scale that fit it left the runtime's own
+bars in the bottom seventh of the panel. The panel cuts shutdown's bin at the
+scale's end instead: the bar stops square there, two slanted gaps cross it
+below the end, and the bin's whole work stands above it. Its tooltip gives
+that work in full. The scale keeps the work of the workload's gc.collect()
+calls, which make most of create_gc_cycles' work. Where a run's only work is
+shutdown's, the scale fits that.
+
 Each panel reads its values under the pointer (#115). On the heap panel and
 the work budget, a crosshair snaps to the collection nearest the pointer,
 across all four of the heap's lanes, and a tooltip gives the heap before that
@@ -117,6 +128,11 @@ playground the legend edits the workload (ADR 0013).
   PEP.
 - A bar per collection: readable only for short runs, and twice as slow to
   redraw.
+- A work scale that fit the runtime's own collections alone, as #202 first
+  proposed: create_gc_cycles' start-up collections would set it at 400
+  objects, and the panel would cut every bar of its gc.collect() calls.
+- A flat gap across a cut bar: the gaps between a bar's parts are flat, so it
+  would read as one more part's edge.
 - Summary tiles at the foot of each column as well: half their numbers
   repeat the figures.
 - The heap stacked by space, as the panel first drew it: each band's line

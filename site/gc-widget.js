@@ -38,7 +38,7 @@ import { FOREIGN, decode, encode, holdsCode, LINK_STYLE } from "./link.js";
 import { describe, describeChurn, describeYoung, fit, network } from "./graph.js";
 import {
   CLOCK, FADED, FULL, KEYS, KIND, LANES, PARTS, SPACES, WORK_TO_DO,
-  budgetAt, ceiling, collections, heap, heapAt, spoken, step, work, workAt,
+  budgetAt, ceiling, collections, cuts, heap, heapAt, spoken, step, work, workAt, workEnd,
 } from "./panels.js";
 import { dropRuns, requestRuns, stopRuns } from "./runs.js";
 
@@ -1119,13 +1119,13 @@ class GcWidget extends HTMLElement {
     // same MB in any lane.
     const heapMax = ceiling(Math.max(...COLLECTORS.flatMap((c) => heaps[c].whole.map((point) => point.heap))));
     const binKb = Math.ceil(runLength / BINS / threshold0) * threshold0;
-    const works = { legacy: work(this.#records.legacy, binKb), incremental: work(this.#records.incremental, binKb) };
+    const workMax = workEnd(COLLECTORS.map((c) => this.#records[c]), binKb);
+    const works = { legacy: work(this.#records.legacy, binKb, workMax), incremental: work(this.#records.incremental, binKb, workMax) };
     // The legend names the full collections' marks only for runs that make some.
     const fulls = COLLECTORS.some((c) => this.#records[c].some((record) => FULL.includes(record[KIND])));
     for (const entry of /** @type {ShadowRoot} */ (this.shadowRoot).querySelectorAll(".legend [data-full]")) {
       /** @type {HTMLElement} */ (entry).hidden = !fulls;
     }
-    const workMax = ceiling(Math.max(0, ...COLLECTORS.flatMap((c) => works[c].map((segment) => segment.y2))));
     const budgets = this.#records.incremental.map((record) => ({ mb: record[CLOCK] / 1000, budget: record[WORK_TO_DO] }));
     const lowest = Math.min(0, ...budgets.map((d) => d.budget));
     const budgetDomain = [lowest < 0 ? -ceiling(-lowest) : 0, ceiling(Math.max(0, ...budgets.map((d) => d.budget)))];
@@ -1199,9 +1199,18 @@ class GcWidget extends HTMLElement {
       const segments = works[collector];
       const binPx = ((width - MARGINS.marginLeft - MARGINS.marginRight) * binKb) / runLength;
       const inset = Math.max(1, (binPx - BAR) / 2);
+      // A bin cut at the scale's end, as shutdown's can be: two slanted gaps
+      // across its bar below the end, and its whole work above it.
+      const cut = cuts(records, binKb, workMax);
+      const objectsPerPx = workMax / (HEIGHTS.work - MARGINS.marginTop - MARGINS.marginBottom);
+      const gaps = cut.flatMap(({ x1, x2 }) => [7, 12].map((below) => ({
+        x1: x1 + inset / pxPerMb, x2: x2 - inset / pxPerMb,
+        y1: workMax - (below + 2) * objectsPerPx, y2: workMax - (below - 2) * objectsPerPx,
+      })));
       chart(column, "work", Plot.plot({
         ...frame(HEIGHTS.work),
-        ariaLabel: `${TITLES[collector]}: work per bin, as marked, survived and freed, full collections' faded above`,
+        ariaLabel: `${TITLES[collector]}: work per bin, as marked, survived and freed, full collections' faded above`
+          + (cut.length ? ", a bin past the scale cut at its end" : ""),
         y: { domain: [0, workMax], label: "work (objects)", tickFormat: compact },
         color: { domain: PARTS, range: PARTS.map((part) => token(part)) },
         marks: [
@@ -1214,6 +1223,11 @@ class GcWidget extends HTMLElement {
           Plot.rect(segments.filter((s) => s.top), {
             x1: "x1", x2: "x2", y1: "y1", y2: "y2", fill: "part", fillOpacity: "opacity",
             insetLeft: inset, insetRight: inset, insetTop: 1, insetBottom: 1, ry2: 4,
+          }),
+          Plot.link(gaps, { x1: "x1", y1: "y1", x2: "x2", y2: "y2", stroke: token("surface"), strokeWidth: 2 }),
+          Plot.text(cut, {
+            x: (/** @type {{ x1: number, x2: number }} */ d) => (d.x1 + d.x2) / 2, y: workMax,
+            text: (/** @type {{ work: number }} */ d) => compact(d.work), dy: -4, lineAnchor: "bottom", fill: token("text-secondary"),
           }),
           ...ending,
           Plot.ruleY([0], { stroke: token("baseline") }),
@@ -1359,7 +1373,8 @@ class GcWidget extends HTMLElement {
       const total = [...at.automatic, ...at.full].reduce((sum, part) => sum + part, 0);
       const inset = Math.max(1, (px(at.x2) - px(at.x1) - BAR) / 2);
       [left, right] = [px(at.x1) + inset - 2, px(at.x2) - inset + 2];
-      const top = marginTop + (1 - total / workMax) * (HEIGHTS.work - marginTop - marginBottom) - 2;
+      // A bar cut at the scale's end stops there, and so does its outline.
+      const top = marginTop + (1 - Math.min(total, workMax) / workMax) * (HEIGHTS.work - marginTop - marginBottom) - 2;
       Object.assign(mark.style, { left: `${left}px`, width: `${right - left}px`, top: `${top}px`, height: `${HEIGHTS.work - marginBottom - top}px` });
       mark.hidden = !total;
       const fulls = at.full.some(Boolean);

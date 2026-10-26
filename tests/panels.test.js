@@ -6,7 +6,7 @@
 import { test } from "node:test";
 // @ts-expect-error: as above.
 import assert from "node:assert/strict";
-import { FADED, budgetAt, ceiling, collections, heap, heapAt, spoken, step, work, workAt } from "../site/panels.js";
+import { FADED, budgetAt, ceiling, collections, cuts, heap, heapAt, spoken, step, work, workAt, workEnd } from "../site/panels.js";
 
 /**
  * A record with the fields a test names, and the rest empty.
@@ -105,6 +105,58 @@ test("a bin stacks its full collections' work faded above the runtime's own", ()
     { x1: 0, x2: 4, y1: 10, y2: 110, part: "marked", opacity: FADED, top: false },
     { x1: 0, x2: 4, y1: 110, y2: 160, part: "freed", opacity: FADED, top: true },
   ]);
+});
+
+// #202: shutdown took the whole heap, and the scale it set left the runtime's
+// own bars slivers.
+test("the work panel's scale leaves shutdown's work out, and gc.collect()'s in", () => {
+  const legacy = [
+    record({ clock: 2000, marked: 100 }),
+    record({ clock: 6000, kind: "full", freed: 300 }),
+    record({ clock: 8000, kind: "shutdown", marked: 5000 }),
+  ];
+  const incremental = [record({ clock: 4000, survived: 400 }), record({ clock: 8000, kind: "shutdown", marked: 5000 })];
+
+  assert.equal(workEnd([legacy], 4000), ceiling(300));
+  assert.equal(workEnd([legacy, incremental], 4000), ceiling(400));
+  // The runtime's own collections in shutdown's bin count.
+  assert.equal(workEnd([[record({ clock: 7000, freed: 900 }), record({ clock: 8000, kind: "shutdown", marked: 5000 })]], 4000), ceiling(900));
+});
+
+test("the work panel's scale fits shutdown's work where a run holds nothing else", () => {
+  assert.equal(workEnd([[record({ clock: 8000, kind: "shutdown", marked: 5000 })], []], 4000), ceiling(5000));
+  assert.equal(workEnd([[], []], 4000), ceiling(0));
+});
+
+test("a bin past the scale's end is cut there, square on top", () => {
+  const records = [
+    record({ clock: 1000, marked: 10 }),
+    record({ clock: 2000, kind: "shutdown", marked: 50, freed: 200 }),
+    record({ clock: 6000, marked: 40 }),
+  ];
+
+  assert.deepEqual(work(records, 4000, 100), [
+    { x1: 0, x2: 4, y1: 0, y2: 10, part: "marked", opacity: 1, top: false },
+    { x1: 0, x2: 4, y1: 10, y2: 60, part: "marked", opacity: FADED, top: false },
+    { x1: 0, x2: 4, y1: 60, y2: 100, part: "freed", opacity: FADED, top: false },
+    { x1: 4, x2: 8, y1: 0, y2: 40, part: "marked", opacity: 1, top: true },
+  ]);
+  // A part that starts past the end draws nothing.
+  assert.deepEqual(work(records, 4000, 60).map(({ part, y2 }) => [part, y2]), [["marked", 10], ["marked", 60], ["marked", 40]]);
+  // Work that reaches the end alone is not cut.
+  assert.equal(work(records, 4000, 260).at(-2)?.top, true);
+  assert.deepEqual(cuts(records, 4000, 260), []);
+});
+
+test("a cut bin gives its clocks and its whole work", () => {
+  const records = [
+    record({ clock: 1000, marked: 10 }),
+    record({ clock: 2000, kind: "shutdown", marked: 50, freed: 200 }),
+    record({ clock: 6000, marked: 40 }),
+  ];
+
+  assert.deepEqual(cuts(records, 4000, 100), [{ x1: 0, x2: 4, work: 260 }]);
+  assert.deepEqual(cuts(records, 4000, 30), [{ x1: 0, x2: 4, work: 260 }, { x1: 4, x2: 8, work: 40 }]);
 });
 
 test("a y-scale ends at the next step above its data, with room to spare", () => {
