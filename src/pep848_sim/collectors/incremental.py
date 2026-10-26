@@ -141,10 +141,10 @@ class IncrementalCollector(Collector):
         """Collect the whole heap, as `gc.collect()` does. The PEP gives it no
         pseudocode, so it follows the branch's gc_collect_incremental_full (ADR 0012).
         Every object joins pending, old ones first and the young generation after them
-        in the order they entered. What sys reaches moves to visited unexamined, and
-        the rest is examined, its survivors joining visited. The work budget starts
-        again from 0, and with pending empty the next old collection starts a new
-        sweep."""
+        in the order they entered. It moves what sys reaches to visited unexamined,
+        then examines the rest and moves the survivors to visited too. The work
+        budget starts again from 0, and with pending empty the next old collection
+        starts a new sweep."""
         pending = self.pending_space
         pending.extend(self.visited_space)
         pending.extend(self.reachable)
@@ -162,7 +162,7 @@ class IncrementalCollector(Collector):
         own, as the branch's gc_collect_incremental_old does."""
         increment = Space(self)
         increment.append(obj)
-        # The walk's order, since a space cannot grow while it is iterated.
+        # The walk's order, since a space cannot grow while a loop iterates it.
         reached = [obj]
         for x in reached:
             for target in self._heap.references(x):

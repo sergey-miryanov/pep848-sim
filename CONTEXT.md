@@ -21,11 +21,9 @@ it allocates, how it links objects, and when it lets go of them.
 _Avoid_: benchmark, program, test case
 
 **Preset**:
-A named workload with every workload parameter chosen by hand to model one
-worker of a pyperformance benchmark, from interpreter start-up to shutdown.
-Every preset has a benchmark behind it: there are no made-up workloads. Each
-carries its own seed, and runs for its worker's own length on the allocation
-clock, shutdown included.
+A named workload that models one worker of a pyperformance benchmark, from
+interpreter start-up to shutdown. Each carries its own seed, and runs for its
+worker's own length on the allocation clock, shutdown included.
 _Avoid_: benchmark (that is the real program it is modelled on), scenario,
 example, template
 

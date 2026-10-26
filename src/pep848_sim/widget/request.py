@@ -200,7 +200,8 @@ def _workload(values: dict[str, Any]) -> WorkloadParameters:
 
 
 def _structure(values: dict[str, Any]) -> StructureParameters:
-    # Links written before a structure could be built in a frame leave it out.
+    # Links the playground wrote before a frame could build a structure leave
+    # built_in_frame out.
     values = _values(
         values, _names(StructureParameters), "structure", optional=["built_in_frame"]
     )

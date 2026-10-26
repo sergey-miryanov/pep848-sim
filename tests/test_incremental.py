@@ -204,7 +204,7 @@ def test_a_full_collection_marks_what_sys_reaches_and_examines_the_rest() -> Non
 
     collector.collect_full("full")
 
-    # sys and m are marked, held survives, and both cycles are freed.
+    # It marks sys and m, sees held survive and frees both cycles.
     assert collector.counts == [CollectionCounts("full", 2, 1, 4)]
     assert [heap.is_freed(x) for x in (a, b, c, d)] == [True] * 4
     assert heap.uncollected_garbage == 0

@@ -71,7 +71,7 @@ collection and after it, or the budget it left. On the work panel, an outline
 marks the bar under the pointer, and a tooltip gives its work, the full
 collections' apart from the runtime's own. The crosshair and the outline
 follow the pointer at once, and the tooltip waits until the pointer has rested
-350 ms, so a sweep across a panel leaves its plot in view (#143). A move of
+350 ms, so a pointer crossing a panel leaves its plot in view (#143). A move of
 more than 3 px hides the tooltip again, and so does Escape. Both runs share
 the allocation clock, so the pointer marks it in every panel of both columns,
 and once it rests, the panel under it shows its tooltip in both, legacy beside
@@ -155,7 +155,7 @@ playground the legend edits the workload (ADR 0013).
 - A crosshair at the pointer's own clock: between two collections it would
   read the straight line drawn between their records, a value no record holds.
 - The tooltip at once, as #115 first drew it: it covered the plot while the
-  pointer swept across it.
+  pointer crossed it.
 - The values in each panel's legend row, with no tooltip: the plot stayed
   clear, but each legend had to keep two lines' height so its readings never
   pushed the charts under the pointer, and the readings shifted sideways as

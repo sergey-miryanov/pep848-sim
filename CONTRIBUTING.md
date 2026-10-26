@@ -72,10 +72,11 @@ requires one more job, `check`, which passes once they all pass.
 - tsc checks the site's JavaScript from its JSDoc, in strict mode: the page's
   scripts and the tests against the DOM (`tsconfig.json`), and the worker
   against a web worker's globals (`tsconfig.worker.json`).
-- Node's test runner runs `tests/*.test.js` against `site/panels.js`, which
-  turns a run's records into what each panel draws. `panels.js` imports neither
-  Plot nor the DOM, so Node can load it. The tests stay out of `site/`, which
-  `just site` publishes whole.
+- Node's test runner runs `tests/*.test.js` against the site's modules that
+  load without Plot, a page or a worker: `panels.js`, which turns a run's
+  records into what each panel draws, `graph.js`, `editor.js`, `source.js`,
+  `link.js` and `kept.js`. The tests stay out of `site/`, which `just site`
+  publishes whole.
 - Node runs `tests/digests.pyodide.js` under Pyodide, from npm at the version
   the site's worker loads. It sends each request `tests/digests.json` pins
   through `pep848_sim.widget.request`, the worker's path, and each run's

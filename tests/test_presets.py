@@ -25,7 +25,7 @@ from test_run import PINNED, digest, records
 # benchmark's, or half a point of the objects examined, whichever is wider. A
 # benchmark's workers agree to within 0.01 points, so the width goes to the
 # preset's coarser model (#117). Half a point keeps a preset that finds no
-# garbage apart from a benchmark whose collections find 1%.
+# cyclic garbage apart from a benchmark whose collections find 1%.
 YIELD_REL, YIELD_ABS = 0.2, 0.005
 
 

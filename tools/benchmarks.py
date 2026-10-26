@@ -134,10 +134,10 @@ def load(path: Path) -> dict[str, Benchmark]:
 def _shutdown(rows: list[dict[str, str]]) -> set[int]:
     """Which of a worker's rows, in the order of their ts, are shutdown's
     collections, which set no target. gcmon reads a worker from outside, once a
-    tick, and a worker can exit before the next, so it keeps all three of them,
+    tick, and a worker can end before the next, so it keeps all three of them,
     some or none. finalize_modules' two carry their own reason. `_Py_Finalize`'s
     carries gc.collect()'s, manual, so the loader takes the worker's last manual
-    row for it, unless an automatic collection follows. Where gcmon lost all three,
+    row for it, unless an automatic collection follows. If gcmon lost all three,
     that row is the benchmark's last gc.collect(), and the loader leaves it out
     too."""
     explicit = [i for i, row in enumerate(rows) if row["auto_collect"] == "0"]
