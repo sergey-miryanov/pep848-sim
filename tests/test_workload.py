@@ -70,7 +70,8 @@ ROOTS: tuple[Root, ...] = ("module", "frame")
 @st.composite
 def structure_parameters(draw: st.DrawFn, own: bool = True) -> StructureParameters:
     """A small structure of any shape, a reader's own too unless `own` is false,
-    and either root: long-lived, built once and dropped, or repeating."""
+    and either root, sys's built in a frame or not: long-lived, built once and
+    dropped, or repeating."""
     size = draw(st.integers(min_value=1, max_value=6))
     build_churn = draw(st.integers(min_value=0, max_value=2))
     build = size * (1 + build_churn)
@@ -82,16 +83,18 @@ def structure_parameters(draw: st.DrawFn, own: bool = True) -> StructureParamete
         st.builds(Graph, st.integers(0, 3)),
         st.builds(Rings, st.integers(1, 4)),
     ]
+    root = draw(st.sampled_from(ROOTS))
     return StructureParameters(
         shape=draw(st.one_of(*shapes, *([own_shapes()] if own else []))),
         size=size,
-        root=draw(st.sampled_from(ROOTS)),
+        root=root,
         lifetime=None if kind == "long-lived" else draw(st.integers(1, 60)),
         rebuild_interval=(
             draw(st.integers(build, build + 40)) if kind == "repeating" else None
         ),
         build_churn=build_churn,
         full_collections=draw(st.booleans()),
+        built_in_frame=root == "module" and draw(st.booleans()),
     )
 
 
@@ -340,6 +343,30 @@ def test_the_builds_churn_follows_each_built_object() -> None:
     structure = reached_from(heap, [heap.module_root])
     built = [x in structure for x in collector.nursery]
     assert built == [True, *[True, False, False] * 3]
+
+
+def test_sys_takes_a_structure_built_in_a_frame_once_its_builds_churn_ends() -> None:
+    heap = Heap(Collector(CollectorSettings(threshold0=1_000)))
+    chain = StructureParameters(
+        shape=Chains(width=1),
+        size=2,
+        root="module",
+        lifetime=None,
+        rebuild_interval=None,
+        build_churn=1,
+        built_in_frame=True,
+    )
+    workload = Workload(
+        heap, WorkloadParameters(churn=QUIET, structures=(chain,), seed=848)
+    )
+
+    # Its objects come at kB 1 and 3, each with a kB of churn after it, and the
+    # build ends with the churn at kB 4.
+    workload.run_to(3)
+    assert heap.references(heap.module_root) == ()
+
+    workload.run_to(4)
+    assert heap.references(heap.module_root) == (1,)
 
 
 def test_structures_without_an_interval_build_first_and_the_others_wait() -> None:

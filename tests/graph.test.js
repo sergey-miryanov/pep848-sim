@@ -16,7 +16,7 @@ import { describe, describeChurn, describeConstants, describeRun, describeYoung,
 function structure(fields = {}) {
   return {
     shape: "1 chains", size: 2, root: "module", lifetime: null, rebuild_interval: null, full_collections: false,
-    objects: [[0, 0], [1, 1]], links: [[0, 1, false]],
+    built_in_frame: false, objects: [[0, 0], [1, 1]], links: [[0, 1, false]],
     ...fields,
   };
 }
@@ -81,6 +81,10 @@ test("the legend says what holds each structure, and when the workload builds an
     "rings of 1 object, 132 objects, held by a frame: rebuilt every 140 kB, each dropped as soon as built, gc.collect() before each build and after each drop",
   );
   assert.equal(describe(structure({ size: 89_007, lifetime: 25_298 })), "1 chains, 89,007 objects, held by sys: built first, dropped 25.3 MB later");
+  assert.equal(
+    describe(structure({ shape: "a graph of 2 edges a node", size: 89_007, built_in_frame: true })),
+    "a graph of 2 edges a node, 89,007 objects, held by a frame while built, then by sys: built first, kept to the end",
+  );
 });
 
 test("the legend gives the churn's lifetimes and the cycles it makes", () => {
