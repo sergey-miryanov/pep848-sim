@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 cycle collector</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="v/f93607146f61/theme.css">
-<script src="v/f93607146f61/theme.js"></script>
+<link rel="stylesheet" href="v/6dda3f6adad1/theme.css">
+<script src="v/6dda3f6adad1/theme.js"></script>
 <style>
   body {
     margin: 0;
@@ -23,7 +23,7 @@
   nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 20px; font-size: 14px; color: var(--text-secondary); }
   nav [aria-current] { color: var(--text-primary); font-weight: 600; text-decoration: none; }
 </style>
-<script type="module" src="v/f93607146f61/gc-widget.js"></script>
+<script type="module" src="v/6dda3f6adad1/gc-widget.js"></script>
 </head>
 <body>
 <main>
@@ -84,7 +84,7 @@ the browser, downloads and starts.</p>
     {
       "name": "create_gc_cycles",
       "title": "create_gc_cycles",
-      "controls": ["workload.structures.2.size"],
+      "controls": ["workload.structures.4.size"],
       "request": {
         "preset": "create_gc_cycles",
         "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
@@ -103,7 +103,7 @@ the browser, downloads and starts.</p>
     {
       "name": "xml_etree_parse",
       "title": "xml_etree_parse",
-      "controls": ["workload.structures.3.size"],
+      "controls": ["workload.structures.5.size"],
       "request": {
         "preset": "xml_etree_parse",
         "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
@@ -113,7 +113,7 @@ the browser, downloads and starts.</p>
     {
       "name": "async_tree_io_tg",
       "title": "async_tree_io_tg",
-      "controls": ["workload.structures.2.size"],
+      "controls": ["workload.structures.4.size"],
       "request": {
         "preset": "async_tree_io_tg",
         "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
@@ -123,7 +123,7 @@ the browser, downloads and starts.</p>
     {
       "name": "connected_components",
       "title": "connected_components",
-      "controls": ["workload.structures.2.size"],
+      "controls": ["workload.structures.4.size"],
       "request": {
         "preset": "connected_components",
         "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
@@ -201,37 +201,33 @@ pyperformance benchmark of that name. After start-up, each of its 512 loops
 calls <code>gc.collect()</code>, builds 100 rings of 21 objects, drops them
 and calls <code>gc.collect()</code> again, and shutdown ends the run. The
 calls reset the countdown to the next collection so often that the runtime
-starts none of its own once the loops begin. Until the benchmark runs
-again under gcmon, the start-up heap, the churn and the number of loops are
-placeholders.</p>
+starts none of its own once the loops begin. The churn and the number of
+loops remain placeholders.</p>
 <p>json_loads models a worker of the benchmark of that name, which calls
 <code>json.loads</code> 60 times a loop on three JSON strings. No result holds
 a cycle, and each goes as its call returns, so the runtime's collections find
-no cyclic garbage. Nothing calls <code>gc.collect()</code> before shutdown.
-Over so few collections, each one the incremental collector runs before
-shutdown is idle: its young collections take aging spaces still empty this
-early, and its old collections have no work budget to spend. Lower threshold0
-to give it more collections. Until the benchmark runs again under gcmon, the
-start-up heap, the churn that outlives a collection and the run's length are
-placeholders.</p>
+no cyclic garbage beyond a few cycles that start-up lets go of. Nothing calls
+<code>gc.collect()</code> before shutdown. Over so few collections, each one
+the incremental collector runs before shutdown is idle: its young collections
+take aging spaces still empty this early, and its old collections have no work
+budget to spend. Lower threshold0 to give it more collections. The churn that
+outlives a collection and the run's length remain placeholders.</p>
 <p>xml_etree_parse models a worker of the xml_etree benchmark's parse task.
 Four times over, it builds a tree of 5,103 elements, then parses it 60 times,
 from a file and from bytes in turn, and each parsed tree replaces the last of
 its kind. No element links back to its parent, so refcounting frees
 each tree as the next replaces it, and a collection that examines a tree finds
-it alive. Its workload's slider sets the parsed trees' size. Until the benchmark runs
-again under gcmon, the start-up heap, the churn with its cycles and each
-tree's share of the clock are placeholders.</p>
+it alive. Its workload's slider sets the parsed trees' size. The churn with its
+cycles and each tree's share of the clock remain placeholders.</p>
 <p>async_tree_io_tg models a worker of the benchmark of that name. Four times
 over, it starts a tree of 55,987 asyncio tasks, six levels of six under the
 root, each level under a <code>TaskGroup</code>, and each leaf sleeps 50 ms.
 No task links back to the one that started it, so refcounting frees the tree
-as the run ends, and the collections find no cyclic garbage before shutdown.
-Here the incremental collector's peak work passes the legacy collector's: an
-old collection takes all of the tree in the pending space as one increment,
-since the tree's root reaches it all. Until the benchmark runs again under
-gcmon, the start-up heap, the churn, the tree's size and each run's length are
-placeholders.</p>
+as the run ends, and before shutdown the collections find no cyclic garbage
+beyond a few cycles that start-up lets go of. Here the incremental collector's
+peak work passes the legacy collector's: an old collection takes all of the
+tree in the pending space as one increment, since the tree's root reaches it
+all. The churn, the tree's size and each run's length remain placeholders.</p>
 <p>connected_components models a worker of the networkx benchmark of that
 name. As its module loads, it reads the Amazon co-purchasing graph, 262,111
 products and 899,792 edges, into 1.4 million dicts that stay in the module's
@@ -239,12 +235,11 @@ globals. Each of its four loops then walks the graph to count its components,
 and each iterator the walk makes goes once a node's neighbours run out. The
 incremental collector marks the graph from sys while it loads. After that, no
 young collection finds a survivor to add to the work budget, so the old
-collections go idle with part of the graph still pending. The legacy collector
-runs no gen 2 collection before shutdown. The graph's dicts hold no cycle, but
-the module's globals lie on one with its functions, so the graph turns into
-cyclic garbage at shutdown and the first shutdown collection frees it. Until
-the benchmark runs again under gcmon, the start-up heap, the load's churn and
-each loop's length are placeholders.</p>
+collections go idle as a sweep ends, with the whole graph back in pending. The
+legacy collector runs no gen 2 collection before shutdown. The graph's dicts
+hold no cycle, but the module's globals lie on one with its functions, so the
+graph turns into cyclic garbage at shutdown and the first shutdown collection
+frees it. The load's churn and each loop's length remain placeholders.</p>
 
 <h2>More</h2>
 <p><a href="guide.html">The guide</a> takes PEP 848 a part at a time, starting
