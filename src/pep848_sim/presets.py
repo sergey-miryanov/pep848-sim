@@ -107,20 +107,24 @@ _START_UP = _StartUp(
 # Code: 2,100 nodes, 131 simulated objects (ADR 0002), each ring of 21 rounded to
 # one, and the list.
 _RINGS = 132
-# A loop: the rings' build, and pyperf's bookkeeping as churn, a placeholder 8 kB.
-_LOOP = 140
-# Placeholder: half the records' gc.collect() calls per worker.
+# Records: a loop allocates its rings and nothing else that outlives it. At each
+# gc.collect() the heap holds 18,291 or 20,391 real objects in every worker, the
+# rings' 2,100 apart.
+_LOOP = _RINGS
+# Records: the incremental workers' 1,024 gc.collect() calls, two a loop. pyperf
+# calibrated the legacy workers to 64 loops a value, not 128, so they ran 256.
 _LOOPS = 512
 
 CREATE_GC_CYCLES = Preset(
     benchmark="create_gc_cycles",
     workload=WorkloadParameters(
-        # Placeholders. The records' young collections find almost no cycles, so
-        # the churn makes none.
+        # A loop leaves no room for churn, so start-up's build churn is all of it.
+        # Records: the young collections find almost no cycles. A lifetime of 1 kB
+        # or 4 moves what they examine by 0.2%, so it takes json_loads' 1.
         churn=ChurnParameters(
             cycle_share=Fraction(0),
             cycle_size=1,
-            lifetime_mean=4,
+            lifetime_mean=1,
             long_share=Fraction(0),
             long_lifetimes=(1, 1),
         ),

@@ -201,8 +201,7 @@ pyperformance benchmark of that name. After start-up, each of its 512 loops
 calls <code>gc.collect()</code>, builds 100 rings of 21 objects, drops them
 and calls <code>gc.collect()</code> again, and shutdown ends the run. The
 calls reset the countdown to the next collection so often that the runtime
-starts none of its own once the loops begin. The churn and the number of
-loops remain placeholders.</p>
+starts none of its own once the loops begin.</p>
 <p>json_loads models a worker of the benchmark of that name, which calls
 <code>json.loads</code> 60 times a loop on three JSON strings. No result holds
 a cycle, and each goes as its call returns, so the runtime's collections find
