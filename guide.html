@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 guide</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="v/58a4631acaf3/theme.css">
-<script src="v/58a4631acaf3/theme.js"></script>
+<link rel="stylesheet" href="v/c2db065e8063/theme.css">
+<script src="v/c2db065e8063/theme.js"></script>
 <style>
   body {
     margin: 0;
@@ -22,7 +22,7 @@
   nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 20px; font-size: 14px; color: var(--text-secondary); }
   nav [aria-current] { color: var(--text-primary); font-weight: 600; text-decoration: none; }
 </style>
-<script type="module" src="v/58a4631acaf3/gc-widget.js"></script>
+<script type="module" src="v/c2db065e8063/gc-widget.js"></script>
 </head>
 <body>
 <main>
@@ -119,7 +119,9 @@ which examines the whole graph, where a gen 1 collection examines only the
 nursery and the aging generation. The peak work figure reads that collection's
 work. The incremental column's bars stay low, since its old collections mark
 the graph a part at a time. The faded bar at the end of both columns is
-shutdown's collections, which free the graph once the module goes.</p>
+shutdown's collections: the first takes the graph while the module still holds
+it, and the next frees it once the module goes. The panel cuts that bar at its
+top and writes its work above it.</p>
 <p>Move threshold0 back toward 2,000 and fewer collections fit in the run, so the
 gen 2 collection comes later or not before shutdown. Move it lower and gen 2
 collections come while the module still loads the graph, each larger than the
