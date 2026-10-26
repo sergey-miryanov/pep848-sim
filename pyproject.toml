@@ -60,7 +60,3 @@ branch = true
 fail_under = 99
 precision = 2
 show_missing = true
-
-[tool.typos.default]
-# A playground link holds its request in base64url, whose letters read as typos.
-extend-ignore-re = ['playground\.request=[\w-]+']

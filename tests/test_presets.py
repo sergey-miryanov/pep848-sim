@@ -1,12 +1,9 @@
-import base64
 import json
-import re
-import zlib
 from itertools import pairwise
 
 import pytest
 
-from benchmarks import ROOT, Tally, load_data
+from benchmarks import Tally, load_data
 from compare_presets import COLLECTORS, run_preset, tally
 from pep848_sim.collectors.collector import Collector, CollectorSettings
 from pep848_sim.collectors.heap import Heap
@@ -20,7 +17,7 @@ from pep848_sim.presets import (
     PRESETS,
     XML_ETREE_PARSE,
 )
-from pep848_sim.widget.request import expand, runs
+from pep848_sim.widget.request import runs
 from pep848_sim.workload import Workload
 from test_run import PINNED, digest, records
 
@@ -182,29 +179,16 @@ def test_async_tree_io_tg_runs_leave_no_cyclic_garbage(
     assert freed == garbage.shape.cyclic_garbage(garbage.size)
 
 
-def test_the_guides_link_opens_async_tree_io_tg_with_its_tree_under_a_frame() -> None:
-    """The guide's section on a large increment links to the playground with the
-    preset's workload, its task tree hung off a frame root, as the playground
-    writes a link (site/link.js): deflate-raw JSON in base64url."""
-    guide = (ROOT / "site" / "guide.html").read_text(encoding="utf-8")
-    [text] = re.findall(
-        r"playground=async_tree_io_tg&amp;playground\.request=([\w-]+)", guide
-    )
-    padded = text + "=" * (-len(text) % 4)
-    request = json.loads(zlib.decompress(base64.urlsafe_b64decode(padded), -15))
+def test_connected_components_examines_its_graph_in_increments_while_it_loads() -> None:
+    """read_adjlist's frame holds the graph until it returns, so sys reaches none
+    of it while it loads, and an old collection's increment takes it: more than a
+    young collection's survivors, all the work budget gains from one, could pay
+    for."""
+    records = run_preset(CONNECTED_COMPONENTS, IncrementalCollector)
 
-    preset = json.dumps(
-        {
-            "preset": "async_tree_io_tg",
-            "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
-            "every": 10,
-        }
-    )
-    wanted = json.loads(expand(preset))
-    tree = wanted["workload"]["structures"][4]
-    assert (tree["shape"], tree["root"]) == ({"hierarchy": 6}, "module")
-    tree["root"] = "frame"
-    assert request == wanted
+    examined = [r.survived + r.freed for r in records if r.kind == "old"]
+
+    assert max(examined) > CollectorSettings().threshold0
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])

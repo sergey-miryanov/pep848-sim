@@ -117,8 +117,10 @@ fits more collections. In the legacy column's work panel, one bar rises far
 above the gen 1 collections' bars: the stretch that holds the gen 2 collection,
 which examines the whole graph, where a gen 1 collection examines only the
 nursery and the aging generation. The peak work figure reads that collection's
-work. The incremental column's bars stay low, since its old collections mark
-the graph a part at a time. The faded bar at the end of both columns is
+work. The incremental column's tallest bars come while the module loads the
+graph, from old collections whose increments take what has loaded so far, as a
+later section shows. They stay well below the gen 2 bar. The faded bar at the
+end of both columns is
 shutdown's collections: the first takes the graph while the module still holds
 it, and the next frees it once the module goes. The panel cuts that bar at its
 top and writes its work above it.</p>
@@ -212,45 +214,48 @@ adds its survivors to it, and an old collection marks or examines until it has
 spent it, so the collector scans the old generation as fast as young
 collections move objects in. The budget starts below zero, so the first old
 collections wait until young collections have moved enough objects in.</p>
-<p>The widget below runs connected_components again, now at the PEP's threshold0
-of 2,000 kB. sys reaches the whole graph, so the old collections mark it.
+<p>The widget below runs async_tree_io_tg, which models a worker of the
+benchmark of that name. Four times over, it starts a tree of asyncio tasks six
+levels deep, and the event loop holds the tree until its tasks finish. sys
+reaches the tree through the event loop, so the old collections mark it.
 Increments take only what sys does not reach: here, a few objects from
 start-up, in one small increment as each sweep ends. A later section shows
-where a large one comes from.</p>
+where a large one comes from. No task links back to the one that started it,
+so refcounting frees each tree as the run ends.</p>
 
 <gc-widget id="old-widget" controls="workload.structures.4.size">
 <script type="application/json">
 {
-  "preset": "connected_components",
+  "preset": "async_tree_io_tg",
   "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
-  "every": 5
+  "every": 10
 }
 </script>
 </gc-widget>
 
 <p>In the incremental column's heap panel, the old generation fills as young
-collections move the graph in from the aging lane. At each swap, visited turns
-into pending, and pending then drains back into visited, an old collection at a
-time. Each sweep runs longer than the last, since the old generation has grown
-since the one before. In the work panel the bars hold steady: each young
-collection's survivors, and the marking of the old collection after it. The
-legacy column's bars rise every twelfth collection, where a gen 1 collection
-examines the nursery and the aging generation together. Work per MB comes out
-close for the two collectors, and the incremental collector spends its share in
-pieces the size of what young collections promote.</p>
+collections move a tree in from the aging lane, and empties as the tree goes.
+At each swap, visited turns into pending, and pending then drains back into
+visited, an old collection at a time. While a tree grows, each sweep runs about
+twice as long as the last, since the old generation has doubled since the one
+before. In the work panel, each old collection marks what the young collection
+before it moved in, so no collection's work outgrows the work budget. The
+legacy column's tallest bars hold its gen 1 collections, which examine the
+nursery and the aging generation together, and its one gen 2 collection comes
+just after a tree has gone. Work per MB comes out close for the two collectors,
+and the incremental collector spends its share in pieces the size of what young
+collections promote.</p>
 <p>The work budget panel shows the pacing. Each young collection lifts the budget
 by what it moved in, and the old collection after it spends the budget back to
-zero. Once the module has loaded the whole graph, young collections stop moving
-objects in, the budget stays at zero, and the old collections go idle. The
-fourth sweep ends just as they do, so the whole graph waits in pending when the
-run ends.</p>
-<p>Move the graph's size and the sweeps change. A smaller graph fits fewer sweeps
-in. A larger one keeps young collections promoting for longer, so the old
-collections carry on into a fifth sweep, and the run ends part way through it.
-The incremental collector's bars stay the same height, while the legacy
-collector's gen 1 bars grow with the graph until each examines a full nursery
-and aging generation. At a few thousand kB the graph never lifts the budget
-above zero, and no sweep runs.</p>
+zero. The benchmark's records agree: the reference branch's old collections
+spend their whole budget, and examine a few hundred objects each.</p>
+<p>Move the Hierarchy size, the task tree's, and the sweeps change. A smaller tree
+fits fewer sweeps in, and at the smallest it never lifts the budget above zero,
+so no sweep runs. The incremental collector's bars stay no larger than what
+each young collection moves in, while the legacy collector's gen 1 bars grow
+with the tree until each examines a full nursery and aging generation. At the
+largest size, its gen 2 collection comes while a tree lives and examines all of
+it.</p>
 </section>
 
 <section id="a-large-increment">
@@ -266,46 +271,43 @@ still have long pause times if the transitive closure needed for an increment
 is large". It suggests scanning an increment over several collections, and
 calls that challenging, since the program can change the increment's objects
 between them.</p>
-<p>The widget below runs async_tree_io_tg, which models a worker of the benchmark
-of that name. Four times over, it starts a tree of asyncio tasks six levels
-deep, and the event loop holds the tree until its tasks finish. sys reaches the
-tree through the event loop, so marking takes it, and no increment forms from
-it. No task links back to the one that started it, so refcounting frees each
-tree as the run ends. Before shutdown, the collections find no cyclic garbage
-beyond a few cycles that start-up lets go of.</p>
+<p>The widget below runs connected_components again, at the PEP's threshold0 of
+2,000 kB. Its module loads the graph with <code>G = nx.read_adjlist(...)</code>,
+so read_adjlist's frame holds the graph until the call returns, and only then
+does the module's global take it. sys reaches none of the graph while it loads,
+so marking leaves it in pending, and the graph's root reaches every node read
+so far.</p>
 
 <gc-widget id="increment-widget" controls="workload.structures.4.size">
 <script type="application/json">
 {
-  "preset": "async_tree_io_tg",
+  "preset": "connected_components",
   "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
-  "every": 10
+  "every": 5
 }
 </script>
 </gc-widget>
 
-<p>In the incremental column, each old collection marks what the young collection
-before it moved in, so no collection's work outgrows the work budget. The peak
-work figure stays far below the legacy collector's, whose largest
-collections here are gen 1 collections that take the nursery and the aging
-generation whole. Its one gen 2 collection comes just after a tree has gone.
-The benchmark's records agree: the reference branch's old collections spend
-their whole budget and examine a few hundred objects each.</p>
-<p>A frame root changes that. Hang the same tree off a frame instead, as a
-structure that only a running function's locals hold, and
-<a href="playground.html#playground=async_tree_io_tg&amp;playground.request=zZTdbhshEIXfZa6pCnjj2LxKFSG8zHppMFTD4Mi19t0rdm2nrqJIuUjUO-YwZ_gYfs7wkuk5ZufBnKEfK6V5cOoj2jI6QjAgQVyV8BvBKAExDMjhgPaALoHpBMSc9neOWbjmFTA_lFBPk4DCVHuuNGtnKKP71SxMiCDgssJKAOXMYGAgd2gT10pgpADCXQ3R25AY6egimFRjFLCol22sBAw1RtvnGLHnkFMBM7hYcElkG5Jdyi_yJG44rRcuNINaTzcqrW5Yh-xrvOdaED4d7b5Tj1v5HzC92S690u-c4peRjQHJUT-ewLyyPehu8_gOne7W-s17pvT2Ydv9A6g-DPgkoCB6MJtuI6CMlX1-SWCYKjZIZA5pXxo_j4RlzNFLMFpKKV4VBUb9HesWTwKoJhsx7XlsO13NJjwinZb8PqfCLvFcPqTAwUXb_gG7q36PDOabknJ2DYTobU_oA4PRt1d9RG_JcchgQH3voLXKRZt3P7Hnyzex7qbpDw">open
-it in the playground</a>. sys no longer reaches the tree, so marking leaves it in
-pending, and an old collection whose increment starts from the tree's root
-examines every task that young collections have moved in so far. While a tree
-grows, each such increment is larger than the last, and the incremental
-collector's peak work passes the legacy collector's more than three times over.
-The work budget drops by the whole increment, far below zero, and the old
+<p>In the incremental column's work panel, the tallest bars each hold an old
+collection whose increment starts from the graph's root and examines every node
+that young collections have moved in so far. While the graph loads, each such
+increment is about twice the last, and the peak work figure reads the largest,
+above the legacy collector's. The benchmark's records show the same: in every
+worker, one of the reference branch's old collections examines 231,870 real
+objects in one increment while the graph loads. Once the graph has loaded,
+young collections stop moving objects in, and the old collections go idle with
+the whole graph back in pending, which sys now reaches.</p>
+<p>The work budget panel shows what each large increment costs the old collections
+after it. The budget drops by the whole increment, far below zero, and the old
 collections stay idle until young collections have paid it back.</p>
-<p>Move the Hierarchy size, the task tree's, and the legacy collector's largest
-collections grow with the tree: its gen 1 collections until each takes a full
-nursery and aging generation, and at the largest size a gen 2 collection that
-comes while a tree lives and examines all of it. The incremental collector's
-stay no larger than what each young collection moves in.</p>
+<p>async_tree_io_tg's task tree, in the section before, reaches 53 MB, but sys
+reaches it through the event loop from its first task, so marking takes it and
+no increment forms from it.</p>
+<p>Move the Graph size and the increments follow the graph. Halve it and its
+largest increment halves. At a quarter of its size, the graph has loaded, and
+the module holds it, before the work budget lets an old collection reach it, so
+no increment forms from it. A larger graph loads for longer, and its largest
+increment grows with it.</p>
 </section>
 
 <section id="gc-collect-and-shutdown">
@@ -401,16 +403,19 @@ time with threshold0 and threshold1 as its controls.</p>
 </gc-widget>
 
 <p>threshold0 trades the incremental collector's collections against their size.
-Halve it and the collections figure doubles, while each collection takes half
-as much, so peak work halves too and work per MB holds. The notes under the
-controls give the nursery's and the aging generation's sizes as they change.
-The legacy collector answers less evenly: a lower threshold0 adds to its work
-per MB, and its peak work jumps whenever one of its collections comes to take
-the whole graph.</p>
+Halve it and the collections figure doubles, while each young collection and
+each marking takes half as much. Peak work does not follow: it reads the
+largest increment, which depends on how much of the graph has loaded when an
+old collection's increment starts from its root, and here it grows by half.
+The notes under the controls give the nursery's and the aging generation's
+sizes as they change. The legacy collector answers less evenly: a lower
+threshold0 adds to its work per MB, and its peak work jumps whenever one of its
+collections comes to take the whole graph.</p>
 <p>threshold1 sets how long an object ages before a young collection examines it.
-Here it changes nothing in the incremental column: the graph outlives any young
-generation, so all of it reaches the old generation however long it waits.
-threshold1 matters for objects that die before they would reach the old
+The graph outlives any young generation, so all of it reaches the old
+generation however long it waits, but when it arrives decides when the
+increments come and how large: raise threshold1 to 20 and the largest halves.
+threshold1 matters most for objects that die before they would reach the old
 generation, as the <a href="#the-young-generation">young generation's
 section</a> shows. For the legacy collector, threshold1 still spaces out its
 gen 1 collections, and at 2 it brings gen 2 collections into the run.</p>
