@@ -13,10 +13,10 @@ from pep848_sim.workload import WorkloadParameters, geometric_thresholds
 from test_run import collector_settings, constants, workloads
 from test_workload import exact_thresholds
 
-# The stand-in widget's request: a 150 MB run at the PEP's thresholds, with 8 MB
-# of module globals and a 20 MB tree rebuilt every 80 MB, one churn allocation
-# after each built object.
-STAND_IN = """{
+# A request that spells out its workload: a 150 MB run at the PEP's thresholds,
+# with 8 MB of module globals and a 20 MB tree rebuilt every 80 MB, one churn
+# allocation after each built object.
+SPELLED_OUT = """{
     "workload": {
         "churn": {
             "cycle_share": "3/100", "cycle_size": 3, "lifetime_mean": 5,
@@ -42,7 +42,7 @@ STAND_IN = """{
 def test_threshold0_ranges_over_10_to_1000_collections_a_run() -> None:
     # 150,000 kB over 1,000 collections is 150 kB, which the 100 kB step rounds
     # up to 200; over 10 collections, 15,000 kB.
-    assert controls(STAND_IN, ["settings.threshold0"]) == [
+    assert controls(SPELLED_OUT, ["settings.threshold0"]) == [
         Control("settings.threshold0", "threshold0", "kB", 2000, 200, 15_000, 100)
     ]
 
@@ -56,7 +56,7 @@ def test_the_collectors_other_settings_and_constants_range_about_the_peps() -> N
         "constants.long_lived_ratio",
     ]
 
-    assert controls(STAND_IN, paths) == [
+    assert controls(SPELLED_OUT, paths) == [
         Control("settings.threshold1", "threshold1", "count", 10, 1, 40, 1),
         Control(
             "settings.threshold2", "threshold2 (legacy only)", "count", 10, 0, 40, 1
@@ -94,7 +94,7 @@ def test_the_collectors_other_settings_and_constants_range_about_the_peps() -> N
 def test_a_collector_control_takes_in_the_requests_own_value(
     path: str, value: int | str, low: int, high: int
 ) -> None:
-    values = json.loads(expand(STAND_IN))
+    values = json.loads(expand(SPELLED_OUT))
     group, name = path.split(".")
     values[group][name] = value
 
@@ -105,7 +105,7 @@ def test_a_collector_control_takes_in_the_requests_own_value(
 
 
 def test_cycle_share_ranges_up_to_half_the_churn_in_thousandths() -> None:
-    assert controls(STAND_IN, ["workload.churn.cycle_share"]) == [
+    assert controls(SPELLED_OUT, ["workload.churn.cycle_share"]) == [
         Control(
             "workload.churn.cycle_share",
             "Churn that starts a cycle",
@@ -119,7 +119,7 @@ def test_cycle_share_ranges_up_to_half_the_churn_in_thousandths() -> None:
 
 
 def test_the_churn_lifetime_mean_ranges_up_to_1000_kb_by_the_kb() -> None:
-    assert controls(STAND_IN, ["workload.churn.lifetime_mean"]) == [
+    assert controls(SPELLED_OUT, ["workload.churn.lifetime_mean"]) == [
         Control(
             "workload.churn.lifetime_mean", "Churn lifetime mean", "kB", 5, 1, 1000, 1
         )
@@ -127,7 +127,7 @@ def test_the_churn_lifetime_mean_ranges_up_to_1000_kb_by_the_kb() -> None:
 
 
 def test_the_longest_churn_lifetime_mean_builds_the_exact_thresholds() -> None:
-    [control] = controls(STAND_IN, ["workload.churn.lifetime_mean"])
+    [control] = controls(SPELLED_OUT, ["workload.churn.lifetime_mean"])
 
     assert geometric_thresholds(control.max) == exact_thresholds(control.max)
 
@@ -135,7 +135,7 @@ def test_the_longest_churn_lifetime_mean_builds_the_exact_thresholds() -> None:
 def test_a_repeating_structures_size_stops_where_its_build_fills_its_interval() -> None:
     # Each built object takes 1 kB and one churn allocation another: 40,000
     # objects fill 80,000 kB.
-    assert controls(STAND_IN, ["workload.structures.1.size"]) == [
+    assert controls(SPELLED_OUT, ["workload.structures.1.size"]) == [
         Control(
             "workload.structures.1.size", "Tree size", "kB", 20_000, 100, 40_000, 100
         )
@@ -143,7 +143,7 @@ def test_a_repeating_structures_size_stops_where_its_build_fills_its_interval() 
 
 
 def test_a_structure_never_rebuilt_stops_where_its_build_fills_the_run() -> None:
-    assert controls(STAND_IN, ["workload.structures.0.size"]) == [
+    assert controls(SPELLED_OUT, ["workload.structures.0.size"]) == [
         Control(
             "workload.structures.0.size", "Chains size", "kB", 8000, 1000, 150_000, 1000
         )
@@ -152,7 +152,7 @@ def test_a_structure_never_rebuilt_stops_where_its_build_fills_the_run() -> None
 
 def test_a_rebuild_interval_starts_at_its_structures_build() -> None:
     # 20,000 objects and 20,000 churn allocations after them.
-    assert controls(STAND_IN, ["workload.structures.1.rebuild_interval"]) == [
+    assert controls(SPELLED_OUT, ["workload.structures.1.rebuild_interval"]) == [
         Control(
             "workload.structures.1.rebuild_interval",
             "Tree rebuild interval",
@@ -166,7 +166,7 @@ def test_a_rebuild_interval_starts_at_its_structures_build() -> None:
 
 
 def test_a_structure_that_outgrows_the_run_keeps_its_size_in_range() -> None:
-    short = json.dumps(json.loads(STAND_IN) | {"run_length": 4000})
+    short = json.dumps(json.loads(SPELLED_OUT) | {"run_length": 4000})
 
     assert controls(short, ["workload.structures.0.size"]) == [
         Control("workload.structures.0.size", "Chains size", "kB", 8000, 10, 8000, 10)
@@ -174,7 +174,7 @@ def test_a_structure_that_outgrows_the_run_keeps_its_size_in_range() -> None:
 
 
 def test_a_rebuild_interval_that_outlasts_the_run_stays_in_range() -> None:
-    short = json.dumps(json.loads(STAND_IN) | {"run_length": 60_000})
+    short = json.dumps(json.loads(SPELLED_OUT) | {"run_length": 60_000})
 
     assert controls(short, ["workload.structures.1.rebuild_interval"]) == [
         Control(
@@ -200,7 +200,7 @@ def test_a_rebuild_interval_that_outlasts_the_run_stays_in_range() -> None:
 )
 def test_a_path_with_no_control_is_refused(path: str, refusal: str) -> None:
     with pytest.raises(ValueError, match=f"^{refusal}$"):
-        controls(STAND_IN, [path])
+        controls(SPELLED_OUT, [path])
 
 
 def request(

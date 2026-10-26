@@ -7,9 +7,9 @@ and a guide and a playground let you change the workload and the
 `gc.set_threshold()` settings and watch what each collector does.
 
 The site, <https://sergey-miryanov.github.io/pep848-sim/>, runs one widget
-whose select offers a stand-in workload and five presets modelled on
-pyperformance benchmarks: create_gc_cycles, json_loads, xml_etree_parse,
-async_tree_io_tg and connected_components. Its playground starts from the
+whose select offers five presets modelled on pyperformance benchmarks:
+xml_etree_parse, create_gc_cycles, json_loads, async_tree_io_tg and
+connected_components. Its playground starts from the
 same workloads and lets you change any part of them, in the widget's legend or
 as Python, the collector constants included, and send what you made by its
 link. The guide comes next.
