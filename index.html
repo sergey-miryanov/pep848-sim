@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 cycle collector</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="v/fd2ee880686f/theme.css">
-<script src="v/fd2ee880686f/theme.js"></script>
+<link rel="stylesheet" href="v/b46c9b0ca95f/theme.css">
+<script src="v/b46c9b0ca95f/theme.js"></script>
 <style>
   body {
     margin: 0;
@@ -23,7 +23,7 @@
   nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 20px; font-size: 14px; color: var(--text-secondary); }
   nav [aria-current] { color: var(--text-primary); font-weight: 600; text-decoration: none; }
 </style>
-<script type="module" src="v/fd2ee880686f/gc-widget.js"></script>
+<script type="module" src="v/b46c9b0ca95f/gc-widget.js"></script>
 </head>
 <body>
 <main>
@@ -54,30 +54,12 @@ the browser, downloads and starts.</p>
                "constants.long_lived_ratio"],
   "entries": [
     {
-      "name": "stand-in",
-      "title": "Stand-in",
-      "controls": ["workload.churn.cycle_share", "workload.churn.lifetime_mean",
-                   "workload.structures.1.size",
-                   "workload.structures.1.rebuild_interval"],
+      "name": "xml_etree_parse",
+      "title": "xml_etree_parse",
+      "controls": ["workload.structures.5.size"],
       "request": {
-        "workload": {
-          "churn": {
-            "cycle_share": "3/100", "cycle_size": 3, "lifetime_mean": 5,
-            "long_share": "1/20", "long_lifetimes": [100, 1000]
-          },
-          "structures": [
-            {"shape": {"chains": 16}, "size": 8000, "root": "module",
-             "lifetime": null, "rebuild_interval": null, "build_churn": 0,
-             "full_collections": false},
-            {"shape": "tree", "size": 20000, "root": "frame",
-             "lifetime": 40000, "rebuild_interval": 80000, "build_churn": 1,
-             "full_collections": false}
-          ],
-          "seed": 848,
-          "shutdown": false
-        },
+        "preset": "xml_etree_parse",
         "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
-        "run_length": 150000,
         "every": 5
       }
     },
@@ -98,16 +80,6 @@ the browser, downloads and starts.</p>
         "preset": "json_loads",
         "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
         "every": 1
-      }
-    },
-    {
-      "name": "xml_etree_parse",
-      "title": "xml_etree_parse",
-      "controls": ["workload.structures.5.size"],
-      "request": {
-        "preset": "xml_etree_parse",
-        "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
-        "every": 5
       }
     },
     {
@@ -192,16 +164,21 @@ or below, old collections do no work until young ones raise it again.</dd>
 </dl>
 
 <h2>The workloads</h2>
-<p>The stand-in has 8 MB of module globals, a 20 MB tree rebuilt every 80 MB,
-and churn with 3% of its allocations in cycles. Presets will replace it, each
-modelled on a pyperformance benchmark and checked against that benchmark's
-yield. The guide's sections will run them.</p>
-<p>create_gc_cycles, the first preset, models one worker of the
-pyperformance benchmark of that name. After start-up, each of its 512 loops
-calls <code>gc.collect()</code>, builds 100 rings of 21 objects, drops them
-and calls <code>gc.collect()</code> again, and shutdown ends the run. The
-calls reset the countdown to the next collection so often that the runtime
-starts none of its own once the loops begin.</p>
+<p>Each workload is a preset, modelled on a worker of a pyperformance benchmark
+and checked against that benchmark's yield. The guide's sections run them.</p>
+<p>The widget opens on xml_etree_parse, which models a worker of the xml_etree
+benchmark's parse task. Four times over, it builds a tree of 5,103 elements,
+then parses it 60 times, from a file and from bytes in turn, and each parsed
+tree replaces the last of its kind. No element links back to its parent, so
+refcounting frees each tree as the next replaces it, and a collection that
+examines a tree finds it alive. Before shutdown, the collections find no
+cyclic garbage beyond a few cycles that start-up lets go of. Its workload's
+slider sets the parsed trees' size.</p>
+<p>create_gc_cycles models a worker of the benchmark of that name. After
+start-up, each of its 512 loops calls <code>gc.collect()</code>, builds 100
+rings of 21 objects, drops them and calls <code>gc.collect()</code> again, and
+shutdown ends the run. The calls reset the countdown to the next collection
+so often that the runtime starts none of its own once the loops begin.</p>
 <p>json_loads models a worker of the benchmark of that name, which calls
 <code>json.loads</code> 60 times a loop on three JSON strings. No result holds
 a cycle, and each goes as its call returns, so the runtime's collections find
@@ -210,14 +187,6 @@ no cyclic garbage beyond a few cycles that start-up lets go of. Nothing calls
 the incremental collector runs before shutdown is idle: its young collections
 take aging spaces still empty this early, and its old collections have no work
 budget to spend. Lower threshold0 to give it more collections.</p>
-<p>xml_etree_parse models a worker of the xml_etree benchmark's parse task.
-Four times over, it builds a tree of 5,103 elements, then parses it 60 times,
-from a file and from bytes in turn, and each parsed tree replaces the last of
-its kind. No element links back to its parent, so refcounting frees each tree
-as the next replaces it, and a collection that examines a tree finds it alive.
-Before shutdown, the collections find no cyclic garbage beyond a few cycles
-that start-up lets go of. Its workload's slider sets the parsed trees'
-size.</p>
 <p>async_tree_io_tg models a worker of the benchmark of that name. Four times
 over, it starts a tree of 55,987 asyncio tasks, six levels of six under the
 root, each level under a <code>TaskGroup</code>, and each leaf sleeps 50 ms.
