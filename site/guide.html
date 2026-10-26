@@ -259,6 +259,65 @@ largest size, its gen 2 collection comes while a tree lives and examines all of
 it.</p>
 </section>
 
+<section id="the-work-budget">
+<h2>The work budget</h2>
+<p>The section before showed the work budget, <code>work_to_do</code> in the PEP's
+pseudocode, pacing the old collections. Two of the pseudocode's numbers set its
+rules: where the budget starts, and what an increment gives back for the
+objects it frees. The PEP's text gives the aim: in the old generation, "objects
+are scanned at a lower rate, only increasing that rate when necessary to
+collect excess garbage".</p>
+<p>The budget starts at -100,000 real objects, so the old collections stay idle
+until young collections have moved that many objects into the old generation.
+An increment debits the budget with every object it examines, then credits it
+with twice each object it frees. The pseudocode's comment gives the reason: "If
+we are collecting lots of objects, that means there is a lot of cycle garbage
+and we should sweep the heap faster to keep the amount of garbage down". An
+increment that frees more than half of what it examines leaves the budget
+higher than it found it, so the old collection goes on to the next increment,
+and the sweep ends sooner.</p>
+<p>The widget below runs async_tree_io_tg again, with the two numbers as its
+controls: the initial work budget, in real objects, and the freed-credit
+multiplier. No Python API changes either of them.</p>
+
+<gc-widget id="budget-widget" controls="constants.initial_work_budget constants.freed_credit">
+<script type="application/json">
+{
+  "preset": "async_tree_io_tg",
+  "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10},
+  "every": 10
+}
+</script>
+</gc-widget>
+
+<p>In the incremental column's work budget panel, the line starts at -6,250, the
+PEP's -100,000 in simulated objects, and stays there for the first 24 MB: until
+then each young collection takes an aging space still empty and moves nothing
+in. The young collections at 24, 28, 32 and 36 MB pay the budget back. At 38 MB
+the first old collection with a budget above zero marks sys and finds pending
+empty, so the first sweep ends. From there each young collection lifts the
+budget and the old collection after it spends the budget back to zero, as in
+the section before. The sweeps figure reads 15.</p>
+<p>Move the Initial work budget and the first old collection moves with it. At
+-200,000 it comes at 50 MB, and the run fits 14 sweeps. At 0 it comes at 26 MB,
+where the young generation's 24 MB holds it back instead, and the run fits 17.
+A budget above zero buys one empty sweep: the first old collection, at 2 MB,
+finds the old generation empty, swaps the spaces and sets the budget to zero.
+Work per MB moves by 2% across the slider.</p>
+<p>Move the Freed-credit multiplier and nothing changes, in any panel or figure.
+Here the old collections free nothing: sys reaches the task trees, and the
+increments find only start-up's objects, all alive. The benchmarks' records
+agree. gcmon recorded 6,919 old collections on the reference branch, across the
+five benchmarks and four more beside them, and none freed an object, so the
+credit never came into play. To see what it does,
+<a href="playground.html#playground=async_tree_io_tg&amp;playground.request=zZRNboMwEIXv4jVVbYf8cZUqshwYwK2xKzNOlEbcvWNIUFNFkbqo2h1-9ht_82A4s6MPb9brihVnVrYxuPHhVFpQfasDsIJxll0V80GCyJg1NaDpQHWgyZGT4l1z4xiF67meFS8iE7shYz2GWGIMo3ZmZHlPFgwA5LrcsMhY8B5Jr4Pu0sa1Eis47cE-Glsp4xDCQVtWuGhtxib10gbVqElVpbcWSjTe0Y21tj1MB5Hsaio_yUM246QstEkGsRpmKilmrM5X0d5yTQi_jnab1HrL_wHT3bjkQj54i3-S1lLmm_WjvGS-kne_LyG3y23-DUz8GGxHJAA0bJt8Q49txMofqRLNBKTgANG4pk-JYksj0npbccLinKhmRdDVX9cyrckeolMWXINtanUxmuAA4TSdL4kPtcOxvHEGjbYqzb_ax6oBiuRJcD66akqN2gxQGZLlPM0HUoOmTik-8ZyzFBUV8ftX6v_ye1jlw_AJ">open
+async_tree_io_tg in the playground with each task linking back to its
+parent</a>. Each tree turns into cyclic garbage as it goes, and the old
+collections free whole trees. At the PEP's multiplier of 2, the incremental
+collector runs 9 sweeps and frees three of the four trees before shutdown. Set
+the multiplier to 0 in the legend's constants, and it runs 6 and frees two.</p>
+</section>
+
 <section id="a-large-increment">
 <h2>A large increment</h2>
 <p>An increment is a transitive closure: the least recently scanned pending object
@@ -301,9 +360,9 @@ the whole graph back in pending, which sys now reaches.</p>
 <p>The work budget panel shows what each large increment costs the old collections
 after it. The budget drops by the whole increment, far below zero, and the old
 collections stay idle until young collections have paid it back.</p>
-<p>async_tree_io_tg's task tree, in the section before, reaches 53 MB, but sys
-reaches it through the event loop from its first task, so marking takes it and
-no increment forms from it.</p>
+<p>async_tree_io_tg's task tree, in the section on the old generation, reaches
+53 MB, but sys reaches it through the event loop from its first task, so
+marking takes it and no increment forms from it.</p>
 <p>Move the Graph size and the increments follow the graph. Halve it and the
 graph has loaded before the second increment comes, so peak work falls from
 32.5K to 8.5K. At a quarter of its size, the graph has loaded, and the module
