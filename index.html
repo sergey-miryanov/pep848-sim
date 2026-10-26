@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 cycle collector</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="v/0f87e63f2a7c/theme.css">
-<script src="v/0f87e63f2a7c/theme.js"></script>
+<link rel="stylesheet" href="v/fd2ee880686f/theme.css">
+<script src="v/fd2ee880686f/theme.js"></script>
 <style>
   body {
     margin: 0;
@@ -23,7 +23,7 @@
   nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 20px; font-size: 14px; color: var(--text-secondary); }
   nav [aria-current] { color: var(--text-primary); font-weight: 600; text-decoration: none; }
 </style>
-<script type="module" src="v/0f87e63f2a7c/gc-widget.js"></script>
+<script type="module" src="v/fd2ee880686f/gc-widget.js"></script>
 </head>
 <body>
 <main>
@@ -209,8 +209,7 @@ no cyclic garbage beyond a few cycles that start-up lets go of. Nothing calls
 <code>gc.collect()</code> before shutdown. Over so few collections, each one
 the incremental collector runs before shutdown is idle: its young collections
 take aging spaces still empty this early, and its old collections have no work
-budget to spend. Lower threshold0 to give it more collections. The churn that
-outlives a collection and the run's length remain placeholders.</p>
+budget to spend. Lower threshold0 to give it more collections.</p>
 <p>xml_etree_parse models a worker of the xml_etree benchmark's parse task.
 Four times over, it builds a tree of 5,103 elements, then parses it 60 times,
 from a file and from bytes in turn, and each parsed tree replaces the last of
