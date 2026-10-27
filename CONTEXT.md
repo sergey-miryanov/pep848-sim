@@ -223,8 +223,8 @@ _Avoid_: slide, frame (that is a root), stage
 
 **Mark**:
 A step's outline round a panel or a figure, with a numbered badge whose note
-in the guide's rail says what to see there. A marked figure's numbers take a
-tint.
+says what to see there: in the guide's rail, or on a phone beside the badge in
+the widget. A marked figure's numbers take a tint.
 _Avoid_: highlight, callout, annotation
 
 **Playground**:

@@ -100,14 +100,21 @@
        uncollected garbage chapter's 174 px, so a new chapter moves nothing. */
     gc-controls { box-sizing: border-box; min-height: 182px; }
   }
-  /* On a phone the rail sticks to the top over the widget, the settings come
-     before the widget, and the chapters follow it. */
+  /* On a phone the step docks at the foot of the screen, and its notes sit in
+     the widget by their badges (#229). The settings come before the widget,
+     and the chapters follow it. */
   @media (width < 900px) {
     .guide { grid-template-columns: minmax(0, 1fr); gap: 16px; }
     .side { display: contents; }
-    .rail { position: sticky; top: 0; z-index: 5; gap: 8px; padding: 8px 0 12px; background: var(--surface); border-bottom: 1px solid var(--grid); }
+    .rail {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; max-height: 42vh; overflow-y: auto;
+      gap: 8px; padding: 8px 16px 12px; background: var(--surface);
+      border-top: 1px solid var(--baseline); box-shadow: 0 -6px 18px rgb(0 0 0 / 0.18);
+    }
+    .buttons button { width: 44px; height: 36px; }
     .steps h2 { font-size: 17px; margin-bottom: 4px; }
     .steps p { font-size: 15px; }
+    .notes { display: none; }
     .toc { order: 1; }
     .settings { margin-bottom: 8px; }
   }
