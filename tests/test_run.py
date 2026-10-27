@@ -122,6 +122,14 @@ def test_a_run_yields_its_newest_records_every_few_collections(
     assert records(parts) == records(whole)
 
 
+@pytest.mark.parametrize("every", [0, -1])
+def test_a_run_refuses_a_part_of_no_records(every: int) -> None:
+    parts = run(FIXED, LegacyCollector, CollectorSettings(), 1_000, every)
+
+    with pytest.raises(ValueError, match=f"a part of {every} records holds none"):
+        next(parts)
+
+
 @pytest.mark.parametrize("collector", COLLECTORS)
 @pytest.mark.parametrize(
     ("run_length", "clocks"),

@@ -92,6 +92,8 @@ def test_the_fixed_request_is_the_one_its_digests_are_pinned_for() -> None:
             '"threshold0": 0',
             "a threshold0 of 0 kB falls under 1 kB",
         ),
+        ('"every": 50', '"every": 0', "a part of 0 records holds none"),
+        ('"every": 50', '"every": -1', "a part of -1 records holds none"),
         (
             '"threshold1": 10',
             '"threshold1": 0',

@@ -29,6 +29,7 @@ def run(
     collector's class, makes from the settings and the constants, the defaults
     unless given, and end in shutdown if the workload asks. Yield the newest
     records `every` at a time as they build up, and the rest at the end."""
+    check_every(every)
     collector = make_collector(settings, constants or Constants())
     heap = Heap(collector)
     workload = Workload(heap, parameters)
@@ -47,3 +48,9 @@ def run(
     while len(records) > sent:
         yield records[sent : sent + every]
         sent += every
+
+
+def check_every(every: int) -> None:
+    """Refuse a part that holds no records: a run would yield it without end."""
+    if every < 1:
+        raise ValueError(f"a part of {every} records holds none")
