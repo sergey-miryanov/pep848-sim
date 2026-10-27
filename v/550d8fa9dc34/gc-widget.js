@@ -28,6 +28,11 @@
 // can mark the panels and figures its page talks about, each outlined with a
 // badge that numbers it. A widget with a `changes` attribute notes under each
 // figure what it read before the last runs it asked for, where the two differ.
+// A `narrow` widget shows one collector at a time, which tabs pick, and each
+// mark's note by its badge, and it scrolls a new entry's first mark into view
+// (#229). A `fit` widget sizes its charts' plots to end at the window's foot, and a
+// <gc-controls for="widget-id"> on its page takes its controls, so the guide
+// shows them in its rail (#232).
 //
 // Each panel reads its values under the pointer, and from the keys once it has
 // focus: the arrows step from one collection or bin to the next. A screen reader
@@ -45,8 +50,9 @@ import { Source, SOURCE_STYLE } from "./source.js";
 import { FOREIGN, decode, encode, holdsCode, LINK_STYLE } from "./link.js";
 import { describe, describeChurn, describeYoung, fit, network } from "./graph.js";
 import {
-  CLOCK, FADED, FULL, KEYS, KIND, LANES, PARTS, SPACES, WORK_TO_DO,
-  budgetAt, ceiling, collections, cuts, heap, heapAt, spoken, step, work, workAt, workEnd,
+  AXES, CLOCK, FADED, FULL, KEYS, KIND, LANE_MARGIN, LANES, PARTS, SIZES, SPACES, WORK_TO_DO,
+  budgetAt, ceiling, collections, cuts, fitted, heap, heapAt, heapHeight, laneTicks, spoken, step, work, workAt,
+  workEnd,
 } from "./panels.js";
 import { dropRuns, requestRuns, stopRuns } from "./runs.js";
 import { Kept } from "./kept.js";
@@ -67,8 +73,9 @@ import { Kept } from "./kept.js";
 /**
  * A workload a widget offers: its name in the URL fragment, its title in the
  * select, its request as the controls have set it, the paths of its controls,
- * and the parts it marks, as collector.panel or figure.name.
- * @typedef {{ name: string, title: string, request: any, controls: string[], marks: string[] }} Entry
+ * the parts it marks, as collector.panel or figure.name, and a note for each,
+ * which a narrow widget shows by its badge.
+ * @typedef {{ name: string, title: string, request: any, controls: string[], marks: string[], notes: string[] }} Entry
  */
 
 /** @type {Collector[]} */
@@ -80,18 +87,11 @@ const TICK = 6;
 
 // About this many bins of work a run, each a whole number of collection intervals.
 const BINS = 40;
-const HEIGHTS = { work: 160, budget: 130 };
-const MARGINS = { marginLeft: 48, marginRight: 72, marginTop: 16, marginBottom: 32 };
-// A lane of the heap panel: its plot, without its margins, and the margin above
-// and below it that neither axis's labels take.
-const LANE_HEIGHT = 64;
-const LANE_MARGIN = 12;
-// About how many ticks a lane's y-axis takes.
-const LANE_TICKS = 3;
-// The heap panel's height: the whole heap's lane over the spaces', the margin
-// between each two, and the axes' margins above the first and below the last.
-const HEAP_HEIGHT = (LANES.legacy.length + 1) * (LANE_HEIGHT + 2 * LANE_MARGIN) - 2 * LANE_MARGIN
-  + MARGINS.marginTop + MARGINS.marginBottom;
+const MARGINS = { marginLeft: 48, marginRight: 72, marginTop: AXES.top, marginBottom: AXES.bottom };
+// The heap panel's lanes: the whole heap's over the spaces'.
+const HEAP_LANES = LANES.legacy.length + 1;
+// The room a fitted widget leaves under itself, in px.
+const FOOT = 12;
 // The widest a bar of work grows, in px. A wider bin pads its bar on both sides.
 const BAR = 24;
 // How far, in px, a tooltip stands off the crosshair or bar it reads, and how far
@@ -174,6 +174,17 @@ function assign(/** @type {any} */ request, /** @type {string} */ path, /** @typ
 }
 
 /**
+ * A mark's number, as a note or a tab shows it beside the badge.
+ * @param {number} n
+ */
+function numbered(n) {
+  const number = document.createElement("span");
+  number.className = "number";
+  number.textContent = String(n);
+  return number;
+}
+
+/**
  * The entries a widget's JSON offers: the ones it lists, each with its own
  * controls and those the JSON lists for every entry, or else the one request it
  * holds, with the controls the widget's `controls` attribute names.
@@ -183,7 +194,7 @@ function assign(/** @type {any} */ request, /** @type {string} */ path, /** @typ
  */
 function entriesOf(json, controls) {
   if (!("entries" in json)) {
-    return [{ name: "", title: "", request: json, controls: (controls ?? "").split(/\s+/).filter(Boolean), marks: [] }];
+    return [{ name: "", title: "", request: json, controls: (controls ?? "").split(/\s+/).filter(Boolean), marks: [], notes: [] }];
   }
   /** @type {Entry[]} */
   const entries = json.entries;
@@ -192,12 +203,13 @@ function entriesOf(json, controls) {
   if (new Set(names).size < names.length) throw new Error("The widget lists two entries under one name.");
   /** @type {string[]} */
   const shared = json.controls ?? [];
-  for (const { name, marks = [] } of entries) {
+  for (const { name, marks = [], notes = [] } of entries) {
     const unknown = marks.find((mark) => !MARKS.includes(mark));
     if (unknown) throw new Error(`The widget's entry ${name} marks ${unknown}, which it has no part by.`);
+    if (notes.length > marks.length) throw new Error(`The widget's entry ${name} has more notes than marks.`);
   }
-  return entries.map(({ name, title, request, controls = [], marks = [] }) => ({
-    name, title, request, controls: [...controls, ...shared.filter((path) => !controls.includes(path))], marks,
+  return entries.map(({ name, title, request, controls = [], marks = [], notes = [] }) => ({
+    name, title, request, controls: [...controls, ...shared.filter((path) => !controls.includes(path))], marks, notes,
   }));
 }
 
@@ -210,6 +222,22 @@ const fragment = () => new URLSearchParams(location.hash.slice(1));
 const linkKey = (/** @type {string} */ id) => `${id}.request`;
 // What the workload source says while a link's code waits for Run.
 const HELD = "This link carries Python, which runs in your browser once you press Run. Read it first.";
+
+// The controls' layout, in the widget or in a <gc-controls> the page places.
+const CONTROLS_STYLE = `
+  .controls { display: grid; gap: 16px; }
+  .controls[hidden] { display: none; }
+  .controls .group { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: start; }
+  .controls h3 { flex-basis: 100%; margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .controls details { flex-basis: 100%; font-size: 13px; color: var(--text-secondary); }
+  .controls summary { width: max-content; cursor: pointer; }
+  .controls details > .group { margin-top: 12px; }
+  .control { display: grid; gap: 4px; width: 200px; font-size: 13px; color: var(--text-secondary); }
+  .control .name { display: flex; justify-content: space-between; gap: 8px; }
+  .control output { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .control input { margin: 0; accent-color: var(--text-secondary); }
+  .control .note { font-size: 12px; }
+`;
 
 // The colors come from the page's theme.css, through the custom properties the
 // shadow root inherits (ADR 0018).
@@ -228,14 +256,10 @@ const TEMPLATE = `
   .picks { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; margin: 0 0 16px; font-size: 13px; color: var(--text-secondary); }
   .entries { display: flex; align-items: center; gap: 8px; }
   .entries select { font: inherit; color: var(--text-primary); background: var(--surface); }
-  .controls { display: grid; gap: 16px; margin: 0 0 24px; }
-  .controls .group { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: start; }
-  .controls h3 { flex-basis: 100%; margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
-  .controls details { flex-basis: 100%; font-size: 13px; color: var(--text-secondary); }
-  .controls summary { width: max-content; cursor: pointer; }
-  .controls details > .group { margin-top: 12px; }
+  ${CONTROLS_STYLE}
+  .controls { margin: 0 0 24px; }
   /* Their display would otherwise outrank the hidden attribute's. */
-  .picks[hidden], .entries[hidden], .controls[hidden], .graph[hidden], .key-list[hidden] { display: none; }
+  .picks[hidden], .entries[hidden], .graph[hidden], .key-list[hidden] { display: none; }
   /* The select, the controls and the object graph's legend, beside the graph. */
   .top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 520px); gap: 24px; margin: 0 0 24px; align-items: start; }
   .top > div:first-child > :last-child { margin-bottom: 0; }
@@ -254,11 +278,6 @@ const TEMPLATE = `
   .graph .object { fill: var(--text-secondary); }
   .graph .first circle, .graph .root rect { fill: var(--surface); stroke: var(--text-secondary); stroke-width: 1.5; }
   .graph text { fill: var(--text-primary); font-size: 10px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
-  .control { display: grid; gap: 4px; width: 200px; font-size: 13px; color: var(--text-secondary); }
-  .control .name { display: flex; justify-content: space-between; gap: 8px; }
-  .control output { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
-  .control input { margin: 0; accent-color: var(--text-secondary); }
-  .control .note { font-size: 12px; }
   .figures { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px 16px; margin: 0 0 24px; }
   .figure { display: grid; grid-row: span 2; grid-template-rows: subgrid; grid-template-columns: 1fr 1fr; column-gap: 8px; }
   .figure dt { grid-column: 1 / -1; align-self: end; font-size: 13px; color: var(--text-secondary); }
@@ -275,9 +294,10 @@ const TEMPLATE = `
   .plot { position: relative; }
   /* Each chart keeps the height it draws at from the start, so a widget that
      has not asked for its runs yet takes its full room on the page. */
-  [data-panel="heap"] .chart { min-height: ${HEAP_HEIGHT}px; }
-  [data-panel="work"] .chart { min-height: ${HEIGHTS.work}px; }
-  [data-panel="budget"] .chart { min-height: ${HEIGHTS.budget}px; }
+  /* A fitted widget sets each panel's height on its host. */
+  [data-panel="heap"] .chart { min-height: var(--heap-height, ${heapHeight(HEAP_LANES, SIZES.lane)}px); }
+  [data-panel="work"] .chart { min-height: var(--work-height, ${SIZES.work}px); }
+  [data-panel="budget"] .chart { min-height: var(--budget-height, ${SIZES.budget}px); }
   .plot:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; border-radius: 4px; }
   .crosshair, .outline, .tip { position: absolute; pointer-events: none; }
   .crosshair { width: 1px; background: var(--text-secondary); }
@@ -308,6 +328,8 @@ const TEMPLATE = `
   :host([changes]) .was { display: block; height: 16px; font-size: 11px; line-height: 16px; color: var(--text-muted); }
   :host([compact]) .graph, :host([compact]) .key-list, :host([compact]) .picks { display: none; }
   :host([compact]) .top, :host([compact]) .controls, :host([compact]) .figures { margin-bottom: 12px; }
+  /* With its controls on the page, a compact widget's top row holds nothing. */
+  :host([compact]) .top:has(> div > .controls[hidden]) { margin-bottom: 0; }
   /* Too narrow for three controls beside the graph: the select and the
      controls, then the graph, then its legend. */
   @container widget (width < 780px) {
@@ -335,6 +357,30 @@ const TEMPLATE = `
     :host([compact]) .columns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
     :host([compact]) .figure .value { font-size: 17px; }
   }
+  /* A narrow widget, as the guide's on a phone (#229): one collector at a time,
+     which the tabs pick, and each mark's note beside its badge. */
+  .tabs, .note { display: none; }
+  :host([narrow]) .tabs {
+    display: flex; position: sticky; top: 0; z-index: 3; margin: 0 0 12px; padding: 6px 0; background: var(--surface);
+  }
+  .tabs button {
+    flex: 1; display: flex; gap: 6px; justify-content: center; align-items: center; padding: 6px 8px; cursor: pointer;
+    font: inherit; font-size: 14px; border: 1px solid var(--baseline); background: var(--surface); color: var(--text-secondary);
+  }
+  .tabs button:first-child { border-radius: 6px 0 0 6px; }
+  .tabs button:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
+  .tabs button[aria-pressed="true"] { background: var(--text-primary); color: var(--surface); font-weight: 600; }
+  :host([narrow]) .columns { grid-template-columns: minmax(0, 1fr); }
+  :host([narrow]) [data-collector]:not(.shown) { display: none; }
+  :host([narrow]) .note { display: flex; gap: 6px; align-items: baseline; margin: 6px 0; font-size: 13px; color: var(--text-secondary); }
+  :host([narrow]) .notes { margin: 0 0 12px; }
+  .number {
+    flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%;
+    font-size: 10px; font-weight: 600; background: var(--text-primary); color: var(--surface);
+  }
+  .tabs button[aria-pressed="true"] .number { background: var(--surface); color: var(--text-primary); }
+  /* Room above a mark the widget scrolls to, for the tabs and the badge. */
+  :host([narrow]) [data-mark] { scroll-margin-top: 64px; }
 </style>
 <div class="frame"><div class="content">
 <p class="error" hidden></p>
@@ -356,6 +402,9 @@ const TEMPLATE = `
   <div class="graph" hidden></div>
 </div>
 <dl class="figures"></dl>
+<div class="tabs" role="group" aria-label="Collector">
+  <button type="button" data-tab="legacy"></button><button type="button" data-tab="incremental"></button>
+</div>
 <div class="columns">
   <section data-collector="legacy">
     <h2>Legacy collector</h2>
@@ -408,6 +457,8 @@ class GcWidget extends HTMLElement {
   /** The entry the widget shows. */
   /** @type {Entry | null} */
   #entry = null;
+  /** The collector a narrow widget shows. @type {Collector} */
+  #shown = "legacy";
   /** The request whose records the charts show, until a newer one's first records arrive. */
   /** @type {any} */
   #drawn = null;
@@ -421,10 +472,15 @@ class GcWidget extends HTMLElement {
    */
   #sliders = new Map();
   /**
-   * Whether the collector constants' controls show, kept from one entry to the
-   * next. They start open only on a widget that offers no collector settings.
+   * Whether the reader opened the collector constants' controls, kept from one
+   * entry to the next: null until they open or close them (ADR 0017).
+   * @type {boolean | null}
    */
-  #constantsOpen = false;
+  #constantsOpen = null;
+  /** The panels' heights, which a fitted widget sets (#232). */
+  #sizes = SIZES;
+  /** Whether the widget follows the window, for `fit`. */
+  #fitting = false;
   #frame = 0;
   /** What the last redraw laid out, which the pointer's marks follow; null before the clock has a length. */
   /** @type {Layout | null} */
@@ -472,6 +528,11 @@ class GcWidget extends HTMLElement {
     if (this.shadowRoot) return;
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = TEMPLATE;
+    for (const tab of root.querySelectorAll("[data-tab]")) {
+      const collector = /** @type {Collector} */ (/** @type {HTMLElement} */ (tab).dataset.tab);
+      tab.addEventListener("click", () => this.#pick(collector));
+    }
+    this.#pick("legacy");
     let json;
     try {
       json = JSON.parse(this.querySelector('script[type="application/json"]')?.textContent ?? "");
@@ -719,10 +780,11 @@ class GcWidget extends HTMLElement {
    * @param {Entry} entry
    */
   #enter(entry) {
+    const shifted = this.#entry !== null && this.#entry !== entry;
     this.#entry = entry;
     const root = /** @type {ShadowRoot} */ (this.shadowRoot);
     /** @type {HTMLSelectElement} */ (root.querySelector(".entries select")).value = entry.name;
-    const row = /** @type {HTMLElement} */ (root.querySelector(".controls"));
+    const row = this.#row();
     row.replaceChildren();
     row.hidden = true;
     this.#sliders.clear();
@@ -731,14 +793,9 @@ class GcWidget extends HTMLElement {
     this.#records = { legacy: [], incremental: [] };
     this.#figures = {};
     this.#drawn = entry.request;
-    for (const part of root.querySelectorAll("[data-mark]")) delete /** @type {HTMLElement} */ (part).dataset.mark;
-    entry.marks.forEach((mark, i) => {
-      const [kind, name] = mark.split(".");
-      const part = kind === "figure"
-        ? root.querySelector(`[data-figure="${name}"]`)
-        : root.querySelector(`[data-collector="${kind}"] [data-panel="${name}"]`);
-      /** @type {HTMLElement} */ (part).dataset.mark = String(i + 1);
-    });
+    this.#markParts(entry);
+    // A narrow widget brings a new entry's first mark into view, once laid out.
+    if (shifted && this.hasAttribute("narrow")) requestAnimationFrame(() => this.#reveal());
     if (this.#held.has(entry)) {
       const source = /** @type {Source} */ (this.#source);
       try {
@@ -960,7 +1017,7 @@ class GcWidget extends HTMLElement {
    * workload's, the collector settings', or the collector constants' under them.
    */
   #show(/** @type {Control[]} */ controls) {
-    const row = /** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".controls"));
+    const row = this.#row();
     row.hidden = !controls.length;
     for (const [path, label, unit, value, min, max, step] of controls) {
       let slider = this.#sliders.get(path);
@@ -1026,7 +1083,7 @@ class GcWidget extends HTMLElement {
    * @returns {HTMLElement}
    */
   #group(path) {
-    const row = /** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".controls"));
+    const row = this.#row();
     const [first] = path.split(".");
     const kind = first === "settings" || first === "constants" ? first : "workload";
     const found = /** @type {HTMLElement | null} */ (row.querySelector(`[data-group="${kind}"]`));
@@ -1038,15 +1095,17 @@ class GcWidget extends HTMLElement {
     if (kind === "constants") {
       group.setAttribute("aria-label", "Collector constants");
       const toggle = document.createElement("details");
-      // Under the collector settings, closed unless the reader opened it, or
-      // open in their place where the entry shows none (ADR 0017).
+      // Under the collector settings, or in their place where the entry shows
+      // none. As the reader last left it, or until they touch it, open only in
+      // their place (ADR 0017).
       const settings = /** @type {Entry} */ (this.#entry).controls.some((control) => control.startsWith("settings."));
-      toggle.open = !settings || this.#constantsOpen;
-      toggle.addEventListener("toggle", () => {
-        if (settings) this.#constantsOpen = toggle.open;
-      });
+      toggle.open = this.#constantsOpen ?? !settings;
       const summary = document.createElement("summary");
       summary.textContent = "Collector constants, which no Python API changes";
+      // The click comes before the toggle, which the page's own opening fires too.
+      summary.addEventListener("click", () => {
+        this.#constantsOpen = !toggle.open;
+      });
       toggle.append(summary, group);
       (settings ? this.#group("settings") : row).append(toggle);
       return group;
@@ -1169,6 +1228,74 @@ class GcWidget extends HTMLElement {
     frame.replaceChildren(svg);
   }
 
+  /**
+   * Mark the parts the entry names, each with a badge, and its note beside it
+   * for a narrow widget: under a panel's title, or under the figures for a
+   * figure. A narrow widget shows the collector of the first panel the entry
+   * marks, and each tab carries the numbers of its collector's marks.
+   * @param {Entry} entry
+   */
+  #markParts(entry) {
+    const root = /** @type {ShadowRoot} */ (this.shadowRoot);
+    for (const part of root.querySelectorAll("[data-mark]")) delete /** @type {HTMLElement} */ (part).dataset.mark;
+    for (const note of root.querySelectorAll(".note, .notes")) note.remove();
+    const figures = document.createElement("div");
+    figures.className = "notes";
+    entry.marks.forEach((mark, i) => {
+      const [kind, name] = mark.split(".");
+      const part = /** @type {HTMLElement} */ (kind === "figure"
+        ? root.querySelector(`[data-figure="${name}"]`)
+        : root.querySelector(`[data-collector="${kind}"] [data-panel="${name}"]`));
+      part.dataset.mark = String(i + 1);
+      if (entry.notes[i] === undefined) return;
+      const note = document.createElement("p");
+      note.className = "note";
+      note.append(numbered(i + 1), entry.notes[i]);
+      if (kind === "figure") figures.append(note);
+      else /** @type {HTMLElement} */ (part.querySelector("figcaption")).after(note);
+    });
+    if (figures.children.length) /** @type {HTMLElement} */ (root.querySelector(".figures")).after(figures);
+    const panel = entry.marks.find((mark) => !mark.startsWith("figure."));
+    this.#pick(panel ? /** @type {Collector} */ (panel.split(".")[0]) : this.#shown);
+  }
+
+  /**
+   * Show one collector's column in a narrow widget, and press its tab.
+   * @param {Collector} collector
+   */
+  #pick(collector) {
+    this.#shown = collector;
+    const root = /** @type {ShadowRoot} */ (this.shadowRoot);
+    const marks = this.#entry?.marks ?? [];
+    for (const kind of COLLECTORS) {
+      this.#column(kind).classList.toggle("shown", kind === collector);
+      const tab = /** @type {HTMLElement} */ (root.querySelector(`[data-tab="${kind}"]`));
+      tab.setAttribute("aria-pressed", String(kind === collector));
+      tab.replaceChildren(kind === "legacy" ? "Legacy" : "Incremental");
+      marks.forEach((mark, i) => {
+        if (mark.startsWith(`${kind}.`)) tab.append(numbered(i + 1));
+      });
+    }
+  }
+
+  /**
+   * Scroll a narrow widget's first mark into view, unless it stands wholly in
+   * view already, short of what the page's scroll padding covers.
+   */
+  #reveal() {
+    const shown = /** @type {HTMLElement[]} */ ([.../** @type {ShadowRoot} */ (this.shadowRoot).querySelectorAll("[data-mark]")])
+      .filter((part) => part.offsetParent !== null);
+    const first = shown.sort((a, b) => Number(a.dataset.mark) - Number(b.dataset.mark))[0];
+    if (!first) return;
+    const box = first.getBoundingClientRect();
+    const page = getComputedStyle(document.documentElement);
+    const top = (parseFloat(page.scrollPaddingTop) || 0) + parseFloat(getComputedStyle(first).scrollMarginTop);
+    const bottom = innerHeight - (parseFloat(page.scrollPaddingBottom) || 0);
+    if (box.top >= top && box.bottom <= bottom) return;
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    first.scrollIntoView({ block: "start", behavior: still ? "auto" : "smooth" });
+  }
+
   /** @param {Collector} collector */
   #column(collector) {
     return /** @type {HTMLElement} */ (
@@ -1183,6 +1310,49 @@ class GcWidget extends HTMLElement {
     error.hidden = false;
   }
 
+  static observedAttributes = ["fit"];
+
+  attributeChangedCallback() {
+    // A fitted widget follows the window's height and whatever moves its top.
+    if (this.hasAttribute("fit") && !this.#fitting) {
+      this.#fitting = true;
+      addEventListener("resize", () => this.#schedule());
+      new ResizeObserver(() => this.#schedule()).observe(document.documentElement);
+    }
+    if (this.shadowRoot) this.#schedule();
+  }
+
+  /**
+   * The panels' sizes that end the widget at the window's foot (#232): the room
+   * below its top, less what it holds besides its charts at the sizes it has.
+   * Once it redraws at the new sizes, the same sums give the same sizes.
+   * @returns {typeof SIZES}
+   */
+  #fitted() {
+    const box = this.getBoundingClientRect();
+    const { lane, work, budget } = this.#sizes;
+    const rest = box.height - (heapHeight(HEAP_LANES, lane) + work + budget);
+    return fitted(innerHeight - (box.top + scrollY) - FOOT - rest, HEAP_LANES);
+  }
+
+  /** Take the panels' sizes, and give the charts' boxes their heights. */
+  #size(/** @type {typeof SIZES} */ sizes) {
+    const { lane, work, budget } = this.#sizes;
+    if (sizes.lane === lane && sizes.work === work && sizes.budget === budget) return;
+    this.#sizes = sizes;
+    this.style.setProperty("--heap-height", `${heapHeight(HEAP_LANES, sizes.lane)}px`);
+    this.style.setProperty("--work-height", `${sizes.work}px`);
+    this.style.setProperty("--budget-height", `${sizes.budget}px`);
+  }
+
+  /** The row the controls go in: a <gc-controls> the page placed for this widget, or the widget's own. */
+  #row() {
+    const outside = this.id ? document.querySelector(`gc-controls[for="${CSS.escape(this.id)}"]`) : null;
+    return outside instanceof GcControls
+      ? outside.row
+      : /** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".controls"));
+  }
+
   // At most one redraw an animation frame, of whatever records have arrived.
   #schedule() {
     if (this.#frame) return;
@@ -1193,6 +1363,7 @@ class GcWidget extends HTMLElement {
   }
 
   #draw() {
+    this.#size(this.hasAttribute("fit") ? this.#fitted() : SIZES);
     FIGURES.forEach(({ read, show }, i) => {
       const values = COLLECTORS.map((collector) => {
         const figures = this.#figures[collector];
@@ -1223,7 +1394,8 @@ class GcWidget extends HTMLElement {
     const style = getComputedStyle(this);
     const token = (/** @type {string} */ name) => style.getPropertyValue(`--${name}`).trim();
     const xMax = runLength / 1000;
-    const width = this.#column("legacy").clientWidth;
+    // A narrow widget hides one column, which draws at the other's width.
+    const width = Math.max(...COLLECTORS.map((collector) => this.#column(collector).clientWidth));
 
     const heaps = { legacy: heap("legacy", this.#records.legacy), incremental: heap("incremental", this.#records.incremental) };
     // One y-scale for every lane in both columns, so that a height reads as the
@@ -1248,7 +1420,9 @@ class GcWidget extends HTMLElement {
     });
     const gridY = Plot.gridY({ stroke: token("grid"), strokeOpacity: 1 });
     // A lane is too short for the ticks Plot picks, so its grid takes its axis's.
-    const laneGridY = Plot.gridY({ stroke: token("grid"), strokeOpacity: 1, ticks: LANE_TICKS });
+    const { lane: laneHeight, work: workHeight, budget: budgetHeight } = this.#sizes;
+    const laneTickCount = laneTicks(laneHeight);
+    const laneGridY = Plot.gridY({ stroke: token("grid"), strokeOpacity: 1, ticks: laneTickCount });
 
     for (const collector of COLLECTORS) {
       const column = this.#column(collector);
@@ -1273,11 +1447,11 @@ class GcWidget extends HTMLElement {
         const top = i === 0, bottom = i === LANES[collector].length;
         const margins = { marginTop: top ? MARGINS.marginTop : LANE_MARGIN, marginBottom: bottom ? MARGINS.marginBottom : LANE_MARGIN };
         return Plot.plot({
-          ...frame(LANE_HEIGHT + margins.marginTop + margins.marginBottom),
+          ...frame(laneHeight + margins.marginTop + margins.marginBottom),
           ...margins,
           x: { domain: [0, xMax], label: "allocation clock (MB)", axis: bottom ? "bottom" : null },
           ariaLabel: `${TITLES[collector]}: ${shows}`,
-          y: { domain: [0, heapMax], label: top ? "heap (MB)" : null, ticks: LANE_TICKS },
+          y: { domain: [0, heapMax], label: top ? "heap (MB)" : null, ticks: laneTickCount },
           color: colors,
           marks: [laneGridY, ...marks, ...ending, Plot.ruleY([0], { stroke: token("baseline") })],
         });
@@ -1287,7 +1461,7 @@ class GcWidget extends HTMLElement {
           Plot.areaY(whole, { x: "mb", y1: "reachable", y2: "heap", fill: token("text-muted"), fillOpacity: 0.18 }),
           Plot.lineY(whole, { x: "mb", y: "heap", stroke: token("text-muted"), strokeWidth: 2 }),
           Plot.lineY(whole, { x: "mb", y: "reachable", stroke: token("text-primary"), strokeWidth: 2 }),
-          Plot.ruleX(calls, { y1: 0, y2: (-heapMax * TICK) / LANE_HEIGHT, stroke: token("text-secondary") }),
+          Plot.ruleX(calls, { y1: 0, y2: (-heapMax * TICK) / laneHeight, stroke: token("text-secondary") }),
           Plot.text(calls.slice(0, 1), {
             x: (/** @type {number} */ mb) => mb, y: 0, text: () => "gc.collect()",
             textAnchor: "start", lineAnchor: "bottom", dx: 2, dy: -2, fill: token("text-secondary"),
@@ -1313,13 +1487,13 @@ class GcWidget extends HTMLElement {
       // A bin cut at the scale's end, as shutdown's can be: two slanted gaps
       // across its bar below the end, and its whole work above it.
       const cut = cuts(records, binKb, workMax);
-      const objectsPerPx = workMax / (HEIGHTS.work - MARGINS.marginTop - MARGINS.marginBottom);
+      const objectsPerPx = workMax / (workHeight - MARGINS.marginTop - MARGINS.marginBottom);
       const gaps = cut.flatMap(({ x1, x2 }) => [7, 12].map((below) => ({
         x1: x1 + inset / pxPerMb, x2: x2 - inset / pxPerMb,
         y1: workMax - (below + 2) * objectsPerPx, y2: workMax - (below - 2) * objectsPerPx,
       })));
       chart(column, "work", Plot.plot({
-        ...frame(HEIGHTS.work),
+        ...frame(workHeight),
         ariaLabel: `${TITLES[collector]}: work per bin, as marked, survived and freed, full collections' faded above`
           + (cut.length ? ", a bin past the scale cut at its end" : ""),
         y: { domain: [0, workMax], label: "work (objects)", tickFormat: compact },
@@ -1347,7 +1521,7 @@ class GcWidget extends HTMLElement {
 
       if (collector === "incremental") {
         chart(column, "budget", Plot.plot({
-          ...frame(HEIGHTS.budget),
+          ...frame(budgetHeight),
           ariaLabel: `${TITLES[collector]}: work budget`,
           y: { domain: budgetDomain, label: "work budget (objects)", tickFormat: compact },
           marks: [
@@ -1485,8 +1659,9 @@ class GcWidget extends HTMLElement {
       const inset = Math.max(1, (px(at.x2) - px(at.x1) - BAR) / 2);
       [left, right] = [px(at.x1) + inset - 2, px(at.x2) - inset + 2];
       // A bar cut at the scale's end stops there, and so does its outline.
-      const top = marginTop + (1 - Math.min(total, workMax) / workMax) * (HEIGHTS.work - marginTop - marginBottom) - 2;
-      Object.assign(mark.style, { left: `${left}px`, width: `${right - left}px`, top: `${top}px`, height: `${HEIGHTS.work - marginBottom - top}px` });
+      const { work: workHeight } = this.#sizes;
+      const top = marginTop + (1 - Math.min(total, workMax) / workMax) * (workHeight - marginTop - marginBottom) - 2;
+      Object.assign(mark.style, { left: `${left}px`, width: `${right - left}px`, top: `${top}px`, height: `${workHeight - marginBottom - top}px` });
       mark.hidden = !total;
       const fulls = at.full.some(Boolean);
       content = () => [
@@ -1569,4 +1744,25 @@ function full(/** @type {HTMLElement} */ entry) {
   return entry;
 }
 
+/**
+ * <gc-controls for="id">: where the widget of that id shows its controls, when
+ * its page wants them apart from its charts, as the guide's rail does (#232).
+ * The widget fills it, with its own controls' styles, so the page reaches
+ * nothing inside either.
+ */
+class GcControls extends HTMLElement {
+  /** The row of controls, made with the element's shadow root when first asked for. */
+  get row() {
+    const root = this.shadowRoot ?? this.attachShadow({ mode: "open" });
+    if (!root.firstChild) {
+      root.innerHTML = `<style>
+        :host { display: block; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text-primary); }
+        ${CONTROLS_STYLE}
+      </style><div class="controls" hidden></div>`;
+    }
+    return /** @type {HTMLElement} */ (root.querySelector(".controls"));
+  }
+}
+
+customElements.define("gc-controls", GcControls);
 customElements.define("gc-widget", GcWidget);
