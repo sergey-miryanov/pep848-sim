@@ -204,7 +204,7 @@ def test_a_rebuild_interval_that_outlasts_the_run_stays_in_range() -> None:
             40_000,
             80_100,
         ),
-        # Below the low end the step rounds up to, so it becomes the low end.
+        # Below the low end the step rounds up to: the value becomes the low end.
         ("workload.structures.0.size", "0.size", 5, 150_000, 5, 149_005),
     ],
 )
