@@ -220,7 +220,7 @@ def guides_link(section: str) -> Any:
     """The request of the one link to the playground's async_tree_io_tg in the
     guide's section of that id, as the playground writes a link (site/link.js):
     deflate-raw JSON in base64url."""
-    guide = (ROOT / "site" / "guide.html").read_text(encoding="utf-8")
+    guide = (ROOT / "site" / "guide-long.html").read_text(encoding="utf-8")
     [body] = re.findall(rf'<section id="{section}">(.*?)</section>', guide, re.DOTALL)
     [text] = re.findall(
         r"playground=async_tree_io_tg&amp;playground\.request=([\w-]+)", body
