@@ -47,8 +47,9 @@ const EXAMPLE = `def doubly_linked(i):
     # Each object and the one before it hold each other.
     return [(i - 1, i), (i, i - 1)]`;
 
-// The source writes a request's values as Python literals and nothing else, so
-// that a link's request carries no code past the hold on a shape of its own.
+// The source writes a request's values as Python literals and refuses any it
+// cannot, so that a link's code lies in a shape of the reader's own, which
+// waits for Run (ADR 0016).
 
 /** A number as Python takes it, in groups of three from 10,000 up. */
 const py = (/** @type {unknown} */ value) => {

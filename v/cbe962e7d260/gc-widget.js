@@ -847,8 +847,8 @@ class GcWidget extends HTMLElement {
     const records = { legacy: [], incremental: [] };
     /** @type {{ legacy?: Figures, incremental?: Figures }} */
     const figures = {};
-    // The charts take the new runs at their first records, or at done for runs
-    // that make none.
+    // The charts take the new runs at their first records, or when both end
+    // without one.
     const adopt = () => {
       if (!fresh) return;
       fresh = false;
@@ -887,7 +887,7 @@ class GcWidget extends HTMLElement {
       },
       done: () => {
         // A run shorter than threshold0, with no gc.collect() and no shutdown,
-        // sends no records, and its empty charts replace the old runs' here.
+        // makes no records, and its empty charts replace the old runs'.
         if (fresh) {
           for (const collector of COLLECTORS) figures[collector] ??= NO_RECORDS;
           adopt();
