@@ -150,13 +150,13 @@ export function describeRun(request) {
 /**
  * The incremental collector's young generation as threshold0 and threshold1
  * make it: a nursery of two half-spaces, threshold0 kB each, and threshold1
- * half-spaces of aging, held as threshold1 / 2 aging spaces, rounded up, each
- * the size of a nursery.
+ * half-spaces of aging, held as threshold1 / 2 aging spaces, rounded up and one
+ * at least, each the size of a nursery.
  * @param {number} threshold0
  * @param {number} threshold1
  */
 export function describeYoung(threshold0, threshold1) {
-  const spaces = Math.ceil(threshold1 / 2);
+  const spaces = Math.max(1, Math.ceil(threshold1 / 2));
   return {
     nursery: `Incremental nursery: ${size(2 * threshold0)}`,
     aging: `Incremental aging: ${spaces} ${spaces === 1 ? "space" : "spaces"}, ${size(2 * threshold0 * spaces)}`,

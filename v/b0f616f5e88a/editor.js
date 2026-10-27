@@ -489,7 +489,7 @@ export class Editor {
       }, { min: 1 })),
       this.#label("threshold1", this.#number("run:threshold1", settings.threshold1, (value) => {
         settings.threshold1 = /** @type {number} */ (value);
-      }, { min: 1 })),
+      })),
       this.#label("threshold2", this.#number("run:threshold2", settings.threshold2, (value) => {
         settings.threshold2 = /** @type {number} */ (value);
       })),
