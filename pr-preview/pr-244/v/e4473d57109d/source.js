@@ -7,7 +7,7 @@
 // `toSource` writes the source of a request without the DOM, so Node's test
 // runner can load this module: see tests/source.test.js.
 
-import { nameOf, typeCode } from "./editor.js";
+import { nameOf, SHAPES, typeCode } from "./editor.js";
 
 /** @typedef {import("./editor.js").Request} Request */
 /** @typedef {import("./editor.js").Shape} Shape */
@@ -47,9 +47,26 @@ const EXAMPLE = `def doubly_linked(i):
     # Each object and the one before it hold each other.
     return [(i - 1, i), (i, i - 1)]`;
 
-/** A whole number as Python takes it, in groups of three from 10,000 up. */
-const py = (/** @type {number} */ value) =>
-  Math.abs(value) >= 10_000 ? String(value).replace(/\B(?=(\d{3})+(?!\d))/g, "_") : String(value);
+// The source writes a request's values as Python literals and nothing else, so
+// that a link's request carries no code past the hold on a shape of its own.
+
+/** A number as Python takes it, in groups of three from 10,000 up. */
+const py = (/** @type {unknown} */ value) => {
+  if (typeof value !== "number" || !Number.isFinite(value)) throw new TypeError(`${JSON.stringify(value)} is not a number`);
+  return Math.abs(value) >= 10_000 ? String(value).replace(/\B(?=(\d{3})+(?!\d))/g, "_") : String(value);
+};
+
+/** Text, such as a share or a root, as a Python string on one line. */
+const pyText = (/** @type {unknown} */ value) => {
+  if (typeof value !== "string") throw new TypeError(`${JSON.stringify(value)} is not text`);
+  return JSON.stringify(value);
+};
+
+/** A setting's name as a keyword, which Settings refuses unless it takes it. */
+const setting = (/** @type {string} */ name) => {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new TypeError(`no setting ${JSON.stringify(name)}`);
+  return name;
+};
 
 /**
  * Text as a Python string: triple-quoted, a line to each of its lines, unless
@@ -129,6 +146,7 @@ export function toSource(request) {
   });
   const shapeOf = (/** @type {Shape} */ shape) => {
     const name = nameOf(shape);
+    if (!Object.hasOwn(SHAPES, name)) throw new TypeError(`no shape ${JSON.stringify(name)}`);
     if (name === "tree") return "Tree()";
     const value = /** @type {{ [name: string]: number | string }} */ (shape)[name];
     if (name === "own") return `Own(${names.get(String(value))})`;
@@ -143,14 +161,14 @@ export function toSource(request) {
     "",
     "",
     call("churn = Churn(", [
-      `lifetime_mean=${py(churn.lifetime_mean)}`, `cycle_share="${churn.cycle_share}"`,
-      `cycle_size=${py(churn.cycle_size)}`, `long_share="${churn.long_share}"`,
+      `lifetime_mean=${py(churn.lifetime_mean)}`, `cycle_share=${pyText(churn.cycle_share)}`,
+      `cycle_size=${py(churn.cycle_size)}`, `long_share=${pyText(churn.long_share)}`,
       `long_lifetimes=(${py(low)}, ${py(high)})`,
     ]),
     "",
     structures.length ? "structures = [" : "structures = []",
     ...structures.map((structure) => {
-      const args = [shapeOf(structure.shape), `size=${py(structure.size)}`, `root="${structure.root}"`];
+      const args = [shapeOf(structure.shape), `size=${py(structure.size)}`, `root=${pyText(structure.root)}`];
       if (structure.lifetime !== null) args.push(`lifetime=${py(structure.lifetime)}`);
       if (structure.rebuild_interval !== null) args.push(`rebuild_interval=${py(structure.rebuild_interval)}`);
       if (structure.build_churn) args.push(`build_churn=${py(structure.build_churn)}`);
@@ -161,14 +179,14 @@ export function toSource(request) {
     ...(structures.length ? ["]"] : []),
     "",
     `run_length = ${py(runLength)}`,
-    call("settings = Settings(", Object.entries(settings).map(([name, value]) => `${name}=${py(value)}`)),
+    call("settings = Settings(", Object.entries(settings).map(([name, value]) => `${setting(name)}=${py(value)}`)),
     `shutdown = ${shutdown ? "True" : "False"}`,
     ...(seed === SEED ? [] : [`seed = ${py(seed)}`]),
     "",
     ABOUT_CONSTANTS,
     call("constants = Constants(", [
       `initial_work_budget=${py(constants.initial_work_budget)}`, `freed_credit=${py(constants.freed_credit)}`,
-      `long_lived_ratio="${constants.long_lived_ratio}"`, `real_object_size=${py(constants.real_object_size)}`,
+      `long_lived_ratio=${pyText(constants.long_lived_ratio)}`, `real_object_size=${py(constants.real_object_size)}`,
     ]),
   ];
   return `${lines.join("\n")}\n`;
@@ -280,8 +298,9 @@ export class Source {
    * Show the entry's source: the reader's text, while the entry's request stays
    * the one it made or was written from, and else the request written afresh.
    * A request that still names a preset has no source until the worker spells
-   * it out.
+   * it out. False when the playground cannot write the request as Python.
    * @param {{ request: any }} entry
+   * @returns {boolean}
    */
   show(entry) {
     this.#entry = entry;
@@ -291,18 +310,29 @@ export class Source {
     if (waiting) {
       this.#area.value = "";
       this.#mark();
-      return;
+      return true;
     }
     const of = JSON.stringify(entry.request);
     let kept = this.#texts.get(entry);
     if (!kept || kept.of !== of) {
-      const text = toSource(entry.request);
+      let text;
+      try {
+        text = toSource(entry.request);
+      } catch (error) {
+        // A request the playground did not write, such as a link's: nothing to run.
+        this.#area.value = "";
+        this.#area.disabled = this.#run.disabled = true;
+        this.fail(`The playground cannot write this request as Python: ${error instanceof Error ? error.message : error}.`);
+        this.#mark();
+        return false;
+      }
       kept = { text, ran: text, of };
       this.#texts.set(entry, kept);
     }
     // Setting the same text would move the caret to its end.
     if (this.#area.value !== kept.text) this.#area.value = kept.text;
     this.#mark();
+    return true;
   }
 
   /**

@@ -147,6 +147,10 @@ const FIGURES = [
   { name: "collections", label: "Collections", read: (figures) => figures[4], show: count },
   { name: "gen2_collections_sweeps", label: "Gen 2 collections / sweeps", read: (figures, collector) => figures[collector === "legacy" ? 6 : 5], show: count },
 ];
+// The figures of a run without a record: no collection and no work, so 0 work
+// per MB over what it allocated, and no yield.
+/** @type {Figures} */
+const NO_RECORDS = [0, 0, 0, undefined, 0, 0, 0];
 // The parts an entry can mark: each collector's panels, and the figures.
 const MARKS = [
   ...["legacy", "incremental"].flatMap((collector) => ["heap", "work", "budget"].map((panel) => `${collector}.${panel}`)),
@@ -799,9 +803,7 @@ class GcWidget extends HTMLElement {
     if (shifted && this.hasAttribute("narrow")) requestAnimationFrame(() => this.#reveal());
     if (this.#held.has(entry)) {
       const source = /** @type {Source} */ (this.#source);
-      try {
-        source.show(entry);
-      } catch {
+      if (!source.show(entry)) {
         this.#fail(FOREIGN);
         return;
       }
@@ -822,8 +824,9 @@ class GcWidget extends HTMLElement {
   /**
    * Ask for both runs of the request as the controls have set it, or of another
    * request for the entry, in place of any runs asked for before. The charts keep
-   * the old runs until the new runs' first records arrive. If the widget kept the
-   * request's runs, they draw at once, and the worker hears nothing.
+   * the old runs until the new runs' first records arrive, or until both end
+   * without one. If the widget kept the request's runs, they draw at once, and
+   * the worker hears nothing.
    * @param {any} sent the request, the entry's own unless another is given
    * @param {() => void} made what follows once the worker spells the request out
    */
@@ -844,6 +847,15 @@ class GcWidget extends HTMLElement {
     const records = { legacy: [], incremental: [] };
     /** @type {{ legacy?: Figures, incremental?: Figures }} */
     const figures = {};
+    // The charts take the new runs at their first records, or at done for runs
+    // that make none.
+    const adopt = () => {
+      if (!fresh) return;
+      fresh = false;
+      this.#drawn = request;
+      this.#records = records;
+      this.#figures = figures;
+    };
     /** @type {Required<Listener>} */
     const listener = {
       controls: (controls, expanded, graph) => {
@@ -868,17 +880,19 @@ class GcWidget extends HTMLElement {
         this.#graph(graph);
       },
       records: (collector, part, last) => {
-        if (fresh) {
-          fresh = false;
-          this.#drawn = request;
-          this.#records = records;
-          this.#figures = figures;
-        }
+        adopt();
         records[collector].push(...part);
         figures[collector] = last;
         this.#schedule();
       },
       done: () => {
+        // A run shorter than threshold0, with no gc.collect() and no shutdown,
+        // sends no records, and its empty charts replace the old runs' here.
+        if (fresh) {
+          for (const collector of COLLECTORS) figures[collector] ??= NO_RECORDS;
+          adopt();
+          this.#schedule();
+        }
         const { legacy, incremental } = figures;
         if (!legacy || !incremental) return;
         if (this.#figures === figures) this.#finished = { legacy, incremental };

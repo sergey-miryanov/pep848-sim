@@ -12,9 +12,10 @@
 
 /**
  * A run's figures so far, as pep848_sim.widget.figures.Figures.row holds them:
- * peak work, peak uncollected garbage, work per MB, yield (undefined until the
- * run has examined an object), collections, sweeps and gen 2 collections.
- * @typedef {[number, number, number, number | undefined, number, number, number]} Figures
+ * peak work, peak uncollected garbage, work per MB (undefined until the run has
+ * allocated), yield (undefined until it has examined an object), collections,
+ * sweeps and gen 2 collections.
+ * @typedef {[number, number, number | undefined, number | undefined, number, number, number]} Figures
  */
 
 /**
