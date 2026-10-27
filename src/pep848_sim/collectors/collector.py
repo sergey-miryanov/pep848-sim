@@ -76,6 +76,10 @@ class Constants:
         simulated objects, rounded down."""
         return real * self.real_object_size // 1024
 
+    def real(self, simulated: int) -> int:
+        """A count of simulated objects in the real objects they stand for."""
+        return simulated * 1024 // self.real_object_size
+
 
 @dataclass(frozen=True)
 class CollectionCounts:
@@ -112,6 +116,11 @@ class Record(NamedTuple):
     spaces_after: tuple[int, ...]
     reachable_before: int
     reachable_after: int
+
+    @property
+    def work(self) -> int:
+        """The collection's work, as CollectionCounts counts it."""
+        return CollectionCounts(self.kind, self.marked, self.survived, self.freed).work
 
 
 class Space:

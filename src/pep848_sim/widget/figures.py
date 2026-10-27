@@ -59,7 +59,7 @@ class Figures(NamedTuple):
     def add(self, records: Iterable[Record]) -> Figures:
         figures = self
         for record in records:
-            work = record.marked + record.survived + record.freed
+            work = record.work
             uncollected = sum(record.spaces_before) - record.reachable_before
             automatic = record.kind not in _FULL
             peak_work = max(figures.peak_work, work) if automatic else figures.peak_work

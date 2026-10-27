@@ -8,7 +8,12 @@ workload parameters until the two agree (ADR 0011).
 from collections.abc import Iterable
 
 from benchmarks import Benchmark, Kind, Tally, load_data
-from pep848_sim.collectors.collector import Collector, CollectorSettings, Record
+from pep848_sim.collectors.collector import (
+    Collector,
+    CollectorSettings,
+    Constants,
+    Record,
+)
 from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.collectors.legacy import LegacyCollector
 from pep848_sim.presets import PRESETS, Preset
@@ -33,9 +38,6 @@ FILED: dict[str, tuple[int, Kind] | None] = {
     "shutdown": None,
 }
 
-# Real objects to a simulated one (ADR 0002).
-REAL_PER_SIMULATED = 16
-
 # A column's heads: the benchmark's figure, then the preset's.
 _SIDES = f"{'benchmark':>10}{'preset':>10}"
 
@@ -46,20 +48,22 @@ def run_preset(preset: Preset, collector: type[Collector]) -> list[Record]:
     return [record for part in parts for record in part]
 
 
-def tally(records: Iterable[Record]) -> Benchmark:
+def tally(records: Iterable[Record], constants: Constants | None = None) -> Benchmark:
     """A run's records as one worker's collections, tallied as #117 tallies a
-    benchmark's, in real objects: the objects a collection examined are its
-    candidates, and those it freed are what it collected."""
+    benchmark's, in real objects by the run's constants, the defaults unless
+    given: the objects a collection examined are its candidates, and those it
+    freed are what it collected."""
+    constants = constants or Constants()
     tallies: dict[tuple[int, Kind], Tally] = {}
     first_examined = None
     for record in records:
-        examined = (record.survived + record.freed) * REAL_PER_SIMULATED
+        examined = constants.real(record.survived + record.freed)
         if first_examined is None:
             first_examined = examined
         key = FILED[record.kind]
         if key is None:
             continue
-        collection = Tally(1, examined, record.freed * REAL_PER_SIMULATED)
+        collection = Tally(1, examined, constants.real(record.freed))
         tallies[key] = tallies.get(key, Tally()).add(collection)
     return Benchmark(1, tallies, first_examined)
 
