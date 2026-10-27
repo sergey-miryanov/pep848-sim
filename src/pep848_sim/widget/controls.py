@@ -120,9 +120,12 @@ def _ranged(
     path: str, label: str, unit: str, value: int, low: int, high: int
 ) -> Control:
     """A control from `low` to `high` on a round step about a hundredth of `high`,
-    each end moved inward to the step."""
+    each end moved inward to the step, or outward far enough to hold `value`. A
+    slider counts its steps from its least value, so a value below the rounded
+    least becomes the least, and sits on a step."""
     step = 10 ** max(0, len(str(high)) - 3)
-    least = -(-low // step) * step
-    return Control(
-        path, label, unit, value, least, max(least, high // step * step), step
-    )
+    least = min(-(-low // step) * step, value)
+    most = max(least + (high - least) // step * step, least)
+    if value > most:
+        most = least + -(-(value - least) // step) * step
+    return Control(path, label, unit, value, least, most, step)
