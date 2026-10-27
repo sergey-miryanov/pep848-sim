@@ -18,12 +18,12 @@ which integer arithmetic alone gives for a geometric lifetime, the
 exponential's counterpart in whole kB. Each run owns its
 `random.Random(seed)`, its draws never depend on what the collector does,
 and its state lives in its generator, never at module level. Records hold ints and strings, and the
-worker passes them on unchanged. Tests pin the records digests of a fixed
+worker passes them on unchanged. Tests pin the records' digests of a fixed
 workload and of each preset under CPython, in `tests/digests.json`, and these
 rules make them Pyodide's digests too. `just test-pyodide`, which `just check`
 and so CI run, sends the same requests through the worker's own path under
 Pyodide in Node, at the version the site's worker loads, and fails on any
-digest that differs from its pin (#188). It takes about 13 s.
+digest that differs from its pin (#188). It takes 15 to 21 s in CI.
 
 ## Considered Options
 

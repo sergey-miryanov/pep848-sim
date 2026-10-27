@@ -37,7 +37,7 @@
 // Each panel reads its values under the pointer, and from the keys once it has
 // focus: the arrows step from one collection or bin to the next. A screen reader
 // takes each panel for a slider along the allocation clock, and hears the
-// tooltip's readout at each step.
+// tooltip's readout at each key.
 
 // @ts-expect-error: an editor cannot fetch Plot's types from jsDelivr.
 import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+esm";
@@ -174,7 +174,7 @@ function assign(/** @type {any} */ request, /** @type {string} */ path, /** @typ
 }
 
 /**
- * A mark's number, as a note or a tab shows it beside the badge.
+ * A mark's number, in a disc like its badge, for a note or a tab.
  * @param {number} n
  */
 function numbered(n) {
@@ -330,8 +330,9 @@ const TEMPLATE = `
   :host([compact]) .top, :host([compact]) .controls, :host([compact]) .figures { margin-bottom: 12px; }
   /* With its controls on the page, a compact widget's top row holds nothing. */
   :host([compact]) .top:has(> div > .controls[hidden]) { margin-bottom: 0; }
-  /* Too narrow for three controls beside the graph: the select and the
-     controls, then the graph, then its legend. */
+  /* Too narrow for the controls beside the graph, which would leave them
+     room for one slider a row: the select and the controls, then the graph,
+     then its legend. */
   @container widget (width < 780px) {
     .top { grid-template-columns: minmax(0, 1fr); gap: 0; }
     .top > div:first-child { display: contents; }
@@ -1164,8 +1165,9 @@ class GcWidget extends HTMLElement {
     /** @type {HTMLElement} */ (keys.querySelector(".plain .churn")).textContent = describeChurn(graph.churn);
     this.#editor?.describe(graph);
     if (!nodes.length) return;
-    // The layout's own copies, which the simulation moves and links in place. The
-    // roots keep to a line along the top, and what they hold hangs below them.
+    // The layout's own copies, which d3's force simulation moves and links in
+    // place. The roots keep to a line along the top, and what they hold hangs
+    // below them.
     /** @type {(import("./graph.js").Node & { x?: number, y?: number, fy?: number })[]} */
     const placed = nodes.map((node) => (node.root ? { ...node, fy: -GRAPH.height / 2 } : { ...node }));
     const byKey = (/** @type {{ key: string }} */ node) => node.key;
@@ -1279,8 +1281,9 @@ class GcWidget extends HTMLElement {
   }
 
   /**
-   * Scroll a narrow widget's first mark into view, unless it stands wholly in
-   * view already, short of what the page's scroll padding covers.
+   * Scroll the first mark a narrow widget shows into view, unless all of it
+   * stands in view, short of the page's scroll padding and the mark's scroll
+   * margin.
    */
   #reveal() {
     const shown = /** @type {HTMLElement[]} */ ([.../** @type {ShadowRoot} */ (this.shadowRoot).querySelectorAll("[data-mark]")])
@@ -1582,8 +1585,8 @@ class GcWidget extends HTMLElement {
 
   /**
    * Where the marks read: the panel under the pointer, or else the one the keys
-   * read, the clock, in kB, and the height of the panel's tooltips, in px, or
-   * null while they hide. Null when nothing reads.
+   * read, the clock, in kB, and the height, in px, the panel's tooltips stand
+   * at, or null while they hide. Null when nothing reads.
    * @returns {{ panel: string, kb: number, y: number | null } | null}
    */
   #where() {
@@ -1751,7 +1754,7 @@ function full(/** @type {HTMLElement} */ entry) {
  * nothing inside either.
  */
 class GcControls extends HTMLElement {
-  /** The row of controls, made with the element's shadow root when first asked for. */
+  /** The row of controls, which the first call makes, with the element's shadow root. */
   get row() {
     const root = this.shadowRoot ?? this.attachShadow({ mode: "open" });
     if (!root.firstChild) {

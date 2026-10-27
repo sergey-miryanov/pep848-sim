@@ -146,7 +146,7 @@ test("a bin past the scale's end is cut there, square on top", () => {
   ]);
   // A part that starts past the end draws nothing.
   assert.deepEqual(work(records, 4000, 60).map(({ part, y2 }) => [part, y2]), [["marked", 10], ["marked", 60], ["marked", 40]]);
-  // Work that reaches the end alone is not cut.
+  // Work that stops at the end keeps its rounded top, and the panel cuts no bin.
   assert.equal(work(records, 4000, 260).at(-2)?.top, true);
   assert.deepEqual(cuts(records, 4000, 260), []);
 });

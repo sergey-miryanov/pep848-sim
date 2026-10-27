@@ -83,9 +83,9 @@ it to its section in a long form, the guide as it stood, where each section
 embedded a widget of its own. The last chapter to move retired the long form
 (#221 to #228).
 
-Where the long form linked to the playground for a variant of a preset's
-workload, such as async_tree_io_tg with parent pointers, a step runs the
-variant in the guide's widget. A request that names a preset can carry
+A step runs a variant of a preset's workload, such as async_tree_io_tg with
+parent pointers, in the guide's widget, where the long form linked to the
+playground for it. A request that names a preset can carry
 `changes`: each sets a field of the spelled-out request, by the path a control
 names it with, and a path the request lacks is refused. The preset's numbers
 stay in one place, and the step's request holds only what differs.
@@ -124,5 +124,5 @@ to fit a phone (#229). The guide took the third, with the second's dock:
   columns, the plots fell to 0.3 of full size, and the clamped text hid part
   of the step.
 - The step docked at the foot, with both columns side by side at full size:
-  a heap panel only just fit above the dock, at 166 px wide.
+  the dock left room for one heap panel, at 166 px wide.
 - One collector at a time, with the notes in the widget and the rail on top.

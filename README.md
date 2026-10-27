@@ -9,8 +9,8 @@ and a guide and a playground let you change the workload and the
 The site, <https://sergey-miryanov.github.io/pep848-sim/>, opens on a widget
 whose select offers five presets modelled on pyperformance benchmarks:
 xml_etree_parse, create_gc_cycles, json_loads, async_tree_io_tg and
-connected_components. Its guide takes PEP 848 a part at a time, with widgets
-that run the presets. Its playground starts from the same workloads and
+connected_components. Its guide takes PEP 848 a chapter at a time, in steps
+beside one widget. Its playground starts from the same workloads and
 lets you change any part of them, in the widget's legend or as Python, the
 collector constants included, and send what you made by its link.
 

@@ -29,10 +29,10 @@ a violet between gruvbox's blue and its purple.
 Each series keeps its hue and moves only as far as the dataviz skill's
 validator needs for its neighbors in each panel to pass, in both themes: the
 heap's lanes, the incremental collector's old generation's stack, and the work
-stack. In the light theme only the nursery moves more than a shade, to a
-stronger teal, since gruvbox's blue reads as gray. In the dark theme gruvbox's
-yellow sits above the validator's lightness band, and darkening it enough to
-stay apart from pending turns it a mustard. Against the light theme's cream,
+stack. The nursery moves to a stronger teal in both themes, since gruvbox's
+blue reads as gray, and in the light theme no other series moves more than a
+shade. In the dark theme gruvbox's yellow sits above the validator's lightness
+band, and darkening it enough to stay apart from pending turns it a mustard. Against the light theme's cream,
 aging, pending and marked fall below 3:1, as aging did on the old palette. Each
 panel's legend names them, as the validator asks of a color below 3:1.
 

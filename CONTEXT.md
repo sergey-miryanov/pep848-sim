@@ -57,7 +57,7 @@ config
 A number fixed inside a collector that no Python API changes: the initial
 work budget and the freed-credit multiplier of the incremental collector, the
 25% long-lived ratio of the legacy collector. The home page's widget and the
-playground unlock them, and the guide's section on the work budget unlocks
+playground unlock them, and the guide's chapter on the work budget unlocks
 the incremental collector's two.
 _Avoid_: setting (that is what Python can change), magic number, tunable
 
@@ -116,8 +116,8 @@ _Avoid_: immortal (CPython's immortal objects are a different thing),
 permanent, static
 
 **Object graph**:
-The heap's objects and the references between them. The widget draws a
-sample of it: a few objects of each structure.
+The heap's objects and the references between them. A widget draws a sample
+of it, a few objects of each structure, unless it is compact, as the guide's is.
 _Avoid_: heap graph, reference graph
 
 **Structure**:
@@ -197,7 +197,7 @@ the controls a reader may change for each, and the charts of the runs it makes.
 _Avoid_: demo, applet, visualization, simulator (that is what it runs)
 
 **Control**:
-A slider the page puts on a widget for one workload parameter, collector
+A slider the page gives a widget for one workload parameter, collector
 setting or collector constant. The widget groups them: the workload's, then the
 collector's. Moving one changes only the value it shows; releasing it starts
 the widget's two runs again, or draws the ones it kept for the same values.
@@ -398,7 +398,7 @@ _Avoid_: promoted, kept, live
 
 **Freed**:
 Objects a collection examined and freed: the cyclic garbage it found, and any
-object it kept that refcounting freed when it cleared that garbage.
+object it judged reachable that refcounting freed when it cleared that garbage.
 _Avoid_: collected (reads as the act, not the count), reclaimed, swept
 
 **Yield**:
