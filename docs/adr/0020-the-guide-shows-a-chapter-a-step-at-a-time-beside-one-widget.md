@@ -15,12 +15,28 @@ browser's Back button steps back, a link reaches a step, and the kept runs
 (#135) draw a step the reader has seen at once. The controls stay live within
 a step, and a chapter's steps share its controls.
 
-A rail beside the widget holds the chapter, Back and Next, the step and its
-notes, then the chapters, with the steps of the one shown. Back and Next sit
-above the step's text, and the step's box keeps the height of the chapter's
-longest step, so neither moves from one step to the next. On a phone the rail
-sticks to the top over the widget, and the chapters follow the widget (#229
-fits the two together).
+A rail beside the widget holds the chapter, the arrows that step back and on
+with the step's number between them, the step and its notes, then the
+chapters, with the steps of the one shown. The arrows sit beside the
+chapter's name, above the step's text, and the step's box keeps the height of
+the guide's longest step, so nothing moves from one step to the next. On a
+phone the rail sticks to the top over the widget, the box keeps its chapter's
+longest step's height, and the chapters follow the widget (#229 fits the two
+together).
+
+At 1440 by 900 the widget stood 1,076 px tall under 240 px of heading and
+intro, so its budget charts sat below the fold (#232). Beside the rail, the
+guide now fits one window:
+
+- The intro sits in a strip over the guide, which the reader closes once and
+  the browser remembers. The page drops its heading.
+- The widget's controls sit at the foot of the side, under the chapters, in a
+  Settings block the reader collapses, which stays as they left it from step
+  to step. Open, it keeps the height of the tallest chapter's controls, so a
+  new chapter moves nothing above it. The chapters fill the side between the
+  step and the settings, and scroll to keep the one shown in view.
+- The widget's charts end at the window's foot: their plots scale alike, and
+  their axes and legends stay.
 
 The widget learns three things for the guide, so the page reaches nothing
 inside its shadow root:
@@ -36,6 +52,11 @@ inside its shadow root:
 - A widget with a `changes` attribute notes under each figure what it read
   before the last runs it asked for, as soon as the new value shows, where
   the two differ. The note keeps its line while empty, so the charts stay put.
+- A `fit` widget sizes its plots, between 0.3 and 1.3 of full size, so that
+  it ends at the window's foot. The page sets it beside the rail alone.
+- A `<gc-controls for="guide">` element on the page takes the widget's
+  controls, with the widget's own styles, so the page places them without
+  reaching into either shadow root.
 
 The chapters moved to steps one at a time. Until each moved, the guide linked
 it to its section in a long form, the guide as it stood, where each section
@@ -62,3 +83,15 @@ other layouts on the young generation's chapter, and with the full widget:
   the fold in every layout.
 - The page reaching into the widget's shadow root to mark parts, as the
   prototype did: it ties the page to the widget's markup.
+
+A second prototype, on the `prototype/guide-fit` branch, compared three ways
+to fit the widget in one window (#232):
+
+- The intro and the settings in the rail, and charts at fixed, shorter
+  heights: a window shorter than the one they were sized for cut them, and a
+  taller one left room under them.
+- The intro behind an About button, and only the panels a step marks at full
+  height: the panels jumped from step to step, and the reader lost their
+  place.
+- The settings in the rail, under the step: the list of chapters jumped up
+  and down with each chapter's controls.

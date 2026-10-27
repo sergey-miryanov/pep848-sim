@@ -6,7 +6,10 @@
 import { test } from "node:test";
 // @ts-expect-error: as above.
 import assert from "node:assert/strict";
-import { FADED, budgetAt, ceiling, collections, cuts, heap, heapAt, spoken, step, work, workAt, workEnd } from "../site/panels.js";
+import {
+  FADED, SIZES, budgetAt, ceiling, collections, cuts, fitted, heap, heapAt, heapHeight, laneTicks, spoken, step, work, workAt,
+  workEnd,
+} from "../site/panels.js";
 
 /**
  * A record with the fields a test names, and the rest empty.
@@ -289,4 +292,27 @@ test("a tooltip names the collections at its clock by kind", () => {
   assert.equal(collections(["shutdown", "shutdown"]), "2 shutdown collections");
   assert.equal(collections(["old", "young"]), "old and young collections");
   assert.equal(collections(["full", "young", "young", "old"]), "full, 2 young and old collections");
+});
+
+test("the heap panel stands as tall as its lanes, the room between them and its axes", () => {
+  assert.equal(heapHeight(4, 64), 376);
+  assert.equal(heapHeight(1, 64), 112);
+});
+
+test("a fitted widget's panels fill the room it has, at full size where the room is the full panels'", () => {
+  const sum = (/** @type {typeof SIZES} */ { lane, work, budget }) => heapHeight(4, lane) + work + budget;
+  assert.deepEqual(fitted(sum(SIZES), 4), SIZES);
+  const less = fitted(500, 4);
+  assert.ok(less.lane < SIZES.lane && less.work < SIZES.work && less.budget < SIZES.budget);
+  assert.ok(Math.abs(sum(less) - 500) <= 3);
+});
+
+test("a fitted widget's plots scale no less than 0.3 and no more than 1.3 of full size", () => {
+  assert.equal(fitted(0, 4).lane, Math.round(0.3 * SIZES.lane));
+  assert.equal(fitted(10_000, 4).lane, Math.round(1.3 * SIZES.lane));
+  assert.ok(fitted(0, 4).work > 48);
+});
+
+test("a heap lane takes as many ticks as its height has room for", () => {
+  assert.deepEqual([20, 30, 40, 64].map(laneTicks), [1, 2, 3, 3]);
 });

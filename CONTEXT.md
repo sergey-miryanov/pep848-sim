@@ -217,8 +217,8 @@ _Avoid_: section, page, lesson
 
 **Step**:
 One stop in a chapter: a sentence or two, the widget's request, and the panels
-and figures it marks, each with a note on what to see there. Back and Next walk
-the steps, and the widget redraws for each.
+and figures it marks, each with a note on what to see there. Two arrows, Back
+and Next, walk the steps, and the widget redraws for each.
 _Avoid_: slide, frame (that is a root), stage
 
 **Mark**:
