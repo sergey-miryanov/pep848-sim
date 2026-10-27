@@ -799,9 +799,7 @@ class GcWidget extends HTMLElement {
     if (shifted && this.hasAttribute("narrow")) requestAnimationFrame(() => this.#reveal());
     if (this.#held.has(entry)) {
       const source = /** @type {Source} */ (this.#source);
-      try {
-        source.show(entry);
-      } catch {
+      if (!source.show(entry)) {
         this.#fail(FOREIGN);
         return;
       }

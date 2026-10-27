@@ -34,7 +34,10 @@ the reader's own, or a shape that is not plainly a named one, opens in the
 workload source with a note and waits for the reader to press Run. Until then
 the switch to the legend stays shut, and picking another workload and coming
 back waits again. The playground cannot tell a reader's own link from
-another's, so a reload of a page whose address holds code waits too.
+another's, so a reload of a page whose address holds code waits too. The
+workload source writes each of the request's other values as a Python number
+or string and refuses one it cannot (#237), so a shape of the reader's own is
+the only code a link can carry into it.
 
 When the playground cannot open a link, it shows the entry as the page gives
 it and says why. Picking another workload drops the link from the address

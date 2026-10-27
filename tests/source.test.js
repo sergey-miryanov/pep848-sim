@@ -51,3 +51,41 @@ test("a shape's code holds a function alone when every line after its def is ind
   assert.equal(functionOf("def links(i):\n    return []\n# after\n"), null);
   assert.equal(functionOf("links = lambda i: []\n"), null);
 });
+
+// Code a link could hide in a value: it ends the string or the call, then runs.
+const INJECTED = '")\nimport js  #';
+
+test("a request's text goes into the source as Python strings on one line each", () => {
+  const request = holding({ ...newStructure(), root: `frame${INJECTED}` });
+  request.workload.churn.cycle_share = `1/4${INJECTED}`;
+  request.workload.churn.long_share = `0${INJECTED}`;
+  request.constants.long_lived_ratio = `1/4${INJECTED}`;
+  const source = toSource(request);
+
+  assert.ok(!source.split("\n").some((line) => line.startsWith("import js")));
+  assert.ok(source.includes(`root=${JSON.stringify(`frame${INJECTED}`)}`));
+  assert.ok(source.includes(`cycle_share=${JSON.stringify(`1/4${INJECTED}`)}`));
+  assert.ok(source.includes(`long_lived_ratio=${JSON.stringify(`1/4${INJECTED}`)}`));
+});
+
+test("a request whose values the source cannot write as literals is refused", () => {
+  /** @type {[(request: any) => void, RegExp][]} */
+  const cases = [
+    [(request) => { request.workload.structures[0].size = `1${INJECTED}`; }, /is not a number/],
+    [(request) => { request.workload.structures[0].shape = { chains: `16${INJECTED}` }; }, /is not a number/],
+    [(request) => { request.workload.structures[0].shape = { [`exec${INJECTED}`]: 1 }; }, /no shape/],
+    [(request) => { request.workload.structures[0].shape = `tree${INJECTED}`; }, /no shape/],
+    [(request) => { request.workload.structures[0].root = 5; }, /is not text/],
+    [(request) => { request.workload.churn.cycle_share = 0.25; }, /is not text/],
+    [(request) => { request.workload.seed = `1${INJECTED}`; }, /is not a number/],
+    [(request) => { request.run_length = Infinity; }, /is not a number/],
+    [(request) => { request.settings.threshold0 = `2000${INJECTED}`; }, /is not a number/],
+    [(request) => { request.settings[`x=1${INJECTED}`] = 1; }, /no setting/],
+    [(request) => { request.constants.freed_credit = `2${INJECTED}`; }, /is not a number/],
+  ];
+  for (const [change, refusal] of cases) {
+    const request = holding(newStructure());
+    change(request);
+    assert.throws(() => toSource(request), refusal);
+  }
+});
