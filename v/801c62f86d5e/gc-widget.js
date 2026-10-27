@@ -23,6 +23,12 @@
 // the runs of its last requests while the page stays open, so picking an entry
 // again, or moving a control back, draws them at once (#135).
 //
+// A `compact` widget, as the guide's, leaves out the object graph, its legend
+// and the select, since the page around it picks the entry (ADR 0020). An entry
+// can mark the panels and figures its page talks about, each outlined with a
+// badge that numbers it. A widget with a `changes` attribute notes under each
+// figure what it read before the last runs it asked for, where the two differ.
+//
 // Each panel reads its values under the pointer, and from the keys once it has
 // focus: the arrows step from one collection or bin to the next. A screen reader
 // takes each panel for a slider along the allocation clock, and hears the
@@ -60,8 +66,9 @@ import { Kept } from "./kept.js";
  */
 /**
  * A workload a widget offers: its name in the URL fragment, its title in the
- * select, its request as the controls have set it, and the paths of its controls.
- * @typedef {{ name: string, title: string, request: any, controls: string[] }} Entry
+ * select, its request as the controls have set it, the paths of its controls,
+ * and the parts it marks, as collector.panel or figure.name.
+ * @typedef {{ name: string, title: string, request: any, controls: string[], marks: string[] }} Entry
  */
 
 /** @type {Collector[]} */
@@ -123,20 +130,27 @@ const count = (value, values) => (values.some((n) => n >= 10_000) ? `${tenths(va
 
 // The row of figures (ADR 0008): how each reads a run's figures so far, and how
 // it shows a value beside the other run's.
+// Its name is how an entry marks it.
 /**
  * @type {{
+ *   name: string,
  *   label: string,
  *   read: (figures: Figures, collector: Collector) => number | undefined,
  *   show: (value: number, values: number[]) => string,
  * }[]}
  */
 const FIGURES = [
-  { label: "Peak work (automatic)", read: (figures) => figures[0], show: count },
-  { label: "Peak uncollected garbage (MB)", read: (figures) => figures[1] / 1000, show: tenths },
-  { label: "Work per MB", read: (figures) => figures[2], show: count },
-  { label: "Yield", read: (figures) => figures[3], show: percent },
-  { label: "Collections", read: (figures) => figures[4], show: count },
-  { label: "Gen 2 collections / sweeps", read: (figures, collector) => figures[collector === "legacy" ? 6 : 5], show: count },
+  { name: "peak_work", label: "Peak work (automatic)", read: (figures) => figures[0], show: count },
+  { name: "peak_uncollected_garbage", label: "Peak uncollected garbage (MB)", read: (figures) => figures[1] / 1000, show: tenths },
+  { name: "work_per_mb", label: "Work per MB", read: (figures) => figures[2], show: count },
+  { name: "yield", label: "Yield", read: (figures) => figures[3], show: percent },
+  { name: "collections", label: "Collections", read: (figures) => figures[4], show: count },
+  { name: "gen2_collections_sweeps", label: "Gen 2 collections / sweeps", read: (figures, collector) => figures[collector === "legacy" ? 6 : 5], show: count },
+];
+// The parts an entry can mark: each collector's panels, and the figures.
+const MARKS = [
+  ...["legacy", "incremental"].flatMap((collector) => ["heap", "work", "budget"].map((panel) => `${collector}.${panel}`)),
+  ...FIGURES.map(({ name }) => `figure.${name}`),
 ];
 
 /** A control's value as the reader sees it: kB, a share as a percentage, or a count. */
@@ -169,7 +183,7 @@ function assign(/** @type {any} */ request, /** @type {string} */ path, /** @typ
  */
 function entriesOf(json, controls) {
   if (!("entries" in json)) {
-    return [{ name: "", title: "", request: json, controls: (controls ?? "").split(/\s+/).filter(Boolean) }];
+    return [{ name: "", title: "", request: json, controls: (controls ?? "").split(/\s+/).filter(Boolean), marks: [] }];
   }
   /** @type {Entry[]} */
   const entries = json.entries;
@@ -178,8 +192,12 @@ function entriesOf(json, controls) {
   if (new Set(names).size < names.length) throw new Error("The widget lists two entries under one name.");
   /** @type {string[]} */
   const shared = json.controls ?? [];
-  return entries.map(({ name, title, request, controls = [] }) => ({
-    name, title, request, controls: [...controls, ...shared.filter((path) => !controls.includes(path))],
+  for (const { name, marks = [] } of entries) {
+    const unknown = marks.find((mark) => !MARKS.includes(mark));
+    if (unknown) throw new Error(`The widget's entry ${name} marks ${unknown}, which it has no part by.`);
+  }
+  return entries.map(({ name, title, request, controls = [], marks = [] }) => ({
+    name, title, request, controls: [...controls, ...shared.filter((path) => !controls.includes(path))], marks,
   }));
 }
 
@@ -275,6 +293,21 @@ const TEMPLATE = `
   .tip thead th:not(:first-child) { text-align: right; padding-left: 12px; }
   .tip td { padding: 0 0 0 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); }
   .error { color: var(--text-primary); }
+  /* A part the entry marks: outlined, with a badge that numbers it, and a
+     figure's numbers tinted. */
+  [data-mark] { position: relative; outline: 2px solid var(--text-primary); outline-offset: 6px; border-radius: 2px; }
+  [data-mark]::after {
+    content: attr(data-mark); position: absolute; top: -16px; right: -16px; z-index: 2;
+    display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+    font-size: 12px; font-weight: 600; background: var(--text-primary); color: var(--surface);
+  }
+  .figure[data-mark] .value { background: color-mix(in srgb, var(--aging) 35%, transparent); border-radius: 3px; padding: 0 3px; }
+  /* What a figure read before, on its own line, which keeps its height while
+     empty so the charts below stay put. */
+  .was { display: none; }
+  :host([changes]) .was { display: block; height: 16px; font-size: 11px; line-height: 16px; color: var(--text-muted); }
+  :host([compact]) .graph, :host([compact]) .key-list, :host([compact]) .picks { display: none; }
+  :host([compact]) .top, :host([compact]) .controls, :host([compact]) .figures { margin-bottom: 12px; }
   /* Too narrow for three controls beside the graph: the select and the
      controls, then the graph, then its legend. */
   @container widget (width < 780px) {
@@ -295,6 +328,12 @@ const TEMPLATE = `
      incremental column under the legacy one. */
   @container widget (width < 700px) {
     .columns { grid-template-columns: minmax(0, 1fr); }
+  }
+  /* A compact widget keeps its columns side by side, so that a step's text
+     stays near both. */
+  @container widget (width < 700px) {
+    :host([compact]) .columns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+    :host([compact]) .figure .value { font-size: 17px; }
   }
 </style>
 <div class="frame"><div class="content">
@@ -354,6 +393,15 @@ class GcWidget extends HTMLElement {
   /** Where each figure shows each run's value. */
   /** @type {{ legacy: HTMLElement, incremental: HTMLElement }[]} */
   #values = [];
+  /** Where each figure shows what each run's value was, on a widget with the `changes` attribute. */
+  /** @type {{ legacy: HTMLElement, incremental: HTMLElement }[]} */
+  #was = [];
+  /** The figures of the last runs that finished, while the charts show them. */
+  /** @type {{ legacy: Figures, incremental: Figures } | null} */
+  #finished = null;
+  /** The figures of the runs the charts showed before the runs asked for last, if those finished. */
+  /** @type {{ legacy: Figures, incremental: Figures } | null} */
+  #before = null;
   /** The workloads the widget offers, each with its request as the controls have set it. */
   /** @type {Entry[]} */
   #entries = [];
@@ -440,9 +488,10 @@ class GcWidget extends HTMLElement {
     // A widget that offers no collector settings shows its constants at once (ADR 0017).
     this.#constantsOpen = !this.#entries.some(({ controls }) => controls.some((control) => control.startsWith("settings.")));
     const row = /** @type {HTMLElement} */ (root.querySelector(".figures"));
-    this.#values = FIGURES.map(({ label }) => {
+    const values = FIGURES.map(({ name, label }) => {
       const figure = document.createElement("div");
       figure.className = "figure";
+      figure.dataset.figure = name;
       const term = document.createElement("dt");
       term.textContent = label;
       figure.append(term);
@@ -452,13 +501,17 @@ class GcWidget extends HTMLElement {
         const number = document.createElement("span");
         number.className = "value";
         number.textContent = "–";
-        description.append(number, collector);
+        const was = document.createElement("span");
+        was.className = "was";
+        description.append(number, collector, was);
         figure.append(description);
-        return number;
+        return { number, was };
       };
       row.append(figure);
       return { legacy: value("legacy"), incremental: value("incremental") };
     });
+    this.#values = values.map(({ legacy, incremental }) => ({ legacy: legacy.number, incremental: incremental.number }));
+    this.#was = values.map(({ legacy, incremental }) => ({ legacy: legacy.was, incremental: incremental.was }));
     for (const collector of COLLECTORS) {
       const column = this.#column(collector);
       /** @type {HTMLElement} */ (column.querySelector("h2")).id = collector;
@@ -680,6 +733,14 @@ class GcWidget extends HTMLElement {
     this.#records = { legacy: [], incremental: [] };
     this.#figures = {};
     this.#drawn = entry.request;
+    for (const part of root.querySelectorAll("[data-mark]")) delete /** @type {HTMLElement} */ (part).dataset.mark;
+    entry.marks.forEach((mark, i) => {
+      const [kind, name] = mark.split(".");
+      const part = kind === "figure"
+        ? root.querySelector(`[data-figure="${name}"]`)
+        : root.querySelector(`[data-collector="${kind}"] [data-panel="${name}"]`);
+      /** @type {HTMLElement} */ (part).dataset.mark = String(i + 1);
+    });
     if (this.#held.has(entry)) {
       const source = /** @type {Source} */ (this.#source);
       try {
@@ -714,6 +775,9 @@ class GcWidget extends HTMLElement {
     const entry = /** @type {Entry} */ (this.#entry);
     let request = structuredClone(sent);
     let fresh = true;
+    // The figures the notes compare against: the runs the charts showed, once they finished.
+    this.#before = this.#finished;
+    this.#finished = null;
     const root = /** @type {ShadowRoot} */ (this.shadowRoot);
     /** @type {HTMLElement} */ (root.querySelector(".error")).hidden = true;
     // What the worker sends for the request, which the widget keeps once both
@@ -760,7 +824,9 @@ class GcWidget extends HTMLElement {
       },
       done: () => {
         const { legacy, incremental } = figures;
-        if (spelled && legacy && incremental) this.#kept.keep(request, entry.controls, { ...spelled, records, figures: { legacy, incremental } });
+        if (!legacy || !incremental) return;
+        if (this.#figures === figures) this.#finished = { legacy, incremental };
+        if (spelled) this.#kept.keep(request, entry.controls, { ...spelled, records, figures: { legacy, incremental } });
       },
       // The legend's editor shows a refusal beside the field the reader changed,
       // and the source under its box, setting back a switch that waited on it.
@@ -1134,9 +1200,16 @@ class GcWidget extends HTMLElement {
         return figures && read(figures, collector);
       });
       const known = values.filter((value) => value !== undefined);
+      const before = this.#before;
+      const was = before && COLLECTORS.map((collector) => read(before[collector], collector));
+      const wasKnown = (was ?? []).filter((value) => value !== undefined);
       COLLECTORS.forEach((collector, j) => {
         const value = values[j];
-        this.#values[i][collector].textContent = value === undefined ? "–" : show(value, known);
+        const text = value === undefined ? "–" : show(value, known);
+        this.#values[i][collector].textContent = text;
+        const earlier = was?.[j];
+        const then = earlier === undefined ? text : show(earlier, wasKnown);
+        this.#was[i][collector].textContent = value === undefined || then === text ? "" : `was ${then}`;
       });
     });
 
