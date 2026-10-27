@@ -1,7 +1,8 @@
 // @ts-check
 // What the widget's panels draw from a run's records: the heap by space, work in
 // bins and where each y-scale ends. Also what each panel reads under the pointer
-// or where the keys take it, and how a screen reader hears it.
+// or where the keys take it, how a screen reader hears it, and how tall the
+// panels stand.
 // The module imports neither Plot nor the DOM, so Node's test runner can load it:
 // see tests/panels.test.js.
 
@@ -26,6 +27,54 @@ export const LANES = {
   incremental: [["nursery"], ["aging"], ["pending", "visited"]],
 };
 export const PARTS = ["marked", "survived", "freed"];
+
+// The panels' heights in px at full size: a heap lane's plot, and the work and
+// budget panels with their axes.
+export const SIZES = { lane: 64, work: 160, budget: 130 };
+// The axes' room above and below a panel's plot, and the room above and below
+// each heap lane that neither axis takes.
+export const AXES = { top: 16, bottom: 32 };
+export const LANE_MARGIN = 12;
+// How far a fitted widget scales its plots from full size (#232): below a third
+// a lane is a line, and above 1.3 the bars outgrow what they say.
+const LEAST = 0.3, MOST = 1.3;
+
+/**
+ * The heap panel's height: its lanes, the whole heap's among them, the room
+ * between each two, and its axes.
+ * @param {number} lanes
+ * @param {number} lane
+ */
+export function heapHeight(lanes, lane) {
+  return lanes * (lane + 2 * LANE_MARGIN) - 2 * LANE_MARGIN + AXES.top + AXES.bottom;
+}
+
+/**
+ * The sizes that stack the heap, work and budget panels into a room of px: their
+ * plots scale alike from full size, within LEAST and MOST, and their axes and
+ * the room between lanes stay.
+ * @param {number} room
+ * @param {number} lanes
+ * @returns {typeof SIZES}
+ */
+export function fitted(room, lanes) {
+  const axes = AXES.top + AXES.bottom;
+  const fixed = heapHeight(lanes, 0) + 2 * axes;
+  const plots = lanes * SIZES.lane + SIZES.work - axes + SIZES.budget - axes;
+  const scale = Math.min(MOST, Math.max(LEAST, (room - fixed) / plots));
+  return {
+    lane: Math.round(SIZES.lane * scale),
+    work: axes + Math.round((SIZES.work - axes) * scale),
+    budget: axes + Math.round((SIZES.budget - axes) * scale),
+  };
+}
+
+/**
+ * How many ticks a heap lane's axis takes: as many as its height has room for.
+ * @param {number} lane
+ */
+export const laneTicks = (lane) => (lane < 30 ? 1 : lane < 40 ? 2 : 3);
+
 // The fields of a record, by position.
 export const CLOCK = 0, KIND = 1, MARKED = 2, WORK_TO_DO = 5;
 const SPACES_BEFORE = 7, SPACES_AFTER = 8, REACHABLE_BEFORE = 9, REACHABLE_AFTER = 10;

@@ -27,11 +27,10 @@ since Python can change them. An entry that offers no collector settings, as
 the guide's chapter on the work budget does, shows the toggle open, with no
 settings heading over it: there the constants are what the reader came to
 move (#182). The widget decides this per entry, since the guide's one widget
-holds every chapter's steps: an entry with settings shows the toggle as the
-reader last left it under settings, closed at first. The real object's size
-stays on the playground:
-it sets the simulator's scale, and moving it would change what every other
-control's units mean (ADR 0002).
+holds every chapter's steps, until the reader opens or closes the toggle.
+From then on it stays as they left it on every entry (#232). The real
+object's size stays on the playground: it sets the simulator's scale, and
+moving it would change what every other control's units mean (ADR 0002).
 
 Each new control ranges about the PEP's value and widens to take in the
 request's own: threshold1 from 1, which a widget's request needs, to 40;
