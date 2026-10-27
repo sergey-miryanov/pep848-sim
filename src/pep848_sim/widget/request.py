@@ -61,7 +61,7 @@ def parse(request: str) -> Request:
     """The request a widget sends, refused unless it holds every field but the
     constants, and no other."""
     values = json.loads(request)
-    # run() checks it only once the worker reads the first part, so the request
+    # run() checks it when the worker reads the first part, so the request
     # refuses it before either run starts.
     check_every(values.get("every", 1))
     if "source" in values:

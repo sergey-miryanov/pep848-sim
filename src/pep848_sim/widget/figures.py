@@ -34,7 +34,7 @@ class Figures(NamedTuple):
     # derives the same floats as CPython (ADR 0007).
     @property
     def work_per_mb(self) -> float | None:
-        """None until the run has allocated, as a gc.collect() at clock 0 finds it."""
+        """None until the run has allocated: a gc.collect() at clock 0 comes first."""
         return self.work * 1000 / self.allocated if self.allocated else None
 
     @property

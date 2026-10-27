@@ -77,7 +77,8 @@ class Constants:
         return real * self.real_object_size // 1024
 
     def real(self, simulated: int) -> int:
-        """A count of simulated objects in the real objects they stand for."""
+        """A count of simulated objects in the real objects they stand for,
+        rounded down."""
         return simulated * 1024 // self.real_object_size
 
 
