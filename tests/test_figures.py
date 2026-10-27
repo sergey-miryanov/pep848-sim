@@ -94,6 +94,14 @@ def test_work_per_mb_divides_the_runs_work_by_the_mb_allocated_so_far() -> None:
     assert Figures().add(records).work_per_mb == 21.5
 
 
+def test_a_run_that_has_allocated_nothing_has_no_work_per_mb() -> None:
+    # A gc.collect() at clock 0, before the workload allocates.
+    records = [record(clock=0, kind="full", survived=1)]
+
+    assert Figures().add(records).work_per_mb is None
+    assert Figures().add(records).row()[2] is None
+
+
 def test_yield_is_the_share_of_the_objects_the_run_examined_that_it_freed() -> None:
     # 20 freed of 100 examined; the 30 marked were never examined.
     records = [
