@@ -150,10 +150,6 @@ def test_a_request_reads_its_source_once() -> None:
             "line 4 of your workload: a real object of 0 B takes no room",
         ),
         (
-            "structures = []\nsettings = Settings(threshold1=0)",
-            "a threshold1 of 0 leaves the incremental collector no aging space",
-        ),
-        (
             "structures = [Structure('tree', 10)]",
             "line 3 of your workload: 'tree' is no shape",
         ),

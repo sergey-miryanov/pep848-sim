@@ -41,10 +41,12 @@ def _control(request: Request, path: str) -> Control:
             high = request.run_length // 10
             return _ranged(path, "threshold0", "kB", value, low, max(high, value))
         case ["settings", "threshold1"]:
-            # From 1, since a widget's request refuses 0, to 40 half-spaces, four
-            # times the PEP's 10, or the request's own.
+            # From 0, which the incremental collector runs as 1, to 40 half-spaces,
+            # four times the PEP's 10, or the request's own.
             value = request.settings.threshold1
-            return Control(path, "threshold1", "count", value, 1, max(40, value), 1)
+            return Control(
+                path, "threshold1", "count", value, min(0, value), max(40, value), 1
+            )
         case ["settings", "threshold2"]:
             # The legacy collector's alone: the gen 1 collections before a gen 2.
             value = request.settings.threshold2

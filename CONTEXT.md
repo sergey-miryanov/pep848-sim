@@ -312,7 +312,7 @@ _Avoid_: half space (two words), segment, unit (bare)
 
 **Aging generation**:
 The generation between the nursery and the old generation: `threshold1 / 2`
-aging spaces, rounded up.
+aging spaces, rounded up, and one at least.
 _Avoid_: gen1, middle generation, young generation (that is nursery and aging
 together)
 
