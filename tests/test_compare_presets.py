@@ -1,5 +1,6 @@
 from benchmarks import Benchmark, Tally
 from compare_presets import report, tally
+from pep848_sim.collectors.collector import Constants
 from test_figures import record
 
 
@@ -25,6 +26,15 @@ def test_tally_files_each_record_where_the_runtimes_stats_would() -> None:
         },
         # What the young collection examined.
         first_examined=64,
+    )
+
+
+def test_tally_counts_real_objects_by_the_runs_constants() -> None:
+    records = [record(kind="young", survived=3, freed=1)]
+
+    # 8 real objects to a simulated one at 128 B each.
+    assert tally(records, Constants(real_object_size=128)) == Benchmark(
+        1, {(0, "automatic"): Tally(1, 32, 8)}, 32
     )
 
 

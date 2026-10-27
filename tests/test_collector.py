@@ -8,6 +8,7 @@ from hypothesis import strategies as st
 from pep848_sim.collectors.collector import (
     Collector,
     CollectorSettings,
+    Constants,
     FullKind,
     Record,
     Space,
@@ -356,6 +357,7 @@ def test_each_record_holds_the_heap_and_its_reachable_part_before_and_after(
     Workload(heap, WorkloadParameters(churn, tuple(structures), seed)).run_to(run_kb)
 
     records: list[Record] = collector.records
+    assert [record.work for record in records] == [c.work for c in collector.counts]
     for record, walk in zip(records, collector.walks, strict=True):
         assert (
             sum(record.spaces_before),
@@ -368,3 +370,10 @@ def test_each_record_holds_the_heap_and_its_reachable_part_before_and_after(
         assert uncollected(record.spaces_before, record.reachable_before) >= (
             uncollected(previous.spaces_after, previous.reachable_after)
         )
+
+
+def test_constants_count_simulated_objects_in_the_real_ones_they_stand_for() -> None:
+    # 1024 / real_object_size real objects to a simulated one (ADR 0002).
+    assert Constants().real(3) == 48
+    assert Constants(real_object_size=128).real(3) == 24
+    assert Constants().simulated(Constants().real(5)) == 5
