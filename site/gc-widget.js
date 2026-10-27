@@ -1249,8 +1249,15 @@ class GcWidget extends HTMLElement {
     });
   }
 
+  // PROTOTYPE (#229): the panels' sizes a page sets, over fit's or full size.
+  /** @type {typeof SIZES | null} */
+  protoSizes = null;
+  protoRedraw() {
+    this.#schedule();
+  }
+
   #draw() {
-    this.#size(this.hasAttribute("fit") ? this.#fitted() : SIZES);
+    this.#size(this.protoSizes ?? (this.hasAttribute("fit") ? this.#fitted() : SIZES));
     FIGURES.forEach(({ read, show }, i) => {
       const values = COLLECTORS.map((collector) => {
         const figures = this.#figures[collector];
