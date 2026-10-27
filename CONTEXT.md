@@ -206,9 +206,27 @@ _Avoid_: knob (that is the parameter, setting or constant it moves), input,
 option
 
 **Guide**:
-The long-form page that explains PEP 848 section by section, each section
-embedding a widget with its preset and one or two controls.
+The page that explains PEP 848 a chapter at a time, as steps beside one
+compact widget. A chapter not yet in steps opens in the long form, the guide as
+it stood, where each section embeds a widget of its own.
 _Avoid_: tutorial, article, docs
+
+**Chapter**:
+One part of PEP 848 the guide explains, such as the young generation: a list
+of steps, which share their controls.
+_Avoid_: section (the long form's), page, lesson
+
+**Step**:
+One stop in a chapter: a sentence or two, the widget's request, and the panels
+and figures it marks, each with a note on what to see there. Back and Next walk
+the steps, and the widget redraws for each.
+_Avoid_: slide, frame (that is a root), stage
+
+**Mark**:
+A step's outline round a panel or a figure, with a numbered badge whose note
+in the guide's rail says what to see there. A marked figure's numbers take a
+tint.
+_Avoid_: highlight, callout, annotation
 
 **Playground**:
 The page with one widget whose legend edits the whole workload, the run

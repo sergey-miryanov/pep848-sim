@@ -119,7 +119,9 @@ the frames pinned along the top, and fits it into its frame. The objects keep
 to ink, and a number on each structure's first object points to its line in
 the legend under the controls, since the panels below take all eight of the
 palette's hues. The graph moves the figures down about 150 px. On the
-playground the legend edits the workload (ADR 0013).
+playground the legend edits the workload (ADR 0013). A compact widget, as the
+guide's, leaves out the graph and its legend, so that its charts come up
+beside a step's text (ADR 0020).
 
 ## Considered Options
 
