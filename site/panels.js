@@ -35,8 +35,8 @@ export const SIZES = { lane: 64, work: 160, budget: 130 };
 // each heap lane that neither axis takes.
 export const AXES = { top: 16, bottom: 32 };
 export const LANE_MARGIN = 12;
-// How far a fitted widget scales its plots from full size (#232): below a third
-// a lane is a line, and above 1.3 the bars outgrow what they say.
+// How far a fitted widget scales its plots from full size (#232): below 0.3 a
+// lane is a line, and above 1.3 the bars outgrow what they say.
 const LEAST = 0.3, MOST = 1.3;
 
 /**

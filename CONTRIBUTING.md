@@ -48,7 +48,7 @@ lists them.
 | `check-py` | `lint`, `typecheck` and `test`: the Python |
 | `check-ts` | tsc over the site's JavaScript and its tests |
 | `test-js` | Node's test runner over the widget's JavaScript |
-| `test-pyodide` | the pinned runs' digests under Pyodide, in Node: about 13 s |
+| `test-pyodide` | the pinned runs' digests under Pyodide, in Node: 15 to 21 s in CI |
 | `test` | pytest, Hypothesis invariants included, with the coverage gate |
 | `lint` | ruff's checker and formatter |
 | `typecheck` | mypy and pyrefly, both strict |

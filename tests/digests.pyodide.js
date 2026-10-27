@@ -2,7 +2,7 @@
 // The digests tests/digests.json pins under CPython, checked under Pyodide in
 // Node, at the version the site's worker loads (ADR 0007): `just test-pyodide`.
 // Each pinned request runs through pep848_sim.widget.request, the worker's own
-// path, from the simulator's sources as `just site` zips them.
+// path, from the sources in src/ that `just site` zips.
 
 // @ts-expect-error: tsc has no types for Node's modules, and the project takes
 // no package for them.

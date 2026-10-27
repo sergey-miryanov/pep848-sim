@@ -24,7 +24,11 @@ its legend. Below 700 px a chart beside another would keep less than about
 220 px of plot, so the incremental column moves under the legacy one. The
 crosshair still marks both columns at one clock, and a reader who scrolls to
 the other column finds the same clock marked there. A tooltip with no
-room on either side of its mark covers the mark.
+room on either side of its mark covers the mark. The guide's widget lays out
+its own way (ADR 0020): beside the rail, a compact widget keeps both columns
+side by side below 700 px, so a step's text stays near both, and on a phone a
+narrow widget shows one collector at a time at the full width, through two
+tabs, where two columns stood 166 px wide each.
 
 The heap panel's top lane draws the whole heap and its reachable part, and
 shades the gap between them, the uncollected garbage. Below it, the nursery,
@@ -61,7 +65,7 @@ bars in the bottom seventh of the panel. The panel cuts shutdown's bin at the
 scale's end instead: the bar stops square there, two slanted gaps cross it
 below the end, and the bin's whole work stands above it. Its tooltip gives
 that work in full. The scale keeps the work of the workload's gc.collect()
-calls, which make most of create_gc_cycles' work. Where a run's only work is
+calls, which make most of create_gc_cycles' work. If a run's only work is
 shutdown's, the scale fits that.
 
 Each panel reads its values under the pointer (#115). On the heap panel and
@@ -176,7 +180,7 @@ beside a step's text (ADR 0020).
   first did: a collection at a bin's end would read the bin after its work,
   and a step on the heap would outline the wrong bar.
 - A small diagram for each structure, laid out level by level under the
-  controls: it showed each shape plainly, but read as a strip of thumbnails
+  controls: it showed each shape, but read as a strip of thumbnails
   that ran past the widget's edge.
 - A graph for each preset after its paragraph under "The workloads": the
   reader had to scroll from the widget down to it and back.
