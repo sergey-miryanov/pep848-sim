@@ -119,6 +119,8 @@ test("the thresholds make a nursery of two half-spaces and aging of threshold1 h
     aging: "Incremental aging: 1 space, 200 kB",
   });
   assert.equal(describeYoung(2000, 9).aging, "Incremental aging: 5 spaces, 20 MB");
+  // One at least, as the incremental collector runs a threshold1 below 1 as 1.
+  assert.equal(describeYoung(2000, 0).aging, "Incremental aging: 1 space, 4 MB");
 });
 
 test("the playground's legend gives the collector constants and the real object's size", () => {

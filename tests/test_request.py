@@ -94,11 +94,6 @@ def test_the_fixed_request_is_the_one_its_digests_are_pinned_for() -> None:
         ),
         ('"every": 50', '"every": 0', "a part of 0 records holds none"),
         ('"every": 50', '"every": -1', "a part of -1 records holds none"),
-        (
-            '"threshold1": 10',
-            '"threshold1": 0',
-            "a threshold1 of 0 leaves the incremental collector no aging space",
-        ),
     ],
 )
 def test_a_request_the_simulator_cannot_run_names_what_it_cannot(
@@ -108,6 +103,20 @@ def test_a_request_the_simulator_cannot_run_names_what_it_cannot(
 
     with pytest.raises(ValueError, match=message):
         runs(request)
+
+
+@pytest.mark.parametrize("threshold1", [0, -1])
+def test_a_request_runs_a_threshold1_below_1_under_both_collectors(
+    threshold1: int,
+) -> None:
+    legacy, incremental = runs(
+        FIXED.replace('"threshold1": 10', f'"threshold1": {threshold1}')
+    )
+    one = runs(FIXED.replace('"threshold1": 10', '"threshold1": 1'))[1]
+
+    # The legacy collector takes it as given; the incremental one runs it as 1.
+    assert digest(records(legacy)) != PINNED["fixed"]["legacy"]
+    assert records(incremental) == records(one)
 
 
 def test_a_request_from_before_built_in_frame_opens_and_is_written_with_it() -> None:

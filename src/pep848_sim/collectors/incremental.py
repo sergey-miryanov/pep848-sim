@@ -35,8 +35,10 @@ class IncrementalCollector(Collector):
         constants: Constants | None = None,
     ) -> None:
         super().__init__(settings, constants)
-        # threshold1 counts half-spaces, two to an aging space.
-        self.aging = [Space(self) for _ in range(-(-self.settings.threshold1 // 2))]
+        # threshold1 counts half-spaces, two to an aging space. Below 1 it runs as
+        # 1, as the reference branch's gc.set_threshold() clamps it.
+        threshold1 = max(1, self.settings.threshold1)
+        self.aging = [Space(self) for _ in range(-(-threshold1 // 2))]
         self.pending_space = Space(self)
         self.visited_space = Space(self)
         self.reachable = Space(self)

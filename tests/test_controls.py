@@ -57,7 +57,7 @@ def test_the_collectors_other_settings_and_constants_range_about_the_peps() -> N
     ]
 
     assert controls(SPELLED_OUT, paths) == [
-        Control("settings.threshold1", "threshold1", "count", 10, 1, 40, 1),
+        Control("settings.threshold1", "threshold1", "count", 10, 0, 40, 1),
         Control(
             "settings.threshold2", "threshold2 (legacy only)", "count", 10, 0, 40, 1
         ),
@@ -82,7 +82,8 @@ def test_the_collectors_other_settings_and_constants_range_about_the_peps() -> N
 @pytest.mark.parametrize(
     ("path", "value", "low", "high"),
     [
-        ("settings.threshold1", 50, 1, 50),
+        ("settings.threshold1", 50, 0, 50),
+        ("settings.threshold1", -1, -1, 40),
         ("settings.threshold2", 60, 0, 60),
         ("settings.threshold2", -1, -1, 40),
         ("constants.initial_work_budget", -300_000, -300_000, 50_000),

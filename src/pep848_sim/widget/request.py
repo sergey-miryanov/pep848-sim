@@ -69,9 +69,7 @@ def parse(request: str) -> Request:
         workload, settings, run_length, constants = source.read(values["source"])
         for structure in workload.structures:
             _check(structure)
-        return Request(
-            workload, _checked(settings), run_length, values["every"], constants
-        )
+        return Request(workload, settings, run_length, values["every"], constants)
     if "preset" in values:
         values = _values(values, _PRESET_FIELDS, "request", (*_OPTIONAL, "changes"))
         preset = PRESETS.get(values["preset"])
@@ -149,9 +147,7 @@ def _names(parameters: type) -> list[str]:
 
 
 def _settings(values: dict[str, Any]) -> CollectorSettings:
-    return _checked(
-        CollectorSettings(**_values(values, _names(CollectorSettings), "settings"))
-    )
+    return CollectorSettings(**_values(values, _names(CollectorSettings), "settings"))
 
 
 def _constants(values: dict[str, Any]) -> Constants:
@@ -162,17 +158,6 @@ def _constants(values: dict[str, Any]) -> Constants:
     return Constants(
         **constants | {"long_lived_ratio": Fraction(constants["long_lived_ratio"])}
     )
-
-
-def _checked(settings: CollectorSettings) -> CollectorSettings:
-    # The legacy collector takes a threshold1 of 0, but the incremental collector
-    # counts its aging spaces from it, and a widget runs both.
-    if settings.threshold1 < 1:
-        raise ValueError(
-            f"a threshold1 of {settings.threshold1} leaves the incremental collector"
-            " no aging space"
-        )
-    return settings
 
 
 def _values(

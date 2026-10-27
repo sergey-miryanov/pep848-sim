@@ -393,6 +393,20 @@ def test_an_older_cycle_that_a_newer_one_holds_waits_for_the_next_sweep() -> Non
     assert heap.uncollected_garbage == 0
 
 
+@pytest.mark.parametrize("threshold1", [0, -1])
+def test_a_threshold1_below_1_runs_as_1(threshold1: int) -> None:
+    # As the reference branch's gc.set_threshold() clamps it: one aging space.
+    collector = IncrementalCollector(CollectorSettings(threshold1=threshold1))
+    heap = Heap(collector)
+    heap.allocate()
+
+    collector.collect()
+    collector.collect()
+
+    assert len(collector.aging) == 1
+    assert [record.kind for record in collector.records] == ["old", "young"]
+
+
 def test_each_collection_leaves_a_record_of_the_heap_before_and_after_it() -> None:
     collector = IncrementalCollector(CollectorSettings(threshold0=5, threshold1=2))
     heap = Heap(collector)
