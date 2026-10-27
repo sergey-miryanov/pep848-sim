@@ -1,4 +1,4 @@
-// @ts-check
+// @ts-nocheck PROTOTYPE (guide fit)
 // <gc-widget>: one embedding of the simulator on a page. It reads its request
 // from the JSON script inside it, asks the page's worker for both runs once a
 // reader comes near it, and draws them as they stream in, as ADR 0008 lays them
@@ -80,17 +80,18 @@ const TICK = 6;
 
 // About this many bins of work a run, each a whole number of collection intervals.
 const BINS = 40;
+// PROTOTYPE (guide fit): the page may change these, through protoHeights.
 const HEIGHTS = { work: 160, budget: 130 };
 const MARGINS = { marginLeft: 48, marginRight: 72, marginTop: 16, marginBottom: 32 };
 // A lane of the heap panel: its plot, without its margins, and the margin above
 // and below it that neither axis's labels take.
-const LANE_HEIGHT = 64;
+let LANE_HEIGHT = 64;
 const LANE_MARGIN = 12;
 // About how many ticks a lane's y-axis takes.
-const LANE_TICKS = 3;
+let LANE_TICKS = 3;
 // The heap panel's height: the whole heap's lane over the spaces', the margin
 // between each two, and the axes' margins above the first and below the last.
-const HEAP_HEIGHT = (LANES.legacy.length + 1) * (LANE_HEIGHT + 2 * LANE_MARGIN) - 2 * LANE_MARGIN
+let HEAP_HEIGHT = (LANES.legacy.length + 1) * (LANE_HEIGHT + 2 * LANE_MARGIN) - 2 * LANE_MARGIN
   + MARGINS.marginTop + MARGINS.marginBottom;
 // The widest a bar of work grows, in px. A wider bin pads its bar on both sides.
 const BAR = 24;
@@ -275,9 +276,9 @@ const TEMPLATE = `
   .plot { position: relative; }
   /* Each chart keeps the height it draws at from the start, so a widget that
      has not asked for its runs yet takes its full room on the page. */
-  [data-panel="heap"] .chart { min-height: ${HEAP_HEIGHT}px; }
-  [data-panel="work"] .chart { min-height: ${HEIGHTS.work}px; }
-  [data-panel="budget"] .chart { min-height: ${HEIGHTS.budget}px; }
+  [data-panel="heap"] .chart { min-height: var(--proto-heap, ${HEAP_HEIGHT}px); }
+  [data-panel="work"] .chart { min-height: var(--proto-work, ${HEIGHTS.work}px); }
+  [data-panel="budget"] .chart { min-height: var(--proto-budget, ${HEIGHTS.budget}px); }
   .plot:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; border-radius: 4px; }
   .crosshair, .outline, .tip { position: absolute; pointer-events: none; }
   .crosshair { width: 1px; background: var(--text-secondary); }
@@ -424,7 +425,8 @@ class GcWidget extends HTMLElement {
    * Whether the collector constants' controls show, kept from one entry to the
    * next. They start open only on a widget that offers no collector settings.
    */
-  #constantsOpen = false;
+  // PROTOTYPE (guide fit): null until the reader opens or closes the toggle.
+  #constantsOpen = null;
   #frame = 0;
   /** What the last redraw laid out, which the pointer's marks follow; null before the clock has a length. */
   /** @type {Layout | null} */
@@ -722,7 +724,7 @@ class GcWidget extends HTMLElement {
     this.#entry = entry;
     const root = /** @type {ShadowRoot} */ (this.shadowRoot);
     /** @type {HTMLSelectElement} */ (root.querySelector(".entries select")).value = entry.name;
-    const row = /** @type {HTMLElement} */ (root.querySelector(".controls"));
+    const row = /** @type {HTMLElement} */ (this.#row());
     row.replaceChildren();
     row.hidden = true;
     this.#sliders.clear();
@@ -960,7 +962,7 @@ class GcWidget extends HTMLElement {
    * workload's, the collector settings', or the collector constants' under them.
    */
   #show(/** @type {Control[]} */ controls) {
-    const row = /** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".controls"));
+    const row = /** @type {HTMLElement} */ (this.#row());
     row.hidden = !controls.length;
     for (const [path, label, unit, value, min, max, step] of controls) {
       let slider = this.#sliders.get(path);
@@ -1026,7 +1028,7 @@ class GcWidget extends HTMLElement {
    * @returns {HTMLElement}
    */
   #group(path) {
-    const row = /** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".controls"));
+    const row = /** @type {HTMLElement} */ (this.#row());
     const [first] = path.split(".");
     const kind = first === "settings" || first === "constants" ? first : "workload";
     const found = /** @type {HTMLElement | null} */ (row.querySelector(`[data-group="${kind}"]`));
@@ -1041,11 +1043,12 @@ class GcWidget extends HTMLElement {
       // Under the collector settings, closed unless the reader opened it, or
       // open in their place where the entry shows none (ADR 0017).
       const settings = /** @type {Entry} */ (this.#entry).controls.some((control) => control.startsWith("settings."));
-      toggle.open = !settings || this.#constantsOpen;
-      toggle.addEventListener("toggle", () => {
-        if (settings) this.#constantsOpen = toggle.open;
-      });
+      toggle.open = this.#constantsOpen ?? !settings;
       const summary = document.createElement("summary");
+      // PROTOTYPE (guide fit): the reader's choice holds for every entry after.
+      summary.addEventListener("click", () => {
+        this.#constantsOpen = !toggle.open;
+      });
       summary.textContent = "Collector constants, which no Python API changes";
       toggle.append(summary, group);
       (settings ? this.#group("settings") : row).append(toggle);
@@ -1181,6 +1184,24 @@ class GcWidget extends HTMLElement {
     const error = /** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".error"));
     error.textContent = message;
     error.hidden = false;
+  }
+
+  /** PROTOTYPE (guide fit): a row of controls the page put elsewhere, or the widget's own. */
+  #row() {
+    return this.protoControls ?? /** @type {ShadowRoot} */ (this.shadowRoot).querySelector(".controls");
+  }
+
+  /** PROTOTYPE (guide fit): redraw with a lane, work and budget height of the page's. */
+  protoHeights({ lane, work, budget }) {
+    LANE_HEIGHT = lane;
+    LANE_TICKS = lane < 30 ? 1 : lane < 40 ? 2 : 3;
+    HEIGHTS.work = work;
+    HEIGHTS.budget = budget;
+    HEAP_HEIGHT = (LANES.legacy.length + 1) * (LANE_HEIGHT + 2 * LANE_MARGIN) - 2 * LANE_MARGIN + MARGINS.marginTop + MARGINS.marginBottom;
+    this.style.setProperty("--proto-heap", `${HEAP_HEIGHT}px`);
+    this.style.setProperty("--proto-work", `${work}px`);
+    this.style.setProperty("--proto-budget", `${budget}px`);
+    this.#schedule();
   }
 
   // At most one redraw an animation frame, of whatever records have arrived.
