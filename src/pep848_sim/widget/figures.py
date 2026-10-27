@@ -33,8 +33,9 @@ class Figures(NamedTuple):
     # The ratios divide int by int, which Python rounds correctly, so Pyodide
     # derives the same floats as CPython (ADR 0007).
     @property
-    def work_per_mb(self) -> float:
-        return self.work * 1000 / self.allocated
+    def work_per_mb(self) -> float | None:
+        """None until the run has allocated, as a gc.collect() at clock 0 finds it."""
+        return self.work * 1000 / self.allocated if self.allocated else None
 
     @property
     def yield_(self) -> float | None:
@@ -42,7 +43,7 @@ class Figures(NamedTuple):
         examined = self.freed + self.survived
         return self.freed / examined if examined else None
 
-    def row(self) -> tuple[int, int, float, float | None, int, int, int]:
+    def row(self) -> tuple[int, int, float | None, float | None, int, int, int]:
         """The figures in the order the widget shows them: what the worker sends
         the page."""
         return (

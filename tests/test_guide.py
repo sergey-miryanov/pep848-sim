@@ -71,6 +71,13 @@ def heap(record: Record) -> int:
     return sum(record.spaces_before)
 
 
+def work_per_mb(records: list[Record]) -> int:
+    """Work per MB to a whole number, as the widget writes 284."""
+    per_mb = figures(records).work_per_mb
+    assert per_mb is not None
+    return round(per_mb)
+
+
 def yield_percent(records: list[Record]) -> float:
     """Yield to a tenth of a point, as the widget writes 45.9%."""
     examined = figures(records).yield_
@@ -146,8 +153,8 @@ def test_the_incremental_collector_looks_later_and_keeps_less() -> None:
         [young] = [r for r in incremental if r.clock == clock and work(r)]
         assert young.freed
         assert young.survived == young.marked == 0
-    assert round(figures(legacy).work_per_mb) == 284
-    assert round(figures(incremental).work_per_mb) == 228
+    assert work_per_mb(legacy) == 284
+    assert work_per_mb(incremental) == 228
 
 
 def test_only_gen_1_and_gen_2_collections_fill_the_old_generation() -> None:
@@ -221,15 +228,15 @@ def test_the_incremental_collector_examines_them_once() -> None:
 
 def test_work_per_mb_reads_192_against_136() -> None:
     legacy, incremental = run("the-young-generation-5")
-    assert round(Figures().add(legacy).work_per_mb) == 192
-    assert round(Figures().add(incremental).work_per_mb) == 136
+    assert work_per_mb(legacy) == 192
+    assert work_per_mb(incremental) == 136
 
 
 def test_at_the_peps_threshold0_the_run_ends_before_a_young_collection() -> None:
     legacy, incremental = run("the-young-generation-6")
     assert not any(map(work, before_shutdown(incremental)))
     assert not any(record.kind == "gen 1" for record in legacy)
-    assert round(Figures().add(incremental).work_per_mb) == 82
+    assert work_per_mb(incremental) == 82
 
 
 def test_at_120_kb_a_gen_2_collection_fits_the_run() -> None:
@@ -239,8 +246,8 @@ def test_at_120_kb_a_gen_2_collection_fits_the_run() -> None:
     gen1 = [r.clock for r in legacy if r.kind == "gen 1" and r.clock < gen2]
     assert {b - a for a, b in pairwise(gen1)} == {1_440}
     assert Figures().add(incremental).sweeps == 0
-    assert round(Figures().add(legacy).work_per_mb) == 249
-    assert round(Figures().add(incremental).work_per_mb) == 136
+    assert work_per_mb(legacy) == 249
+    assert work_per_mb(incremental) == 136
 
 
 def test_a_longer_aging_generation_outlasts_the_run() -> None:
@@ -295,8 +302,8 @@ def test_the_legacy_collectors_tallest_bars_hold_gen_1_collections() -> None:
     assert max(work(r) for r in legacy if r.kind == "gen 1") == 12_003
     [gen2] = [r for r in legacy if r.kind == "gen 2"]
     assert (gen2.clock, work(gen2)) == (266_000, 2_240)
-    assert round(figures(legacy).work_per_mb) == 780
-    assert round(figures(incremental).work_per_mb) == 762
+    assert work_per_mb(legacy) == 780
+    assert work_per_mb(incremental) == 762
 
 
 def test_the_smallest_tree_runs_no_sweep() -> None:
@@ -383,7 +390,7 @@ def peak_garbage(name: str) -> tuple[float, float]:
 
 def wpm(name: str) -> tuple[int, int]:
     legacy, incremental = run(name)
-    return round(figures(legacy).work_per_mb), round(figures(incremental).work_per_mb)
+    return work_per_mb(legacy), work_per_mb(incremental)
 
 
 def test_without_cycles_start_ups_tree_is_the_peak_garbage() -> None:
