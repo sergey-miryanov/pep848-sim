@@ -190,6 +190,42 @@ def test_a_rebuild_interval_that_outlasts_the_run_stays_in_range() -> None:
 
 
 @pytest.mark.parametrize(
+    ("path", "field", "value", "run_length", "low", "high"),
+    [
+        # Above the high end the step rounds down to.
+        ("settings.threshold0", "settings.threshold0", 15_050, 150_000, 200, 15_100),
+        ("workload.structures.0.size", "0.size", 12_345, 4000, 100, 12_400),
+        (
+            "workload.structures.1.rebuild_interval",
+            "1.rebuild_interval",
+            80_050,
+            60_000,
+            40_000,
+            80_100,
+        ),
+        # Below the low end the step rounds up to, so it becomes the low end.
+        ("workload.structures.0.size", "0.size", 5, 150_000, 5, 149_005),
+    ],
+)
+def test_a_ranged_control_holds_a_value_off_its_step(
+    path: str, field: str, value: int, run_length: int, low: int, high: int
+) -> None:
+    values = json.loads(SPELLED_OUT) | {"run_length": run_length}
+    if field.startswith("settings."):
+        values["settings"][field.removeprefix("settings.")] = value
+    else:
+        index, name = field.split(".")
+        values["workload"]["structures"][int(index)][name] = value
+
+    [control] = controls(json.dumps(values), [path])
+
+    assert (control.min, control.max) == (low, high)
+    assert control.min <= control.value <= control.max
+    # Both ends on the slider's steps, which count from its least value.
+    assert (control.max - control.min) % control.step == 0
+
+
+@pytest.mark.parametrize(
     ("path", "refusal"),
     [
         ("workload.seed", "no control 'workload.seed'"),
