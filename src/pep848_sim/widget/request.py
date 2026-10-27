@@ -2,7 +2,8 @@
 and the records each part of a run holds, as JSON text, with the collector constants
 and the real object's size where the playground changes them. A request can name a
 preset in place of its workload and run length, so that a preset's numbers live in
-one place, or carry the playground's Python source of all of them. The worker passes
+one place, with changes to its spelled-out fields where the guide needs a variant, or
+carry the playground's Python source of all of them. The worker passes
 the text on as the page sent it, so no browser object reaches the simulator.
 """
 
@@ -43,8 +44,9 @@ class Request(NamedTuple):
 # The field a request may leave out, for its defaults.
 _OPTIONAL = ("constants",)
 # The fields of a request that names a preset, which brings its workload and run
-# length.
-_PRESET_FIELDS = ("preset", "settings", "every", *_OPTIONAL)
+# length. Its changes, which it may leave out too, map a path into the spelled-out
+# request, as a control's, to the value it takes there.
+_PRESET_FIELDS = ("preset", "settings", "every", "changes", *_OPTIONAL)
 # The fields of a request that carries a workload source, which sets its
 # workload, collector settings, run length and constants.
 _SOURCE_FIELDS = ("source", "every")
@@ -68,17 +70,23 @@ def parse(request: str) -> Request:
             workload, _checked(settings), run_length, values["every"], constants
         )
     if "preset" in values:
-        values = _values(values, _PRESET_FIELDS, "request", _OPTIONAL)
+        values = _values(values, _PRESET_FIELDS, "request", (*_OPTIONAL, "changes"))
         preset = PRESETS.get(values["preset"])
         if preset is None:
             raise ValueError(f"no preset {values['preset']!r}")
-        return Request(
+        named = Request(
             preset.workload,
             _settings(values["settings"]),
             preset.run_length,
             values["every"],
             _constants(values),
         )
+        if "changes" not in values:
+            return named
+        spelled = json.loads(dump(named))
+        for path, value in values["changes"].items():
+            _change(spelled, path, value)
+        return parse(json.dumps(spelled))
     values = _values(values, Request._fields, "request", _OPTIONAL)
     return Request(
         _workload(values["workload"]),
@@ -179,6 +187,24 @@ def _values(
         if name not in values and name not in optional:
             raise ValueError(f"{what} lacks {name!r}")
     return values
+
+
+def _change(spelled: dict[str, Any], path: str, value: Any) -> None:
+    """Set the field at a path of keys and indices joined by dots, as a control's,
+    refused unless the spelled-out request has it."""
+    *keys, last = path.split(".")
+    held: Any = spelled
+    try:
+        for key in keys:
+            held = held[int(key)] if isinstance(held, list) else held[key]
+        if isinstance(held, list):
+            held[int(last)] = value
+        elif last in held:
+            held[last] = value
+        else:
+            raise KeyError(last)
+    except KeyError, IndexError, ValueError, TypeError:
+        raise ValueError(f"a preset's request has no field {path!r}") from None
 
 
 def _workload(values: dict[str, Any]) -> WorkloadParameters:

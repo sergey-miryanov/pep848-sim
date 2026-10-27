@@ -37,10 +37,17 @@ inside its shadow root:
   before the last runs it asked for, as soon as the new value shows, where
   the two differ. The note keeps its line while empty, so the charts stay put.
 
-Until each chapter moves to steps, the guide links it to its section in the
-long form, `site/guide-long.html`, the guide as it stood, where each section
-embeds a widget of its own. The last chapter to move retires the long
-form (#221 to #228).
+The chapters moved to steps one at a time. Until each moved, the guide linked
+it to its section in a long form, the guide as it stood, where each section
+embedded a widget of its own. The last chapter to move retired the long form
+(#221 to #228).
+
+Where the long form linked to the playground for a variant of a preset's
+workload, such as async_tree_io_tg with parent pointers, a step runs the
+variant in the guide's widget. A request that names a preset can carry
+`changes`: each sets a field of the spelled-out request, by the path a control
+names it with, and a path the request lacks is refused. The preset's numbers
+stay in one place, and the step's request holds only what differs.
 
 ## Considered Options
 

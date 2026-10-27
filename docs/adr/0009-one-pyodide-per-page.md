@@ -13,11 +13,12 @@ that worker. A widget's re-run, after a reader changes a control, never
 starts Pyodide again: it costs the runs alone.
 
 A widget asks the worker for its runs once a reader comes within about a
-screen of it (#177). The guide's long form embeds a widget in each of its
-eight sections, and the worker takes every run it holds in turn, a part of
+screen of it (#177). The guide embedded a widget in each of its eight
+sections then, and the worker takes every run it holds in turn, a part of
 each (ADR 0006). A page that asked for every widget's runs on load would start
 sixteen, and the section a reader is at would get one turn in eight. The guide
-itself runs one widget, which steps through its chapters (ADR 0020). Pyodide
+now runs one widget, which steps through its chapters (ADR 0020), and no page
+embeds more than one, but a page that does still asks this way. Pyodide
 still starts with the page, so a widget the reader scrolls to waits only for
 its own runs. Each chart takes the height it draws at before it draws, so a
 widget that hasn't asked yet takes its full room, and the widgets below it
@@ -32,8 +33,8 @@ every request still running hears that its runs stopped.
 
 ## Considered Options
 
-- A worker per widget: the long form embeds one in every section, and each would
-  pay the start, and on a cold cache the download, again.
+- A worker per widget: the guide embedded one in every section then, and each
+  would pay the start, and on a cold cache the download, again.
 - Starting Pyodide when the reader reaches the first widget: the reader
   would wait out the whole start there.
 - Every widget asking for its runs on load: the sections below would take

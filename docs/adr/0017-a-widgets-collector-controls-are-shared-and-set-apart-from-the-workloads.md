@@ -23,10 +23,13 @@ Under the settings, a toggle, closed at first, opens the collector constants,
 multiplier and the long-lived ratio. The home page lets a reader move them, as
 the playground does (ADR 0013), so that the numbers the PEP fixes inside the
 collector show what they change. The thresholds stay the widget's first view,
-since Python can change them. A widget that offers no collector settings, as
-the guide's section on the work budget does, shows the toggle open at first,
-with no settings heading over it: there the constants are what the reader
-came to move (#182). The real object's size stays on the playground:
+since Python can change them. An entry that offers no collector settings, as
+the guide's chapter on the work budget does, shows the toggle open, with no
+settings heading over it: there the constants are what the reader came to
+move (#182). The widget decides this per entry, since the guide's one widget
+holds every chapter's steps: an entry with settings shows the toggle as the
+reader last left it under settings, closed at first. The real object's size
+stays on the playground:
 it sets the simulator's scale, and moving it would change what every other
 control's units mean (ADR 0002).
 

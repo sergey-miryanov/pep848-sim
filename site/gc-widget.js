@@ -485,8 +485,6 @@ class GcWidget extends HTMLElement {
       this.#fail(String(error instanceof Error ? error.message : error));
       return;
     }
-    // A widget that offers no collector settings shows its constants at once (ADR 0017).
-    this.#constantsOpen = !this.#entries.some(({ controls }) => controls.some((control) => control.startsWith("settings.")));
     const row = /** @type {HTMLElement} */ (root.querySelector(".figures"));
     const values = FIGURES.map(({ name, label }) => {
       const figure = document.createElement("div");
@@ -1040,15 +1038,16 @@ class GcWidget extends HTMLElement {
     if (kind === "constants") {
       group.setAttribute("aria-label", "Collector constants");
       const toggle = document.createElement("details");
-      toggle.open = this.#constantsOpen;
+      // Under the collector settings, closed unless the reader opened it, or
+      // open in their place where the entry shows none (ADR 0017).
+      const settings = /** @type {Entry} */ (this.#entry).controls.some((control) => control.startsWith("settings."));
+      toggle.open = !settings || this.#constantsOpen;
       toggle.addEventListener("toggle", () => {
-        this.#constantsOpen = toggle.open;
+        if (settings) this.#constantsOpen = toggle.open;
       });
       const summary = document.createElement("summary");
       summary.textContent = "Collector constants, which no Python API changes";
       toggle.append(summary, group);
-      // Under the collector settings, or in their place where the entry shows none.
-      const settings = /** @type {Entry} */ (this.#entry).controls.some((control) => control.startsWith("settings."));
       (settings ? this.#group("settings") : row).append(toggle);
       return group;
     }

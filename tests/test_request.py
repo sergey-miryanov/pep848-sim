@@ -214,6 +214,33 @@ def test_a_request_that_names_a_preset_holds_its_settings_and_no_workload(
         parse(PRESET.replace(old, new))
 
 
+def test_a_request_that_names_a_preset_can_change_its_fields() -> None:
+    request = json.loads(PRESET)
+    request["changes"] = {
+        "workload.churn.cycle_share": "1/10",
+        "workload.structures.0.size": 7,
+        "run_length": 4000,
+    }
+
+    parsed = parse(json.dumps(request))
+
+    assert parsed.workload.churn.cycle_share == Fraction(1, 10)
+    assert parsed.workload.structures[0].size == 7
+    assert parsed.run_length == 4000
+    assert parsed.workload.structures[1:] == CREATE_GC_CYCLES.workload.structures[1:]
+
+
+@pytest.mark.parametrize(
+    "path", ["workload.churn.cycle_size_mean", "workload.structures.9.size", "seed"]
+)
+def test_a_request_changes_only_the_fields_its_preset_has(path: str) -> None:
+    request = json.loads(PRESET)
+    request["changes"] = {path: 1}
+
+    with pytest.raises(ValueError, match="a preset's request has no field"):
+        parse(json.dumps(request))
+
+
 def test_expanding_a_request_spells_out_the_preset_it_names() -> None:
     expanded = json.loads(expand(PRESET))
 

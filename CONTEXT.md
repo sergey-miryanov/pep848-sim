@@ -207,14 +207,13 @@ option
 
 **Guide**:
 The page that explains PEP 848 a chapter at a time, as steps beside one
-compact widget. A chapter not yet in steps opens in the long form, the guide as
-it stood, where each section embeds a widget of its own.
+compact widget.
 _Avoid_: tutorial, article, docs
 
 **Chapter**:
 One part of PEP 848 the guide explains, such as the young generation: a list
 of steps, which share their controls.
-_Avoid_: section (the long form's), page, lesson
+_Avoid_: section, page, lesson
 
 **Step**:
 One stop in a chapter: a sentence or two, the widget's request, and the panels
