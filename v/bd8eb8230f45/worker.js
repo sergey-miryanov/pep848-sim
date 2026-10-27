@@ -3,8 +3,8 @@
 // and makes every widget's runs, a part of one run at a time, in turn (ADR 0006).
 // It answers each request with the controls the widget asked for, the ranges the
 // request allows, the request with any preset it names spelled out and a sample of
-// its object graph, then posts records as the runs yield them (ADR 0007), each part
-// with its run's figures so far.
+// its object graph, then posts records, unchanged, as the runs yield them (ADR
+// 0007), each part with its run's figures so far.
 
 // @ts-expect-error: an editor cannot fetch Pyodide's types from jsDelivr.
 import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.mjs";
