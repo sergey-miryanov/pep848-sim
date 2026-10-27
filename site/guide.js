@@ -1,10 +1,9 @@
 // @ts-check
 // The guide (ADR 0020): its chapters a step at a time, beside one compact
-// <gc-widget>. guide.json lists the chapters. A chapter with steps runs them
-// here, and one without links to its section in the long form until it moves
-// over. Each step is one of the widget's entries, with its request and the
-// parts it marks, so the page steps by writing the entry's name into the URL
-// fragment, which the widget follows, and the browser's Back steps back. The
+// <gc-widget>. guide.json lists the chapters and their steps. Each step is one
+// of the widget's entries, with its request and the parts it marks, so the
+// page steps by writing the entry's name into the URL fragment, which the
+// widget follows, and the browser's Back steps back. The
 // rail beside the widget shows the step's text and a note for each part it
 // marks, under the badge's number.
 
@@ -12,19 +11,18 @@
  * A part a step marks, as the widget names it, and what to see there.
  * @typedef {{ part: string, note: string }} Mark
  * @typedef {{ title: string, text: string, request: any, marks: Mark[] }} Step
- * A chapter's steps share its controls. One without steps lives in the long form.
- * @typedef {{ id: string, title: string, controls?: string[], steps?: Step[] }} Chapter
+ * A chapter's steps share its controls.
+ * @typedef {{ id: string, title: string, controls: string[], steps: Step[] }} Chapter
  * @typedef {{ chapter: Chapter, step: Step, index: number, name: string }} Stop
  */
 
 const ID = "guide";
-const LONG = "guide-long.html";
 
 /** @type {{ chapters: Chapter[] }} */
 const guide = await (await fetch(new URL("guide.json", import.meta.url))).json();
 /** Every chapter's steps in turn, which Back and Next walk. @type {Stop[]} */
 const stops = guide.chapters.flatMap((chapter) =>
-  (chapter.steps ?? []).map((step, index) => ({ chapter, step, index, name: `${chapter.id}-${index + 1}` })));
+  chapter.steps.map((step, index) => ({ chapter, step, index, name: `${chapter.id}-${index + 1}` })));
 
 const named = () => new URLSearchParams(location.hash.slice(1)).get(ID);
 const current = () => Math.max(0, stops.findIndex(({ name }) => name === named()));
@@ -57,7 +55,7 @@ const json = el("script");
 json.type = "application/json";
 json.textContent = JSON.stringify({
   entries: stops.map(({ chapter, step, name }) => ({
-    name, title: step.title, request: step.request, controls: chapter.controls ?? [], marks: step.marks.map(({ part }) => part),
+    name, title: step.title, request: step.request, controls: chapter.controls, marks: step.marks.map(({ part }) => part),
   })),
 });
 widget.append(json);
@@ -74,9 +72,9 @@ const count = el("span", "count");
 const buttons = el("div", "buttons");
 buttons.append(back, next, count);
 // A box of steps a chapter, each box as tall as its longest step.
-const boxes = new Map(guide.chapters.filter(({ steps }) => steps).map((chapter) => {
+const boxes = new Map(guide.chapters.map((chapter) => {
   const box = el("div", "steps");
-  for (const step of chapter.steps ?? []) {
+  for (const step of chapter.steps) {
     const part = el("div");
     const notes = el("ol", "notes");
     step.marks.forEach(({ note }, i) => {
@@ -97,23 +95,18 @@ const side = el("div", "side");
 side.append(rail, toc);
 /** @type {HTMLElement} */ (document.querySelector(".guide")).append(side, widget);
 
-/** The chapters, each a link to its first step or its long form, with the steps of the one shown. */
+/** The chapters, each a link to its first step, with the steps of the one shown. */
 function chapters() {
   const { chapter: shown, index: at } = stops[current()];
   toc.replaceChildren(...guide.chapters.map((chapter) => {
     const item = el("li");
-    const first = stops.find((stop) => stop.chapter === chapter);
     const link = el("a", "", chapter.title);
-    if (first) link.href = `#${ID}=${first.name}`;
-    else {
-      link.href = `${LONG}#${chapter.id}`;
-      link.append(el("span", "long", "long form"));
-    }
+    link.href = `#${ID}=${chapter.id}-1`;
     item.append(link);
     if (chapter !== shown) return item;
     item.className = "open";
     const steps = el("ol");
-    (chapter.steps ?? []).forEach((step, index) => {
+    chapter.steps.forEach((step, index) => {
       const button = el("button");
       button.type = "button";
       button.append(el("span", "n", String(index + 1)), el("span", "", step.title));
@@ -132,7 +125,7 @@ function show() {
   const at = current();
   const { chapter, index } = stops[at];
   label.textContent = chapter.title;
-  count.textContent = `Step ${index + 1} of ${chapter.steps?.length}`;
+  count.textContent = `Step ${index + 1} of ${chapter.steps.length}`;
   back.disabled = at === 0;
   next.disabled = at === stops.length - 1;
   for (const [owner, box] of boxes) {
