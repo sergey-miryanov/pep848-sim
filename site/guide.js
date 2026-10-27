@@ -7,6 +7,8 @@
 // rail beside the widget shows the step's text and a note for each part it
 // marks, under the badge's number. Beside the widget, the side holds still
 // from step to step, and the widget's charts end at the window's foot (#232).
+// On a phone the rail docks at the foot, and the widget shows one collector at
+// a time, with the notes by their badges (#229).
 
 /**
  * A part a step marks, as the widget names it, and what to see there.
@@ -52,16 +54,20 @@ const widget = document.createElement("gc-widget");
 widget.id = ID;
 widget.setAttribute("compact", "");
 widget.setAttribute("changes", "");
-// Beside the rail, the widget fits the window; on a phone, under it, #229 fits it.
+// Beside the rail, the widget fits the window; on a phone it narrows.
 const wide = matchMedia("(width >= 900px)");
-const fit = () => widget.toggleAttribute("fit", wide.matches);
+const fit = () => {
+  widget.toggleAttribute("fit", wide.matches);
+  widget.toggleAttribute("narrow", !wide.matches);
+};
 fit();
 wide.addEventListener("change", fit);
 const json = el("script");
 json.type = "application/json";
 json.textContent = JSON.stringify({
   entries: stops.map(({ chapter, step, name }) => ({
-    name, title: step.title, request: step.request, controls: chapter.controls, marks: step.marks.map(({ part }) => part),
+    name, title: step.title, request: step.request, controls: chapter.controls,
+    marks: step.marks.map(({ part }) => part), notes: step.marks.map(({ note }) => note),
   })),
 });
 widget.append(json);
@@ -107,7 +113,8 @@ toc.setAttribute("aria-label", "Chapters");
 // The widget's controls, in a block the reader collapses, which stays as they
 // left it from step to step.
 const settings = el("details", "settings");
-settings.open = true;
+// A phone starts with them collapsed, to show the charts first.
+settings.open = wide.matches;
 const controls = document.createElement("gc-controls");
 controls.setAttribute("for", ID);
 settings.append(el("summary", "", "Settings"), controls);
@@ -115,13 +122,21 @@ const side = el("div", "side");
 side.append(rail, toc, settings);
 /** @type {HTMLElement} */ (document.querySelector(".guide")).append(side, widget);
 
-/** Beside the widget, the side as tall as the window below its top. */
+/**
+ * Beside the widget, the side as tall as the window below its top. On a phone,
+ * room at the page's foot for the docked rail, which scrolling leaves clear.
+ */
 function size() {
   side.style.height = wide.matches ? `${innerHeight - (side.getBoundingClientRect().top + scrollY) - 12}px` : "";
+  const docked = wide.matches ? "" : `${Math.ceil(rail.getBoundingClientRect().height)}px`;
+  main.style.paddingBottom = docked && `calc(${docked} + 16px)`;
+  document.documentElement.style.scrollPaddingBottom = docked;
 }
+const main = /** @type {HTMLElement} */ (document.querySelector("main"));
 size();
 addEventListener("resize", size);
 wide.addEventListener("change", size);
+new ResizeObserver(size).observe(rail);
 
 // The intro's Close, which the page remembers.
 const intro = /** @type {HTMLElement} */ (document.querySelector(".intro"));

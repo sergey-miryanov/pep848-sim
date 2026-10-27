@@ -28,7 +28,9 @@
 // can mark the panels and figures its page talks about, each outlined with a
 // badge that numbers it. A widget with a `changes` attribute notes under each
 // figure what it read before the last runs it asked for, where the two differ.
-// A `fit` widget sizes its charts' plots to end at the window's foot, and a
+// A `narrow` widget shows one collector at a time, which tabs pick, and each
+// mark's note by its badge, and it scrolls a new entry's first mark into view
+// (#229). A `fit` widget sizes its charts' plots to end at the window's foot, and a
 // <gc-controls for="widget-id"> on its page takes its controls, so the guide
 // shows them in its rail (#232).
 //
@@ -71,8 +73,9 @@ import { Kept } from "./kept.js";
 /**
  * A workload a widget offers: its name in the URL fragment, its title in the
  * select, its request as the controls have set it, the paths of its controls,
- * and the parts it marks, as collector.panel or figure.name.
- * @typedef {{ name: string, title: string, request: any, controls: string[], marks: string[] }} Entry
+ * the parts it marks, as collector.panel or figure.name, and a note for each,
+ * which a narrow widget shows by its badge.
+ * @typedef {{ name: string, title: string, request: any, controls: string[], marks: string[], notes: string[] }} Entry
  */
 
 /** @type {Collector[]} */
@@ -171,6 +174,17 @@ function assign(/** @type {any} */ request, /** @type {string} */ path, /** @typ
 }
 
 /**
+ * A mark's number, as a note or a tab shows it beside the badge.
+ * @param {number} n
+ */
+function numbered(n) {
+  const number = document.createElement("span");
+  number.className = "number";
+  number.textContent = String(n);
+  return number;
+}
+
+/**
  * The entries a widget's JSON offers: the ones it lists, each with its own
  * controls and those the JSON lists for every entry, or else the one request it
  * holds, with the controls the widget's `controls` attribute names.
@@ -180,7 +194,7 @@ function assign(/** @type {any} */ request, /** @type {string} */ path, /** @typ
  */
 function entriesOf(json, controls) {
   if (!("entries" in json)) {
-    return [{ name: "", title: "", request: json, controls: (controls ?? "").split(/\s+/).filter(Boolean), marks: [] }];
+    return [{ name: "", title: "", request: json, controls: (controls ?? "").split(/\s+/).filter(Boolean), marks: [], notes: [] }];
   }
   /** @type {Entry[]} */
   const entries = json.entries;
@@ -189,12 +203,13 @@ function entriesOf(json, controls) {
   if (new Set(names).size < names.length) throw new Error("The widget lists two entries under one name.");
   /** @type {string[]} */
   const shared = json.controls ?? [];
-  for (const { name, marks = [] } of entries) {
+  for (const { name, marks = [], notes = [] } of entries) {
     const unknown = marks.find((mark) => !MARKS.includes(mark));
     if (unknown) throw new Error(`The widget's entry ${name} marks ${unknown}, which it has no part by.`);
+    if (notes.length > marks.length) throw new Error(`The widget's entry ${name} has more notes than marks.`);
   }
-  return entries.map(({ name, title, request, controls = [], marks = [] }) => ({
-    name, title, request, controls: [...controls, ...shared.filter((path) => !controls.includes(path))], marks,
+  return entries.map(({ name, title, request, controls = [], marks = [], notes = [] }) => ({
+    name, title, request, controls: [...controls, ...shared.filter((path) => !controls.includes(path))], marks, notes,
   }));
 }
 
@@ -342,6 +357,30 @@ const TEMPLATE = `
     :host([compact]) .columns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
     :host([compact]) .figure .value { font-size: 17px; }
   }
+  /* A narrow widget, as the guide's on a phone (#229): one collector at a time,
+     which the tabs pick, and each mark's note beside its badge. */
+  .tabs, .note { display: none; }
+  :host([narrow]) .tabs {
+    display: flex; position: sticky; top: 0; z-index: 3; margin: 0 0 12px; padding: 6px 0; background: var(--surface);
+  }
+  .tabs button {
+    flex: 1; display: flex; gap: 6px; justify-content: center; align-items: center; padding: 6px 8px; cursor: pointer;
+    font: inherit; font-size: 14px; border: 1px solid var(--baseline); background: var(--surface); color: var(--text-secondary);
+  }
+  .tabs button:first-child { border-radius: 6px 0 0 6px; }
+  .tabs button:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
+  .tabs button[aria-pressed="true"] { background: var(--text-primary); color: var(--surface); font-weight: 600; }
+  :host([narrow]) .columns { grid-template-columns: minmax(0, 1fr); }
+  :host([narrow]) [data-collector]:not(.shown) { display: none; }
+  :host([narrow]) .note { display: flex; gap: 6px; align-items: baseline; margin: 6px 0; font-size: 13px; color: var(--text-secondary); }
+  :host([narrow]) .notes { margin: 0 0 12px; }
+  .number {
+    flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%;
+    font-size: 10px; font-weight: 600; background: var(--text-primary); color: var(--surface);
+  }
+  .tabs button[aria-pressed="true"] .number { background: var(--surface); color: var(--text-primary); }
+  /* Room above a mark the widget scrolls to, for the tabs and the badge. */
+  :host([narrow]) [data-mark] { scroll-margin-top: 64px; }
 </style>
 <div class="frame"><div class="content">
 <p class="error" hidden></p>
@@ -363,6 +402,9 @@ const TEMPLATE = `
   <div class="graph" hidden></div>
 </div>
 <dl class="figures"></dl>
+<div class="tabs" role="group" aria-label="Collector">
+  <button type="button" data-tab="legacy"></button><button type="button" data-tab="incremental"></button>
+</div>
 <div class="columns">
   <section data-collector="legacy">
     <h2>Legacy collector</h2>
@@ -415,6 +457,8 @@ class GcWidget extends HTMLElement {
   /** The entry the widget shows. */
   /** @type {Entry | null} */
   #entry = null;
+  /** The collector a narrow widget shows. @type {Collector} */
+  #shown = "legacy";
   /** The request whose records the charts show, until a newer one's first records arrive. */
   /** @type {any} */
   #drawn = null;
@@ -484,6 +528,11 @@ class GcWidget extends HTMLElement {
     if (this.shadowRoot) return;
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = TEMPLATE;
+    for (const tab of root.querySelectorAll("[data-tab]")) {
+      const collector = /** @type {Collector} */ (/** @type {HTMLElement} */ (tab).dataset.tab);
+      tab.addEventListener("click", () => this.#pick(collector));
+    }
+    this.#pick("legacy");
     let json;
     try {
       json = JSON.parse(this.querySelector('script[type="application/json"]')?.textContent ?? "");
@@ -731,6 +780,7 @@ class GcWidget extends HTMLElement {
    * @param {Entry} entry
    */
   #enter(entry) {
+    const shifted = this.#entry !== null && this.#entry !== entry;
     this.#entry = entry;
     const root = /** @type {ShadowRoot} */ (this.shadowRoot);
     /** @type {HTMLSelectElement} */ (root.querySelector(".entries select")).value = entry.name;
@@ -743,14 +793,9 @@ class GcWidget extends HTMLElement {
     this.#records = { legacy: [], incremental: [] };
     this.#figures = {};
     this.#drawn = entry.request;
-    for (const part of root.querySelectorAll("[data-mark]")) delete /** @type {HTMLElement} */ (part).dataset.mark;
-    entry.marks.forEach((mark, i) => {
-      const [kind, name] = mark.split(".");
-      const part = kind === "figure"
-        ? root.querySelector(`[data-figure="${name}"]`)
-        : root.querySelector(`[data-collector="${kind}"] [data-panel="${name}"]`);
-      /** @type {HTMLElement} */ (part).dataset.mark = String(i + 1);
-    });
+    this.#markParts(entry);
+    // A narrow widget brings a new entry's first mark into view, once laid out.
+    if (shifted && this.hasAttribute("narrow")) requestAnimationFrame(() => this.#reveal());
     if (this.#held.has(entry)) {
       const source = /** @type {Source} */ (this.#source);
       try {
@@ -1183,6 +1228,74 @@ class GcWidget extends HTMLElement {
     frame.replaceChildren(svg);
   }
 
+  /**
+   * Mark the parts the entry names, each with a badge, and its note beside it
+   * for a narrow widget: under a panel's title, or under the figures for a
+   * figure. A narrow widget shows the collector of the first panel the entry
+   * marks, and each tab carries the numbers of its collector's marks.
+   * @param {Entry} entry
+   */
+  #markParts(entry) {
+    const root = /** @type {ShadowRoot} */ (this.shadowRoot);
+    for (const part of root.querySelectorAll("[data-mark]")) delete /** @type {HTMLElement} */ (part).dataset.mark;
+    for (const note of root.querySelectorAll(".note, .notes")) note.remove();
+    const figures = document.createElement("div");
+    figures.className = "notes";
+    entry.marks.forEach((mark, i) => {
+      const [kind, name] = mark.split(".");
+      const part = /** @type {HTMLElement} */ (kind === "figure"
+        ? root.querySelector(`[data-figure="${name}"]`)
+        : root.querySelector(`[data-collector="${kind}"] [data-panel="${name}"]`));
+      part.dataset.mark = String(i + 1);
+      if (entry.notes[i] === undefined) return;
+      const note = document.createElement("p");
+      note.className = "note";
+      note.append(numbered(i + 1), entry.notes[i]);
+      if (kind === "figure") figures.append(note);
+      else /** @type {HTMLElement} */ (part.querySelector("figcaption")).after(note);
+    });
+    if (figures.children.length) /** @type {HTMLElement} */ (root.querySelector(".figures")).after(figures);
+    const panel = entry.marks.find((mark) => !mark.startsWith("figure."));
+    this.#pick(panel ? /** @type {Collector} */ (panel.split(".")[0]) : this.#shown);
+  }
+
+  /**
+   * Show one collector's column in a narrow widget, and press its tab.
+   * @param {Collector} collector
+   */
+  #pick(collector) {
+    this.#shown = collector;
+    const root = /** @type {ShadowRoot} */ (this.shadowRoot);
+    const marks = this.#entry?.marks ?? [];
+    for (const kind of COLLECTORS) {
+      this.#column(kind).classList.toggle("shown", kind === collector);
+      const tab = /** @type {HTMLElement} */ (root.querySelector(`[data-tab="${kind}"]`));
+      tab.setAttribute("aria-pressed", String(kind === collector));
+      tab.replaceChildren(kind === "legacy" ? "Legacy" : "Incremental");
+      marks.forEach((mark, i) => {
+        if (mark.startsWith(`${kind}.`)) tab.append(numbered(i + 1));
+      });
+    }
+  }
+
+  /**
+   * Scroll a narrow widget's first mark into view, unless it stands wholly in
+   * view already, short of what the page's scroll padding covers.
+   */
+  #reveal() {
+    const shown = /** @type {HTMLElement[]} */ ([.../** @type {ShadowRoot} */ (this.shadowRoot).querySelectorAll("[data-mark]")])
+      .filter((part) => part.offsetParent !== null);
+    const first = shown.sort((a, b) => Number(a.dataset.mark) - Number(b.dataset.mark))[0];
+    if (!first) return;
+    const box = first.getBoundingClientRect();
+    const page = getComputedStyle(document.documentElement);
+    const top = (parseFloat(page.scrollPaddingTop) || 0) + parseFloat(getComputedStyle(first).scrollMarginTop);
+    const bottom = innerHeight - (parseFloat(page.scrollPaddingBottom) || 0);
+    if (box.top >= top && box.bottom <= bottom) return;
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    first.scrollIntoView({ block: "start", behavior: still ? "auto" : "smooth" });
+  }
+
   /** @param {Collector} collector */
   #column(collector) {
     return /** @type {HTMLElement} */ (
@@ -1281,7 +1394,8 @@ class GcWidget extends HTMLElement {
     const style = getComputedStyle(this);
     const token = (/** @type {string} */ name) => style.getPropertyValue(`--${name}`).trim();
     const xMax = runLength / 1000;
-    const width = this.#column("legacy").clientWidth;
+    // A narrow widget hides one column, which draws at the other's width.
+    const width = Math.max(...COLLECTORS.map((collector) => this.#column(collector).clientWidth));
 
     const heaps = { legacy: heap("legacy", this.#records.legacy), incremental: heap("incremental", this.#records.incremental) };
     // One y-scale for every lane in both columns, so that a height reads as the
