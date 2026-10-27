@@ -231,7 +231,14 @@ def test_a_request_that_names_a_preset_can_change_its_fields() -> None:
 
 
 @pytest.mark.parametrize(
-    "path", ["workload.churn.cycle_size_mean", "workload.structures.9.size", "seed"]
+    "path",
+    [
+        "workload.churn.cycle_size_mean",
+        "workload.structures.9.size",
+        "workload.structures.9",
+        "workload.structures.x",
+        "seed",
+    ],
 )
 def test_a_request_changes_only_the_fields_its_preset_has(path: str) -> None:
     request = json.loads(PRESET)
