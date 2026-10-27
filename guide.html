@@ -5,34 +5,49 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 guide</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="v/b9fb3a4755ad/theme.css">
-<script src="v/b9fb3a4755ad/theme.js"></script>
+<link rel="stylesheet" href="v/5d9a8adff93d/theme.css">
+<script src="v/5d9a8adff93d/theme.js"></script>
 <style>
   body {
     margin: 0;
     font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  main { max-width: 1440px; margin: 0 auto; padding: 24px 16px 48px; }
-  h1 { font-size: 28px; margin: 0 0 12px; }
-  .lede { max-width: 70ch; margin: 0 0 24px; }
+  main { max-width: 1440px; margin: 0 auto; padding: 12px 16px 8px; }
   a { color: inherit; }
-  nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 20px; font-size: 14px; color: var(--text-secondary); }
+  nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 12px; font-size: 14px; color: var(--text-secondary); }
   nav [aria-current] { color: var(--text-primary); font-weight: 600; text-decoration: none; }
+  /* The intro, a strip the reader closes once (#232). */
+  .intro {
+    display: flex; gap: 12px; align-items: baseline; margin: 0 0 12px; padding: 6px 12px; border-radius: 6px;
+    font-size: 14px; color: var(--text-secondary); background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  }
+  .intro[hidden] { display: none; }
+  .intro p { margin: 0; flex: 1; max-width: 110ch; }
+  .intro button {
+    font: inherit; font-size: 13px; padding: 2px 10px; cursor: pointer; border-radius: 6px;
+    border: 1px solid var(--baseline); background: var(--surface); color: var(--text-primary);
+  }
 
-  /* The rail beside the widget: the chapter, Back and Next, the step, and the
-     chapters with the steps of the one shown (ADR 0020). */
+  /* The side beside the widget: the chapter with the arrows that step, the
+     step, the chapters with the steps of the one shown, then the settings
+     (ADR 0020). */
   .guide { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 32px; align-items: start; }
-  .side { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; display: grid; gap: 16px; align-content: start; }
-  .rail { display: grid; gap: 16px; }
-  .chapter { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-muted); }
-  .buttons { display: flex; gap: 8px; align-items: center; }
+  .side { display: grid; gap: 16px; align-content: start; }
+  .rail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  /* One line, so a long chapter name never makes the row taller. */
+  .chapter {
+    margin: 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 13px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-muted);
+  }
+  .buttons { flex: none; display: flex; gap: 4px; align-items: center; }
   .buttons button {
-    font: inherit; font-size: 14px; padding: 6px 16px; cursor: pointer; border-radius: 6px;
+    font: inherit; font-size: 16px; line-height: 1; width: 32px; height: 28px; padding: 0; cursor: pointer; border-radius: 6px;
     border: 1px solid var(--baseline); background: var(--surface); color: var(--text-primary);
   }
   .buttons .next { background: var(--text-primary); color: var(--surface); border-color: var(--text-primary); font-weight: 600; }
   .buttons button:disabled { opacity: 0.4; cursor: default; }
-  .count { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .count { min-width: 3.5em; text-align: center; font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
   /* Every step of the chapter in one cell, the one shown visible, so the
      box keeps the longest step's height and nothing around it moves. */
   .steps { display: grid; }
@@ -59,9 +74,34 @@
   .toc ol button { padding-left: 16px; }
   .toc button[aria-current] { color: var(--surface); background: var(--text-primary); }
   .toc .n { width: 1.4em; color: inherit; opacity: 0.7; font-variant-numeric: tabular-nums; }
+  .settings { border-top: 1px solid var(--grid); padding-top: 8px; }
+  .settings > summary {
+    cursor: pointer; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-muted);
+  }
+  gc-controls { padding-top: 8px; }
   gc-widget { padding: 0; }
-  /* On a phone the rail sticks to the top over the widget, and the chapters
-     follow the widget. */
+  /* Beside the widget, the side fills the window below its top, which
+     guide.js sets, and holds still from step to step. */
+  @media (width >= 900px) {
+    .side { position: sticky; top: 16px; display: flex; flex-direction: column; overflow: hidden; }
+    .rail, .settings { flex: none; }
+    /* Every chapter's steps in one cell, the one shown visible, so the box
+       keeps the guide's longest step's height. */
+    .boxes { display: grid; }
+    .boxes > .steps, .boxes > .steps[hidden] { display: grid; grid-area: 1 / 1; }
+    /* The chapters fill the side between the step and the settings, faded at
+       both edges, so a cut item reads as more to scroll. */
+    .toc {
+      flex: 1 1 auto; min-height: 120px; overflow-y: auto;
+      mask-image: linear-gradient(transparent, #000 20px, #000 calc(100% - 20px), transparent);
+    }
+    .settings { max-height: 45vh; overflow-y: auto; }
+    /* Open, the settings keep the height of the tallest chapter's, the
+       uncollected garbage chapter's 174 px, so a new chapter moves nothing. */
+    gc-controls { box-sizing: border-box; min-height: 182px; }
+  }
+  /* On a phone the rail sticks to the top over the widget, the settings come
+     before the widget, and the chapters follow it. */
   @media (width < 900px) {
     .guide { grid-template-columns: minmax(0, 1fr); gap: 16px; }
     .side { display: contents; }
@@ -69,10 +109,11 @@
     .steps h2 { font-size: 17px; margin-bottom: 4px; }
     .steps p { font-size: 15px; }
     .toc { order: 1; }
+    .settings { margin-bottom: 8px; }
   }
 </style>
-<script type="module" src="v/b9fb3a4755ad/gc-widget.js"></script>
-<script type="module" src="v/b9fb3a4755ad/guide.js"></script>
+<script type="module" src="v/5d9a8adff93d/gc-widget.js"></script>
+<script type="module" src="v/5d9a8adff93d/guide.js"></script>
 </head>
 <body>
 <main>
@@ -83,13 +124,23 @@
 <a href="https://github.com/sergey-miryanov/pep848-sim">GitHub</a>
 <button type="button" class="theme-switch">Dark theme</button>
 </nav>
-<h1>Guide</h1>
-<p class="lede"><a href="https://peps.python.org/pep-0848/">PEP 848</a> proposes
+<div class="intro">
+<p><a href="https://peps.python.org/pep-0848/">PEP 848</a> proposes
 a generational incremental cycle collector for CPython. This guide takes it a
 chapter at a time. Each step sets the widget to show one thing under both
-collectors, and its notes say where to look. Step with Back and Next or the
-arrow keys. The first runs wait a few seconds while Pyodide, the Python that
-runs in the browser, downloads and starts.</p>
+collectors, and its notes say where to look. Step with the arrows beside the
+chapter's name or the arrow keys. The first runs wait a few seconds while
+Pyodide, the Python that runs in the browser, downloads and starts.</p>
+<button type="button">Close</button>
+</div>
+<script>
+  // A reader who closed the intro finds it closed, before the page paints.
+  try {
+    if (localStorage.getItem("pep848-sim.guide-intro") === "closed") document.querySelector(".intro").hidden = true;
+  } catch {
+    // A browser that keeps nothing shows the intro.
+  }
+</script>
 <div class="guide"></div>
 </main>
 </body>

@@ -1,30 +1,29 @@
 // @ts-check
 // The guide (ADR 0020): its chapters a step at a time, beside one compact
-// <gc-widget>. guide.json lists the chapters. A chapter with steps runs them
-// here, and one without links to its section in the long form until it moves
-// over. Each step is one of the widget's entries, with its request and the
-// parts it marks, so the page steps by writing the entry's name into the URL
-// fragment, which the widget follows, and the browser's Back steps back. The
+// <gc-widget>. guide.json lists the chapters and their steps. Each step is one
+// of the widget's entries, with its request and the parts it marks, so the
+// page steps by writing the entry's name into the URL fragment, which the
+// widget follows, and the browser's Back steps back. The
 // rail beside the widget shows the step's text and a note for each part it
-// marks, under the badge's number.
+// marks, under the badge's number. Beside the widget, the side holds still
+// from step to step, and the widget's charts end at the window's foot (#232).
 
 /**
  * A part a step marks, as the widget names it, and what to see there.
  * @typedef {{ part: string, note: string }} Mark
  * @typedef {{ title: string, text: string, request: any, marks: Mark[] }} Step
- * A chapter's steps share its controls. One without steps lives in the long form.
- * @typedef {{ id: string, title: string, controls?: string[], steps?: Step[] }} Chapter
+ * A chapter's steps share its controls.
+ * @typedef {{ id: string, title: string, controls: string[], steps: Step[] }} Chapter
  * @typedef {{ chapter: Chapter, step: Step, index: number, name: string }} Stop
  */
 
 const ID = "guide";
-const LONG = "guide-long.html";
 
 /** @type {{ chapters: Chapter[] }} */
 const guide = await (await fetch(new URL("guide.json", import.meta.url))).json();
 /** Every chapter's steps in turn, which Back and Next walk. @type {Stop[]} */
 const stops = guide.chapters.flatMap((chapter) =>
-  (chapter.steps ?? []).map((step, index) => ({ chapter, step, index, name: `${chapter.id}-${index + 1}` })));
+  chapter.steps.map((step, index) => ({ chapter, step, index, name: `${chapter.id}-${index + 1}` })));
 
 const named = () => new URLSearchParams(location.hash.slice(1)).get(ID);
 const current = () => Math.max(0, stops.findIndex(({ name }) => name === named()));
@@ -53,30 +52,40 @@ const widget = document.createElement("gc-widget");
 widget.id = ID;
 widget.setAttribute("compact", "");
 widget.setAttribute("changes", "");
+// Beside the rail, the widget fits the window; on a phone, under it, #229 fits it.
+const wide = matchMedia("(width >= 900px)");
+const fit = () => widget.toggleAttribute("fit", wide.matches);
+fit();
+wide.addEventListener("change", fit);
 const json = el("script");
 json.type = "application/json";
 json.textContent = JSON.stringify({
   entries: stops.map(({ chapter, step, name }) => ({
-    name, title: step.title, request: step.request, controls: chapter.controls ?? [], marks: step.marks.map(({ part }) => part),
+    name, title: step.title, request: step.request, controls: chapter.controls, marks: step.marks.map(({ part }) => part),
   })),
 });
 widget.append(json);
 
-// The rail: the chapter, Back and Next above the step, so that a longer step
-// never moves them, then the step's title, text and notes.
+// The rail: the chapter beside the arrows that step, above the step, so that a
+// longer step never moves them, then the step's title, text and notes.
 const label = el("p", "chapter");
-const back = el("button", "back", "Back");
-const next = el("button", "next", "Next");
+const back = el("button", "back", "←");
+const next = el("button", "next", "→");
 back.type = next.type = "button";
+back.setAttribute("aria-label", "Back");
+next.setAttribute("aria-label", "Next");
 back.addEventListener("click", () => go(current() - 1));
 next.addEventListener("click", () => go(current() + 1));
 const count = el("span", "count");
 const buttons = el("div", "buttons");
-buttons.append(back, next, count);
-// A box of steps a chapter, each box as tall as its longest step.
-const boxes = new Map(guide.chapters.filter(({ steps }) => steps).map((chapter) => {
+buttons.append(back, count, next);
+const head = el("div", "head");
+head.append(label, buttons);
+// A box of steps a chapter, each box as tall as its longest step, and beside
+// the widget as tall as the guide's longest.
+const boxes = new Map(guide.chapters.map((chapter) => {
   const box = el("div", "steps");
-  for (const step of chapter.steps ?? []) {
+  for (const step of chapter.steps) {
     const part = el("div");
     const notes = el("ol", "notes");
     step.marks.forEach(({ note }, i) => {
@@ -89,31 +98,55 @@ const boxes = new Map(guide.chapters.filter(({ steps }) => steps).map((chapter) 
   }
   return [chapter, box];
 }));
+const all = el("div", "boxes");
+all.append(...boxes.values());
 const rail = el("div", "rail");
-rail.append(label, buttons, ...boxes.values());
+rail.append(head, all);
 const toc = el("ol", "toc");
 toc.setAttribute("aria-label", "Chapters");
+// The widget's controls, in a block the reader collapses, which stays as they
+// left it from step to step.
+const settings = el("details", "settings");
+settings.open = true;
+const controls = document.createElement("gc-controls");
+controls.setAttribute("for", ID);
+settings.append(el("summary", "", "Settings"), controls);
 const side = el("div", "side");
-side.append(rail, toc);
+side.append(rail, toc, settings);
 /** @type {HTMLElement} */ (document.querySelector(".guide")).append(side, widget);
 
-/** The chapters, each a link to its first step or its long form, with the steps of the one shown. */
+/** Beside the widget, the side as tall as the window below its top. */
+function size() {
+  side.style.height = wide.matches ? `${innerHeight - (side.getBoundingClientRect().top + scrollY) - 12}px` : "";
+}
+size();
+addEventListener("resize", size);
+wide.addEventListener("change", size);
+
+// The intro's Close, which the page remembers.
+const intro = /** @type {HTMLElement} */ (document.querySelector(".intro"));
+intro.querySelector("button")?.addEventListener("click", () => {
+  intro.hidden = true;
+  try {
+    localStorage.setItem("pep848-sim.guide-intro", "closed");
+  } catch {
+    // A browser that keeps nothing closes it on this page alone.
+  }
+  size();
+});
+
+/** The chapters, each a link to its first step, with the steps of the one shown. */
 function chapters() {
   const { chapter: shown, index: at } = stops[current()];
   toc.replaceChildren(...guide.chapters.map((chapter) => {
     const item = el("li");
-    const first = stops.find((stop) => stop.chapter === chapter);
     const link = el("a", "", chapter.title);
-    if (first) link.href = `#${ID}=${first.name}`;
-    else {
-      link.href = `${LONG}#${chapter.id}`;
-      link.append(el("span", "long", "long form"));
-    }
+    link.href = `#${ID}=${chapter.id}-1`;
     item.append(link);
     if (chapter !== shown) return item;
     item.className = "open";
     const steps = el("ol");
-    (chapter.steps ?? []).forEach((step, index) => {
+    chapter.steps.forEach((step, index) => {
       const button = el("button");
       button.type = "button";
       button.append(el("span", "n", String(index + 1)), el("span", "", step.title));
@@ -131,8 +164,8 @@ function chapters() {
 function show() {
   const at = current();
   const { chapter, index } = stops[at];
-  label.textContent = chapter.title;
-  count.textContent = `Step ${index + 1} of ${chapter.steps?.length}`;
+  label.textContent = label.title = chapter.title;
+  count.textContent = `${index + 1} / ${chapter.steps.length}`;
   back.disabled = at === 0;
   next.disabled = at === stops.length - 1;
   for (const [owner, box] of boxes) {
@@ -140,6 +173,12 @@ function show() {
     [...box.children].forEach((part, i) => part.toggleAttribute("aria-current", owner === chapter && i === index));
   }
   chapters();
+  // The chapters scroll inside the side: keep the one shown in view.
+  const open = toc.querySelector(".open");
+  if (open) {
+    const list = toc.getBoundingClientRect(), item = open.getBoundingClientRect();
+    if (item.top < list.top || item.bottom > list.bottom) toc.scrollTop += item.top - list.top - 20;
+  }
 }
 
 show();
