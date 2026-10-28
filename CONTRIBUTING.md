@@ -55,6 +55,7 @@ lists them.
 | `site` | assembles `_site/`: the pages at the top, and the rest of `site/` with `src/pep848_sim` zipped as `sim.zip` in `v/<commit>/`; `--keep REF` keeps the folder the site at `REF` serves too |
 | `serve` | runs `site`, then serves `_site/` on `http://localhost:8000` |
 | `compare` | runs each preset under both collectors and prints its collections beside its benchmark's in `data/` |
+| `plot` | writes each preset's collections and its benchmark's workers' to `tools/plot.json`, then serves `tools/plot.html`, which draws them, on `http://localhost:8001/tools/plot.html` |
 
 `test` passes its arguments to pytest. To run one test file, leave the
 coverage gate out: `poetry run just test tests/test_smoke.py --no-cov`.
@@ -70,8 +71,9 @@ requires one more job, `check`, which passes once they all pass.
 - mypy and pyrefly both run in strict mode, and both have to pass. A pyrefly
   warning fails the check as an error does.
 - tsc checks the site's JavaScript from its JSDoc, in strict mode: the page's
-  scripts and the tests against the DOM (`tsconfig.json`), and the worker
-  against a web worker's globals (`tsconfig.worker.json`).
+  scripts, the tests and the dev page in `tools/` against the DOM
+  (`tsconfig.json`), and the worker against a web worker's globals
+  (`tsconfig.worker.json`).
 - Node's test runner runs `tests/*.test.js` against the site's modules that
   load without Plot, a page or a worker: `panels.js`, which turns a run's
   records into what each panel draws, `graph.js`, `editor.js`, `source.js`,

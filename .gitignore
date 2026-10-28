@@ -7,5 +7,6 @@ coverage.xml
 .pytest_cache/
 .ruff_cache/
 _site/
+tools/plot.json
 dist/
 node_modules/

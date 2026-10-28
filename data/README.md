@@ -21,7 +21,9 @@ ships them. It leaves out pyperf's calibration workers, the processes with no
 benchmark's name, and shutdown's collections: gcmon reads a worker once a tick,
 and a worker can exit before gcmon reads them. `poetry run just compare`
 prints each preset's collections beside its benchmark's, for fitting a preset
-by hand (ADR 0011), and the yield test holds them together. Besides the five
+by hand (ADR 0011), and the yield test holds them together. `poetry run just
+plot` draws them a collection at a time over each of the benchmark's workers,
+on a page that runs no Pyodide and ships nowhere. Besides the five
 benchmarks the presets model, the files hold shortest_path and three more
 xml_etree benchmarks.
 

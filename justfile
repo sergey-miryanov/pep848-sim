@@ -49,3 +49,9 @@ serve: site
 # print each preset's collections beside its benchmark's
 compare:
     python tools/compare_presets.py
+
+# write each preset's collections and its benchmark's workers' to tools/plot.json,
+# then serve tools/plot.html, which draws them, on http://localhost:8001
+plot:
+    python tools/plot_presets.py
+    python -m http.server 8001 --bind 127.0.0.1
