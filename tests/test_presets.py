@@ -16,6 +16,7 @@ from pep848_sim.presets import (
     JSON_LOADS,
     PRESETS,
     XML_ETREE_PARSE,
+    Preset,
 )
 from pep848_sim.widget.request import runs
 from pep848_sim.workload import Workload
@@ -27,6 +28,13 @@ from test_run import PINNED, digest, records
 # preset's coarser model (#117). Half a point keeps a preset that finds no
 # cyclic garbage apart from a benchmark whose collections find 1%.
 YIELD_REL, YIELD_ABS = 0.2, 0.005
+
+
+def start_up_garbage(preset: Preset) -> int:
+    """The cyclic garbage of the two trees start-up lets go of, its first
+    structure and its fourth."""
+    structures = preset.workload.structures
+    return sum(s.shape.cyclic_garbage(s.size) for s in (structures[0], structures[3]))
 
 
 def test_each_preset_is_named_for_its_benchmark() -> None:
@@ -78,7 +86,7 @@ def test_create_gc_cycles_runs_its_loops_between_start_up_and_shutdown(
     collector: type[Collector],
 ) -> None:
     preset = CREATE_GC_CYCLES
-    _, _, start_up_tree, _, rings = preset.workload.structures
+    _, _, start_up_tree, _, _, rings = preset.workload.structures
 
     whole = run_preset(preset, collector)
 
@@ -109,19 +117,19 @@ def test_json_loads_loops_leave_no_cyclic_garbage(
     collector: type[Collector],
 ) -> None:
     preset = JSON_LOADS
-    garbage, _, tree, _ = preset.workload.structures
+    tree = preset.workload.structures[2]
 
     *automatic, first, second, third = run_preset(preset, collector)
 
     # Nothing calls gc.collect(), so the runtime starts every collection before
     # shutdown, one each threshold0 kB. No result json.loads returns leaves a
-    # cycle, so they and shutdown's first full collection free the tree start-up
+    # cycle, so they and shutdown's first full collection free the trees start-up
     # let go of and nothing more.
     assert len(automatic) == preset.run_length // CollectorSettings().threshold0
     assert {record.kind for record in automatic}.isdisjoint({"full", "shutdown"})
     assert [first.kind, second.kind, third.kind] == ["shutdown"] * 3
     freed = sum(record.freed for record in automatic) + first.freed
-    assert freed == garbage.shape.cyclic_garbage(garbage.size)
+    assert freed == start_up_garbage(preset)
     # The second frees the start-up tree under sys once the modules go, and leaves
     # the third nothing.
     assert second.freed == tree.shape.cyclic_garbage(tree.size)
@@ -134,30 +142,30 @@ def test_xml_etree_parse_builds_a_tree_then_parses_60_in_each_value() -> None:
 
     workload.run_to(preset.run_length)
 
-    # Start-up's four structures, then each of the four values: its own tree, the
-    # fifth structure, and 60 parses of it, the sixth.
+    # Start-up's five structures, then each of the four values: its own tree, the
+    # sixth structure, and 60 parses of it, the seventh.
     built = [i for i, _, _ in workload.builds]
-    assert built == [0, 1, 2, 3, *[4, *[5] * 60] * 4]
+    assert built == [0, 1, 2, 3, 4, *[5, *[6] * 60] * 4]
     # Each value ends as the next begins, and the last as the run does.
-    value = preset.workload.structures[4].rebuild_interval
+    value = preset.workload.structures[5].rebuild_interval
     assert value is not None
-    starts = [first for i, first, _ in workload.builds if i == 4]
+    starts = [first for i, first, _ in workload.builds if i == 5]
     assert [b - a for a, b in pairwise(starts)] == [value] * 3
     assert starts[-1] - 1 + value == preset.run_length
 
 
 def test_async_tree_io_tg_drops_each_runs_tree_as_the_next_run_starts() -> None:
     preset = ASYNC_TREE_IO_TG
-    tree = preset.workload.structures[4]
+    tree = preset.workload.structures[5]
     assert tree.lifetime is not None
     workload = Workload(Heap(LegacyCollector()), preset.workload)
 
     workload.run_to(preset.run_length)
 
-    # Start-up's four structures, then the tree once a run, four times.
-    assert [i for i, _, _ in workload.builds] == [0, 1, 2, 3, *[4] * 4]
+    # Start-up's five structures, then the tree once a run, four times.
+    assert [i for i, _, _ in workload.builds] == [0, 1, 2, 3, 4, *[5] * 4]
     # Each run's tree goes as the next run starts, and the last as the worker ends.
-    trees = [(first, last) for i, first, last in workload.builds if i == 4]
+    trees = [(first, last) for i, first, last in workload.builds if i == 5]
     drops = [last + tree.lifetime for _, last in trees]
     assert drops == [*(first - 1 for first, _ in trees[1:]), preset.run_length]
 
@@ -166,17 +174,15 @@ def test_async_tree_io_tg_drops_each_runs_tree_as_the_next_run_starts() -> None:
 def test_async_tree_io_tg_runs_leave_no_cyclic_garbage(
     collector: type[Collector],
 ) -> None:
-    garbage = ASYNC_TREE_IO_TG.workload.structures[0]
-
     *automatic, first, second, third = run_preset(ASYNC_TREE_IO_TG, collector)
 
     # Refcounting frees each tree, and nothing calls gc.collect(), so the
-    # collections before shutdown and shutdown's first free the tree start-up let
+    # collections before shutdown and shutdown's first free the trees start-up let
     # go of and nothing more.
     assert {record.kind for record in automatic}.isdisjoint({"full", "shutdown"})
     assert [first.kind, second.kind, third.kind] == ["shutdown"] * 3
     freed = sum(record.freed for record in automatic) + first.freed
-    assert freed == garbage.shape.cyclic_garbage(garbage.size)
+    assert freed == start_up_garbage(ASYNC_TREE_IO_TG)
 
 
 def test_connected_components_examines_its_graph_in_increments_while_it_loads() -> None:
@@ -195,18 +201,18 @@ def test_connected_components_examines_its_graph_in_increments_while_it_loads() 
 def test_connected_components_frees_its_graph_with_its_module_at_shutdown(
     collector: type[Collector],
 ) -> None:
-    garbage, _, start_up_tree, _, graph = CONNECTED_COMPONENTS.workload.structures
+    _, _, start_up_tree, _, _, graph = CONNECTED_COMPONENTS.workload.structures
 
     *automatic, first, second, third = run_preset(CONNECTED_COMPONENTS, collector)
 
     # The walks make no cycles, and the graph stays in its module's globals, so
-    # the collections before shutdown and shutdown's first free the tree start-up
+    # the collections before shutdown and shutdown's first free the trees start-up
     # let go of and nothing more. Shutdown's first full collection comes while the
     # modules still hold the graph and the start-up tree. The second frees both,
     # which their cycles keep once the modules go, and leaves the third nothing.
     assert [first.kind, second.kind, third.kind] == ["shutdown"] * 3
     freed = sum(record.freed for record in automatic) + first.freed
-    assert freed == garbage.shape.cyclic_garbage(garbage.size)
+    assert freed == start_up_garbage(CONNECTED_COMPONENTS)
     assert second.freed == graph.size + start_up_tree.size
     assert third.freed == 0
 

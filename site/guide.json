@@ -177,7 +177,7 @@
           "text": "Raise threshold1 to 20, and the aging generation holds 10 aging spaces. The young generation grows to 22 MB, past the run. Only what the worker allocated in its first MB ages through it, and one young collection, at 21 MB, examines those 250 objects.",
           "request": {"preset": "json_loads", "settings": {"threshold0": 1000, "threshold1": 20, "threshold2": 10}, "every": 1},
           "marks": [
-            {"part": "incremental.heap", "note": "The aging lane holds most of the worker's objects to the end. Visited takes 237 at 21 MB."},
+            {"part": "incremental.heap", "note": "The aging lane holds most of the worker's objects to the end. Visited takes 242 at 21 MB."},
             {"part": "incremental.work", "note": "One bar before shutdown, at 21 MB."}
           ]
         }
@@ -186,7 +186,7 @@
     {
       "id": "the-old-generation",
       "title": "The old generation",
-      "controls": ["workload.structures.4.size"],
+      "controls": ["workload.structures.5.size"],
       "steps": [
         {
           "title": "Pending and visited",
@@ -232,7 +232,7 @@
         {
           "title": "A smaller tree",
           "text": "Shrink the task tree to 100 kB, the slider's smallest. Young collections move too little into the old generation to lift the budget above zero.",
-          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.4.size": 100}},
+          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.5.size": 100}},
           "marks": [
             {"part": "figure.gen2_collections_sweeps", "note": "No sweep runs."}
           ]
@@ -240,7 +240,7 @@
         {
           "title": "The largest tree",
           "text": "Grow the task tree to 64,700 kB, the slider's largest. The legacy collector's gen 2 collection comes while a tree lives, and examines all of it.",
-          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.4.size": 64700}},
+          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.5.size": 64700}},
           "marks": [
             {"part": "legacy.work", "note": "The gen 2 collection's bar at 266 MB stands more than four times as tall as the gen 1 bars."},
             {"part": "figure.peak_work", "note": "66.9K for that gen 2 collection, against 2.0K for the incremental collector."}
@@ -307,7 +307,7 @@
         {
           "title": "Trees that turn into garbage",
           "text": "Give each task a link back to its parent, and each tree turns into cyclic garbage as it goes. Now the old collections free whole trees, and the credit counts.",
-          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.4.shape": "tree"}},
+          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.5.shape": "tree"}},
           "marks": [
             {"part": "incremental.work", "note": "Increments at 208, 296 and 452 MB free three of the four trees, 52,487 objects each."},
             {"part": "figure.gen2_collections_sweeps", "note": "12 sweeps."}
@@ -316,7 +316,7 @@
         {
           "title": "No credit",
           "text": "Set the multiplier to 0, and an increment that frees a tree pays nothing back into the budget.",
-          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.4.shape": "tree", "constants.freed_credit": 0}},
+          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.5.shape": "tree", "constants.freed_credit": 0}},
           "marks": [
             {"part": "incremental.work", "note": "Increments at 208 and 392 MB free two trees. The other two wait for shutdown."},
             {"part": "figure.gen2_collections_sweeps", "note": "6 sweeps."}
@@ -378,7 +378,7 @@
     {
       "id": "a-large-increment",
       "title": "A large increment",
-      "controls": ["workload.structures.4.size"],
+      "controls": ["workload.structures.5.size"],
       "steps": [
         {
           "title": "An increment is a closure",
@@ -407,7 +407,7 @@
         {
           "title": "Half the graph",
           "text": "Halve the graph, to 45,000 kB. It has loaded before the third increment from its root comes.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.4.size": 45000}},
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.5.size": 45000}},
           "marks": [
             {"part": "figure.peak_work", "note": "10.5K: the second increment from the graph's root, at 48 MB."}
           ]
@@ -415,7 +415,7 @@
         {
           "title": "A quarter of the graph",
           "text": "Shrink the graph to 22,000 kB. It has loaded, and the module holds it, before the budget lets an old collection reach it, so no increment forms from it.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.4.size": 22000}},
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.5.size": 22000}},
           "marks": [
             {"part": "figure.peak_work", "note": "4.0K, what a young collection moves in."}
           ]
