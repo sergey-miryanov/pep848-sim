@@ -45,7 +45,9 @@ class IncrementalCollector(Collector):
         # The constants' initial budget, by default the pseudocode's -100_000 real
         # objects, in simulated ones (ADR 0002).
         self.work_to_do = self.constants.simulated(self.constants.initial_work_budget)
-        self.young_next = False
+        # The pseudocode starts it False, an old collection first, where the PEP's
+        # abstract and the reference branch start with a young one (ADR 0003).
+        self.young_next = True
         # Sweeps ended, for the records.
         self.sweeps = 0
 

@@ -65,7 +65,7 @@ def test_the_budget_starts_at_the_initial_work_budget_in_simulated_objects() -> 
     assert IncrementalCollector(constants=constants).work_to_do == -47
 
 
-def test_collections_alternate_from_an_old_one_and_young_ones_start_idle() -> None:
+def test_collections_alternate_from_a_young_one_and_young_ones_start_idle() -> None:
     collector = IncrementalCollector(CollectorSettings(threshold0=10))
     heap = Heap(collector)
     first = [heap.allocate() for _ in range(8)]
@@ -79,7 +79,8 @@ def test_collections_alternate_from_an_old_one_and_young_ones_start_idle() -> No
     for _ in range(111):
         heap.allocate_unseen()
 
-    assert [counts.kind for counts in collector.counts] == ["old", "young"] * 6
+    # As the PEP's abstract and the reference branch order them (ADR 0003).
+    assert [counts.kind for counts in collector.counts] == ["young", "old"] * 6
     young = [counts for counts in collector.counts if counts.kind == "young"]
     # Five aging spaces, all empty at first; the sixth takes the first nursery.
     assert [(c.survived, c.freed, c.work) for c in young] == [(0, 0, 0)] * 5 + [
@@ -252,8 +253,9 @@ def test_an_old_collection_follows_the_pseudocode_line_by_line() -> None:
     # The old generation, least recently scanned first.
     collector.pending_space.extend([m1, m2, held, a, b])
     collector.work_to_do = 10
+    collector.young_next = False
 
-    collector.collect()  # a new collector's first collection is an old one
+    collector.collect()
 
     # scan_reachable(10) marks sys and the chain it holds: 10 - 3.
     # The increment [held] survives: 7 - 1.
@@ -283,6 +285,7 @@ def test_an_increment_credits_the_budget_the_freed_credit_for_each_object_it_fre
     held = [heap.allocate() for _ in range(10)]  # their allocating frames hold them
     collector.pending_space.extend([a, b, *held])
     collector.work_to_do = 3
+    collector.young_next = False
 
     collector.collect()
 
@@ -328,6 +331,7 @@ def test_the_next_old_collection_resumes_where_the_budget_ran_out() -> None:
     p, q, r = heap.allocate(), heap.allocate(), heap.allocate()  # frames hold them
     collector.pending_space.extend([p, q, r])
     collector.work_to_do = 2
+    collector.young_next = False
 
     collector.collect()
 
@@ -356,6 +360,7 @@ def test_an_old_collection_without_a_positive_budget_is_idle() -> None:
     x = heap.allocate()
     collector.pending_space.append(x)
     collector.work_to_do = 0
+    collector.young_next = False
 
     collector.collect()
 
@@ -404,7 +409,7 @@ def test_a_threshold1_below_1_runs_as_1(threshold1: int) -> None:
     collector.collect()
 
     assert len(collector.aging) == 1
-    assert [record.kind for record in collector.records] == ["old", "young"]
+    assert [record.kind for record in collector.records] == ["young", "old"]
 
 
 def test_each_collection_leaves_a_record_of_the_heap_before_and_after_it() -> None:
@@ -424,10 +429,10 @@ def test_each_collection_leaves_a_record_of_the_heap_before_and_after_it() -> No
     # Spaces: nursery, aging, pending, visited (sys on reachable among them).
     idle = (0, 0, 0, -6_250, 0)
     assert collector.records == [
-        Record(5, "old", *idle, (3, 0, 0, 1), (3, 0, 0, 1), 2, 2),
-        Record(10, "young", *idle, (3, 0, 0, 1), (0, 3, 0, 1), 2, 2),
-        Record(15, "old", *idle, (0, 3, 0, 1), (0, 3, 0, 1), 2, 2),
-        Record(20, "young", 0, 1, 2, -6_249, 0, (0, 3, 0, 1), (0, 0, 0, 2), 2, 2),
+        Record(5, "young", *idle, (3, 0, 0, 1), (0, 3, 0, 1), 2, 2),
+        Record(10, "old", *idle, (0, 3, 0, 1), (0, 3, 0, 1), 2, 2),
+        Record(15, "young", 0, 1, 2, -6_249, 0, (0, 3, 0, 1), (0, 0, 0, 2), 2, 2),
+        Record(20, "old", 0, 0, 0, -6_249, 0, (0, 0, 0, 2), (0, 0, 0, 2), 2, 2),
     ]
 
 
@@ -435,6 +440,7 @@ def test_an_old_collections_record_carries_the_budget_and_the_sweep() -> None:
     collector = IncrementalCollector(CollectorSettings(threshold0=5))
     heap = Heap(collector)
     collector.work_to_do = 10
+    collector.young_next = False
 
     for _ in range(6):
         heap.allocate_unseen()
