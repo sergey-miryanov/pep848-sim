@@ -1,4 +1,5 @@
-"""Assemble the site: copy site/ into _site/ and zip the simulator beside it.
+"""Assemble the site: copy site/ into _site/, zip the simulator beside it and
+write the presets page's plot.json there too (ADR 0021).
 
 The pages stay at the top of _site/, and every other file goes into a folder
 named for the commit, v/<commit>/, which the pages' links name. A page then
@@ -16,6 +17,8 @@ import subprocess
 import tarfile
 import zipfile
 from pathlib import Path
+
+import plot_presets
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -94,7 +97,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     out = ROOT / "_site"
-    assemble(ROOT / "site", ROOT / "src" / "pep848_sim", out, version(ROOT))
+    commit = version(ROOT)
+    assemble(ROOT / "site", ROOT / "src" / "pep848_sim", out, commit)
+    # The presets run under both collectors, which takes half a minute.
+    plot_presets.write(out / "v" / commit / "plot.json")
     if args.keep:
         kept = keep(args.keep, out, ROOT)
         print(

@@ -36,9 +36,9 @@ typecheck:
     mypy
     pyrefly check --min-severity=warn
 
-# assemble _site/: the pages at the top, the rest of site/ and src/pep848_sim
-# zipped as sim.zip in v/<commit>/; --keep REF keeps the folder the site at REF
-# serves too
+# assemble _site/: the pages at the top, the rest of site/, src/pep848_sim
+# zipped as sim.zip and the presets page's plot.json in v/<commit>/; --keep REF
+# keeps the folder the site at REF serves too
 site *args:
     python tools/assemble_site.py {{args}}
 
@@ -49,9 +49,3 @@ serve: site
 # print each preset's collections beside its benchmark's
 compare:
     python tools/compare_presets.py
-
-# write each preset's collections and its benchmark's workers' to tools/plot.json,
-# then serve tools/plot.html, which draws them, on http://localhost:8001
-plot:
-    python tools/plot_presets.py
-    python -m http.server 8001 --bind 127.0.0.1

@@ -1,5 +1,6 @@
 """The benchmarks' collections, from the CSV files gcmon extracts from its traces of
-pyperformance's workers (#117). The tests read them; sim.zip never ships them.
+pyperformance's workers (#117). The tests and the presets page's plot.json read
+them; sim.zip never ships them.
 
 A preset models a worker whole (ADR 0011), so every collection before shutdown
 counts: start-up, imports, the benchmark's loops and pyperf's bookkeeping alike.

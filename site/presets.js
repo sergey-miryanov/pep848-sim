@@ -1,8 +1,9 @@
 // @ts-check
-// A dev page: each preset's collections under a collector over its benchmark's
-// workers', from the plot.json tools/plot_presets.py writes. A panel per
-// generation and kind of collection, as compare_presets.py files them, and a
-// collection's number in its worker along the x-axis. Counts are real objects.
+// The presets page: each preset's collections under a collector over its
+// benchmark's workers', from the plot.json `just site` writes beside this
+// script (ADR 0021). A panel per generation and kind of collection, as
+// compare_presets.py files them, and a collection's number in its worker along
+// the x-axis. Counts are real objects.
 // @ts-expect-error: an editor cannot fetch Plot's types from jsDelivr.
 import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+esm";
 
@@ -13,6 +14,15 @@ import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+e
  */
 /** @typedef {"examined" | "freed" | "yield" | "work" | "budget"} Series */
 /** @typedef {{ preset: string, collector: string, workers: Point[][], run: Point[] }} Plotted */
+/**
+ * A worker's collections as plot.json holds them, a column to a series: each
+ * panel by its place in the file's panels, and null where a collection has no
+ * value. A series no collection has a value for has no column.
+ * @typedef {{ n: number[], panel: number[] } & { [key in Series]?: (number | null)[] }} Columns
+ */
+/**
+ * @typedef {{ panels: string[], plots: { preset: string, collector: string, workers: Columns[], run: Columns }[] }} File
+ */
 
 /** @type {{ key: Series, label: string }[]} */
 const SERIES = [
@@ -30,8 +40,28 @@ const presetSelect = /** @type {HTMLSelectElement} */ (document.getElementById("
 const collectorSelect = /** @type {HTMLSelectElement} */ (document.getElementById("collector"));
 const panels = /** @type {HTMLElement} */ (document.getElementById("panels"));
 
+/** @type {File} */
+const file = await (await fetch(new URL("plot.json", import.meta.url))).json();
+/** @type {Series[]} */
+const KEYS = ["examined", "freed", "yield", "work", "budget"];
+/**
+ * A worker's collections, out of their columns.
+ * @param {Columns} columns
+ * @returns {Point[]}
+ */
+const points = (columns) => columns.n.map((n, i) => {
+  /** @type {Point} */
+  const point = { n, panel: file.panels[columns.panel[i]] };
+  for (const key of KEYS) {
+    const value = columns[key]?.[i];
+    if (value !== undefined && value !== null) point[key] = value;
+  }
+  return point;
+});
 /** @type {Plotted[]} */
-const plotted = await (await fetch("plot.json")).json();
+const plotted = file.plots.map(({ preset, collector, workers, run }) => ({
+  preset, collector, workers: workers.map(points), run: points(run),
+}));
 
 /** @param {string[]} names */
 const unique = (names) => [...new Set(names)];

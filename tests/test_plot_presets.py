@@ -2,7 +2,7 @@ import pytest
 
 from benchmarks import Collection, Kind, Tally
 from pep848_sim.collectors.collector import Constants
-from plot_presets import collections, points
+from plot_presets import PANELS, collections, columns, points
 from test_figures import record
 
 # A collection that examined 100 real objects and freed 10.
@@ -124,3 +124,41 @@ def test_only_the_incremental_collector_draws_its_budget() -> None:
 
     assert points(worker, "incremental")[0]["budget"] == -100_000
     assert "budget" not in points(worker, "legacy")[0]
+
+
+def test_the_panels_are_every_generation_and_kind_a_collection_files_in() -> None:
+    assert PANELS == [
+        "gen 0 automatic",
+        "gen 1 automatic",
+        "gen 2 automatic",
+        "gen 2 explicit",
+    ]
+
+
+def test_columns_hold_a_series_each_with_null_where_a_point_has_none() -> None:
+    drawn = points(
+        [collection(), collection(generation=2, increment_size=500)], "legacy"
+    )
+
+    # Panels by their place in PANELS.
+    assert columns(drawn) == {
+        "n": [1, 2],
+        "panel": [0, 2],
+        "examined": [100, 100],
+        "freed": [10, 10],
+        "yield": [0.1, 0.1],
+        "work": [None, 500],
+    }
+
+
+def test_a_series_no_point_has_takes_no_column() -> None:
+    drawn = points([collection()], "legacy")
+
+    assert set(columns(drawn)) == {"n", "panel", "examined", "freed", "yield"}
+
+
+def test_a_mean_keeps_four_significant_digits_and_a_whole_one_its_int() -> None:
+    drawn = points([collection(gained=Tally(3, 100, 30))], "legacy")
+
+    assert columns(drawn)["examined"] == [33.33]
+    assert columns(drawn)["freed"] == [10]

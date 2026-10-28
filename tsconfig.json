@@ -1,6 +1,6 @@
-// tsc checks the site's JavaScript, its tests and the dev pages' in tools/ from
-// their JSDoc and emits nothing: the page's scripts, the tests and the dev
-// pages' here, against the DOM, and the worker in tsconfig.worker.json. It leaves the packages' declarations
+// tsc checks the site's JavaScript and its tests from their JSDoc and emits
+// nothing: the page's scripts and the tests here, against the DOM, and the
+// worker in tsconfig.worker.json. It leaves the packages' declarations
 // unchecked: pyodide's name Node's types, which the project takes no package for.
 {
   "compilerOptions": {
@@ -14,6 +14,6 @@
     "moduleResolution": "bundler",
     "lib": ["es2023", "dom"]
   },
-  "include": ["site/**/*.js", "tests/**/*.js", "tools/**/*.js"],
+  "include": ["site/**/*.js", "tests/**/*.js"],
   "exclude": ["site/worker.js"]
 }
