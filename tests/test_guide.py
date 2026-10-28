@@ -258,7 +258,7 @@ def test_a_longer_aging_generation_lets_the_first_mb_alone_through() -> None:
         21_000,
         "young",
         250,
-        237,
+        242,
     )
 
 

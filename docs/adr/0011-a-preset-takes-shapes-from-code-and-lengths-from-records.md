@@ -34,15 +34,17 @@ automatic collection comes during its loops, and no sweep ends.
 Some workload parameters neither source fixes, such as the start-up heap's
 shape or the churn inside a library. The five benchmarks' workers start up
 alike: in #117's rerun, their first two collections agree within 5%. Their
-presets share one start-up of four structures. Under the module root hang a
+presets share one start-up of five structures. Under the module root hang a
 tree, which shutdown leaves as cyclic garbage, and chains, which refcounting
 frees. Shutdown's collections set no target: gcmon reads a worker once a tick,
 and a worker can end before gcmon reads them (#117). The tree's size comes from
 what `finalize_modules`' first collection frees, in the workers where gcmon
 caught it. Under a frame root hang chains for the objects sys does not reach,
-which the branch's full collections examine where they mark the rest. A tree
-that start-up lets go of as soon as it builds gives its first collections the
-cyclic garbage they free.
+which the branch's full collections examine where they mark the rest. Start-up
+lets go of two trees as soon as it builds them, which give its first two
+collections the cyclic garbage they free (#260). The first comes before the
+module root's structures and the second after them, so the second collection
+still finds the second tree young.
 
 The objects a worker's first collection examines under the legacy collector
 set start-up's size, where the heap that collection reads would count more. A

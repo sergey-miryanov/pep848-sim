@@ -36,16 +36,18 @@ class Preset:
 
 @dataclass(frozen=True)
 class _StartUp:
-    """A worker's start-up and imports, as four structures (ADR 0011): a tree that
-    start-up lets go of as soon as it builds, which its first collections find as
-    cyclic garbage; under the module root, chains that refcounting frees at
-    shutdown and a tree that shutdown leaves as cyclic garbage; and chains that sys
-    does not reach, which a full collection examines where it marks the rest. A
-    frame root holds those until shutdown."""
+    """A worker's start-up and imports, as five structures (ADR 0011): under the
+    module root, chains that refcounting frees at shutdown and a tree that shutdown
+    leaves as cyclic garbage; and chains that sys does not reach, which a full
+    collection examines where it marks the rest. A frame root holds those until
+    shutdown. Two trees start-up lets go of as soon as it builds them, one before
+    the module root's structures and one after, give its first two collections the
+    cyclic garbage they free."""
 
     garbage: int
     acyclic: int
     cyclic: int
+    late_garbage: int
     unreached: int
     # The churn after each object. It takes in the tuples a collection untracks
     # without examining them, which the simulator does not model (ADR 0011).
@@ -69,13 +71,20 @@ class _StartUp:
             built(Tree(), self.garbage, "frame", 0),
             built(Chains(width=16), self.acyclic, "module", None),
             built(Tree(), self.cyclic, "module", None),
+            built(Tree(), self.late_garbage, "frame", 0),
             built(Chains(width=16), self.unreached, "frame", None),
         )
 
     @property
     def length(self) -> int:
         """Its length on the allocation clock, in kB."""
-        objects = self.garbage + self.acyclic + self.cyclic + self.unreached
+        objects = (
+            self.garbage
+            + self.acyclic
+            + self.cyclic
+            + self.late_garbage
+            + self.unreached
+        )
         return objects * (1 + self.churn)
 
 
@@ -83,15 +92,20 @@ class _StartUp:
 # The five benchmarks' first collections agree within 5%, so their presets share
 # it. The records give real objects, each 16 to a simulated one (ADR 0002).
 _START_UP = _StartUp(
-    # Records: the 216 the first collections free under the legacy collector, 129,
-    # 84 and 3, and create_gc_cycles' first gc.collect() under the incremental one.
-    garbage=13,
+    # Records: the 129 the first collection frees under the legacy collector.
+    garbage=8,
     # Records: what create_gc_cycles' full collections keep, 18,291, less the
     # other two.
     acyclic=121,
     # Records: the 12,637 finalize_modules' first collection frees, where gcmon
     # caught it.
     cyclic=790,
+    # Records: the 84 and 3 the second and third collections free under the legacy
+    # collector. It builds after the cyclic tree, which ends past the first
+    # collection, and goes before the second, at 4,000 kB. With the first tree it
+    # makes the 216 create_gc_cycles' first gc.collect() frees under the
+    # incremental collector.
+    late_garbage=5,
     # Records: the 3,705 each of create_gc_cycles' gc.collect() calls examines and
     # keeps under the incremental collector, the rings aside.
     unreached=232,
