@@ -52,7 +52,7 @@ lists them.
 | `test` | pytest, Hypothesis invariants included, with the coverage gate |
 | `lint` | ruff's checker and formatter |
 | `typecheck` | mypy and pyrefly, both strict |
-| `site` | assembles `_site/`: the pages at the top, and the rest of `site/` with `src/pep848_sim` zipped as `sim.zip` in `v/<commit>/`; `--keep REF` keeps the folder the site at `REF` serves too |
+| `site` | assembles `_site/`: the pages at the top, and the rest of `site/` with `src/pep848_sim` zipped as `sim.zip` and the presets page's `plot.json` in `v/<commit>/`; `--keep REF` keeps the folder the site at `REF` serves too |
 | `serve` | runs `site`, then serves `_site/` on `http://localhost:8000` |
 | `compare` | runs each preset under both collectors and prints its collections beside its benchmark's in `data/` |
 
@@ -124,15 +124,20 @@ they import strategies and helpers from one another.
 
 ## The site
 
-There is no build step. `site/` holds hand-written HTML, the widget (one Web
-Component, `<gc-widget>`) and the worker. `theme.css` holds the colors of
-every page and the widget, and `theme.js` picks the light or the dark theme
+`site/` holds hand-written HTML, the widget (one Web Component,
+`<gc-widget>`), the worker and the presets page. `theme.css` holds the colors
+of every page and the widget, and `theme.js` picks the light or the dark theme
 (ADR 0018). Pyodide, Observable Plot and
 d3-force load from jsDelivr at exact versions. The simulator reaches the browser as
 `sim.zip`, which the worker unpacks into Pyodide and imports. `just site`
 copies the pages to the top of `_site/` and every other file into a folder
 named for the commit, which the pages' links name, so each page loads the
 files it was deployed with (ADR 0019).
+
+The one build step is the presets page's `plot.json`: `just site` runs each
+preset under both collectors and writes their collections beside its
+benchmark's workers', from `data/`, into the commit's folder (ADR 0021). It
+takes about 10 seconds, and the presets page draws only under `just serve`.
 
 The simulator package never imports from the browser (`js`, `pyodide`): it
 is plain Python, which is what lets the tests run it under CPython.

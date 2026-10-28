@@ -4,7 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from benchmarks import DATA, FILES, Benchmark, Tally, load, load_data
+from benchmarks import (
+    DATA,
+    FILES,
+    Benchmark,
+    Collection,
+    Tally,
+    load,
+    load_data,
+    read_workers,
+)
 from pep848_sim.collectors.collector import CollectorSettings
 
 HEADER = ",".join(
@@ -252,6 +261,38 @@ def test_running_totals_that_fall_are_an_error(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="json_loads worker 7's generation 0 totals"):
         load(csv)
+
+
+def test_a_worker_reads_as_its_collections_in_the_order_of_their_ts(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "trace.csv"
+    path.write_text(
+        f"{HEADER},increment_size,old_work\n"
+        # A gc.collect() call, the worker's last manual row: shutdown's.
+        "json_loads,7,1,0,200,2,0,2,1,400,4,,0\n"
+        "json_loads,7,1,0,100,1,1,0,1,100,10,250,-4000\n",
+        newline="",
+    )
+
+    assert read_workers(path) == {
+        "json_loads": [
+            [
+                Collection(1, "automatic", Tally(1, 100, 10), 250, -4000, False),
+                Collection(2, "explicit", Tally(1, 400, 4), None, 0, True),
+            ]
+        ]
+    }
+
+
+def test_a_file_without_increment_size_and_old_work_reads_none(
+    tmp_path: Path,
+) -> None:
+    csv = write(tmp_path / "trace.csv", "json_loads,7,1,0,100,0,1,0,1,100,10")
+
+    [[collection]] = read_workers(csv)["json_loads"]
+
+    assert (collection.increment_size, collection.old_work) == (None, None)
 
 
 def test_yield_is_collected_over_candidates() -> None:

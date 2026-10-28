@@ -36,9 +36,9 @@ typecheck:
     mypy
     pyrefly check --min-severity=warn
 
-# assemble _site/: the pages at the top, the rest of site/ and src/pep848_sim
-# zipped as sim.zip in v/<commit>/; --keep REF keeps the folder the site at REF
-# serves too
+# assemble _site/: the pages at the top, the rest of site/, src/pep848_sim
+# zipped as sim.zip and the presets page's plot.json in v/<commit>/; --keep REF
+# keeps the folder the site at REF serves too
 site *args:
     python tools/assemble_site.py {{args}}
 

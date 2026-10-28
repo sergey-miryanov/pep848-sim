@@ -25,7 +25,8 @@ deploys inside 10 minutes would clear a folder that a page from the first
 could still ask for, and we take that risk over keeping more.
 
 `site/` stays as written, and `just serve` serves the assembled site, so work
-on a page needs no build step. A pull request's preview takes the same folder
+on a page needs no build step. The presets page is the exception: `just site`
+builds its `plot.json` into the folder (ADR 0021). A pull request's preview takes the same folder
 under its own path, and each push replaces the preview whole.
 
 The folder takes the commit's name, which tells which commit a page came from.
