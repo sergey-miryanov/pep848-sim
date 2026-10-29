@@ -75,6 +75,10 @@ class Benchmark(NamedTuple):
     # Real objects each worker's first collection examined, which set start-up's
     # size (ADR 0011), averaged over the workers whose first collection gcmon read.
     first_examined: float | None = None
+    # The kB allocated as each worker's last collection before shutdown started,
+    # averaged over the workers whose trace carries it, where a run that reaches
+    # past it outlasts them. Every collection counts, past a reach or not.
+    last_started: float | None = None
 
     def per_worker(self, generation: int, kind: Kind) -> float:
         """How many collections of a generation and kind a worker makes: for
@@ -97,6 +101,12 @@ class Collection(NamedTuple):
     old_work: int | None
     # Whether it is one of shutdown's, which set no target.
     shutdown: bool
+    # The kB the worker had allocated as the collection started, by the branch's
+    # running total of the bytes it allocated for objects the collector tracks: the
+    # allocations whose budget starts an automatic collection, on the simulator's
+    # clock (ADR 0011). A record gcmon lost moves no later row's. None where the
+    # row leaves it blank or the file has no such column.
+    allocated: float | None = None
 
 
 def read_workers(path: Path) -> dict[str, list[list[Collection]]]:
@@ -141,31 +151,43 @@ def read_workers(path: Path) -> dict[str, list[list[Collection]]]:
                     _optional(row.get("increment_size")),
                     _optional(row.get("old_work")),
                     i in shutdown,
+                    _kb(row.get("allocated")),
                 )
             )
         read[benchmark].append(collections)
     return read
 
 
+def summed(workers: list[list[Collection]], reach: int | None = None) -> Benchmark:
+    """A benchmark's workers' collections summed, shutdown's left out. Given a
+    run's reach, the kB it allocates before shutdown, it leaves out too those that
+    started past it, which a run that ends there cannot make."""
+    tallies: dict[tuple[int, Kind], Tally] = {}
+    first_examined = []
+    last_started = []
+    for collections in workers:
+        # A worker's first row holds its first collection alone, unless gcmon lost
+        # that one.
+        if collections[0].gained.collections == 1:
+            first_examined.append(collections[0].gained.candidates)
+        before_shutdown = [c for c in collections if not c.shutdown]
+        if before_shutdown and before_shutdown[-1].allocated is not None:
+            last_started.append(before_shutdown[-1].allocated)
+        for collection in before_shutdown:
+            started = collection.allocated
+            if reach is not None and started is not None and started > reach:
+                continue
+            key = (collection.generation, collection.kind)
+            tallies[key] = tallies.get(key, Tally()).add(collection.gained)
+    return Benchmark(len(workers), tallies, _mean(first_examined), _mean(last_started))
+
+
 def load(path: Path) -> dict[str, Benchmark]:
     """Each benchmark in one CSV file, by pyperformance's name for it, its workers'
     collections summed, shutdown's left out."""
-    benchmarks = {}
-    for name, workers in sorted(read_workers(path).items()):
-        tallies: dict[tuple[int, Kind], Tally] = {}
-        first_examined = []
-        for collections in workers:
-            # A worker's first row holds its first collection alone, unless gcmon
-            # lost that one.
-            if collections[0].gained.collections == 1:
-                first_examined.append(collections[0].gained.candidates)
-            for collection in collections:
-                if collection.shutdown:
-                    continue
-                key = (collection.generation, collection.kind)
-                tallies[key] = tallies.get(key, Tally()).add(collection.gained)
-        benchmarks[name] = Benchmark(len(workers), tallies, _mean(first_examined))
-    return benchmarks
+    return {
+        name: summed(workers) for name, workers in sorted(read_workers(path).items())
+    }
 
 
 def _shutdown(rows: list[dict[str, str]]) -> set[int]:
@@ -191,11 +213,28 @@ def _optional(value: str | None) -> int | None:
     return int(value) if value else None
 
 
-def _mean(values: list[int]) -> float | None:
+def _kb(value: str | None) -> float | None:
+    """A column's bytes in kB, None where the row leaves it blank or the file has no
+    such column."""
+    return int(value) / 1024 if value else None
+
+
+def _mean(values: list[int] | list[float]) -> float | None:
     return sum(values) / len(values) if values else None
+
+
+@cache
+def workers_data(
+    directory: Path = DATA,
+) -> dict[str, dict[str, list[list[Collection]]]]:
+    """Each collector's benchmarks' workers, from its file in data/."""
+    return {name: read_workers(directory / file) for name, file in FILES.items()}
 
 
 @cache
 def load_data(directory: Path = DATA) -> dict[str, dict[str, Benchmark]]:
     """Each collector's benchmarks, from its file in data/."""
-    return {name: load(directory / file) for name, file in FILES.items()}
+    return {
+        name: {benchmark: summed(found) for benchmark, found in sorted(read.items())}
+        for name, read in workers_data(directory).items()
+    }

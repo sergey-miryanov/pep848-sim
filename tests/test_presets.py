@@ -3,8 +3,8 @@ from itertools import pairwise
 
 import pytest
 
-from benchmarks import Tally, load_data
-from compare_presets import COLLECTORS, run_preset, tally
+from benchmarks import Tally
+from compare_presets import COLLECTORS, benchmark, run_preset, tally
 from pep848_sim.collectors.collector import Collector, CollectorSettings
 from pep848_sim.collectors.heap import Heap
 from pep848_sim.collectors.incremental import IncrementalCollector
@@ -223,13 +223,13 @@ def test_connected_components_frees_its_graph_with_its_module_at_shutdown(
 )
 def test_each_presets_yields_match_its_benchmarks(name: str, collector: str) -> None:
     """By generation and kind, wherever the benchmark's collections examined an
-    object (#117)."""
+    object (#117), within the kB the preset's run allocates."""
     preset = PRESETS[name]
-    benchmark = load_data()[collector][preset.benchmark]
+    target_benchmark = benchmark(preset, collector)
 
     simulated = tally(run_preset(preset, COLLECTORS[collector]))
 
-    for key, target in sorted(benchmark.tallies.items()):
+    for key, target in sorted(target_benchmark.tallies.items()):
         if target.yield_ is not None:
             got = simulated.tallies.get(key, Tally()).yield_
             wanted = pytest.approx(target.yield_, rel=YIELD_REL, abs=YIELD_ABS)

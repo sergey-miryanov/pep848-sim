@@ -170,9 +170,11 @@ CREATE_GC_CYCLES = Preset(
 # globals, DICT, TUPLE and the copies of DICT, come to a few real objects, which
 # start-up takes in.
 
-# Records: the automatic collections per worker. Each marks threshold0 kB of
-# allocation (ADR 0011), and the records cannot tell where before the next one the
-# worker ends, so the run ends halfway.
+# Records: the automatic collections a worker makes under the incremental
+# collector. Each marks threshold0 kB of allocation (ADR 0011), and the run ends
+# halfway to the next, at 21,000 kB. The one worker whose shutdown gcmon caught
+# ended at 20,438. pyperf calibrated the legacy workers to 512 loops a value, not
+# 256, so they made 17 and a gen 1 collection, past the run's reach.
 _JSON_LOADS_COLLECTIONS = 10
 
 JSON_LOADS = Preset(

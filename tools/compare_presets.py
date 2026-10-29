@@ -1,13 +1,16 @@
 """Run each preset under both collectors and print what its collections did beside
 its benchmark's, as #117 loads them: by generation and kind, the collections a
 worker makes, the real objects one of them examines on average and their yield,
-and the objects its first collection examines. We change a preset's open
-workload parameters until the two agree (ADR 0011).
+the objects its first collection examines, and the kB allocated as its last
+collection before shutdown starts. A worker's collections that start past the
+kB the preset's run allocates count for none of the rest: a run that ends sooner
+cannot make them. We change a preset's open workload parameters until the two
+agree (ADR 0011).
 """
 
 from collections.abc import Iterable
 
-from benchmarks import Benchmark, Kind, Tally, load_data
+from benchmarks import Benchmark, Kind, Tally, summed, workers_data
 from pep848_sim.collectors.collector import (
     Collector,
     CollectorSettings,
@@ -52,10 +55,11 @@ def tally(records: Iterable[Record], constants: Constants | None = None) -> Benc
     """A run's records as one worker's collections, tallied as #117 tallies a
     benchmark's, in real objects by the run's constants, the defaults unless
     given: the objects a collection examined are its candidates, and those it
-    freed are what it collected."""
+    freed are what it collected. The clock reads kB allocated."""
     constants = constants or Constants()
     tallies: dict[tuple[int, Kind], Tally] = {}
     first_examined = None
+    last_started = None
     for record in records:
         examined = constants.real(record.survived + record.freed)
         if first_examined is None:
@@ -63,9 +67,17 @@ def tally(records: Iterable[Record], constants: Constants | None = None) -> Benc
         key = FILED[record.kind]
         if key is None:
             continue
+        last_started = record.clock
         collection = Tally(1, examined, constants.real(record.freed))
         tallies[key] = tallies.get(key, Tally()).add(collection)
-    return Benchmark(1, tallies, first_examined)
+    return Benchmark(1, tallies, first_examined, last_started)
+
+
+def benchmark(preset: Preset, collector: str) -> Benchmark:
+    """A preset's benchmark under a collector, its workers' collections summed
+    within the kB the preset's run allocates."""
+    workers = workers_data()[collector][preset.benchmark]
+    return summed(workers, preset.run_length)
 
 
 def report(title: str, benchmark: Benchmark, preset: Benchmark) -> list[str]:
@@ -90,6 +102,11 @@ def report(title: str, benchmark: Benchmark, preset: Benchmark) -> list[str]:
         f" benchmark {_count(benchmark.first_examined)},"
         f" preset {_count(preset.first_examined)}"
     )
+    lines.append(
+        "  the last collection before shutdown starts, in kB allocated:"
+        f" benchmark {_count(benchmark.last_started)},"
+        f" preset {_count(preset.last_started)}"
+    )
     return lines
 
 
@@ -102,14 +119,11 @@ def _count(objects: float | None) -> str:
 
 
 def main() -> None:
-    data = load_data()
     for name, preset in PRESETS.items():
         for collector, make in COLLECTORS.items():
             title = f"{name} under the {collector} collector"
             simulated = tally(run_preset(preset, make))
-            print(
-                "\n".join(report(title, data[collector][preset.benchmark], simulated))
-            )
+            print("\n".join(report(title, benchmark(preset, collector), simulated)))
             print()
 
 

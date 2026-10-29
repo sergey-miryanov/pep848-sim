@@ -18,7 +18,10 @@ automatic collection comes when it runs out: the rule the simulator's clock
 follows. Each automatic collection marks `threshold0` kB, so a loop that spans
 n of them allocates n × `threshold0` kB. `gc.collect()` resets the budget too.
 A loop that allocates less than `threshold0` kB between two calls leaves no
-automatic collection to count, so we take its length from the code's counts.
+automatic collection to count, so we took its length from the code's counts.
+From revision b8d8db86a4c on, each record carries `allocated`, the bytes the
+worker had allocated that way as the collection started (#267). We read
+lengths from it, between any two collections, explicit ones included.
 
 A preset runs for its worker's own length on the clock: start-up, the
 benchmark's loops as many times as the records show, and shutdown. The loops
@@ -30,6 +33,14 @@ the last one, and the preset ends halfway. A length set by a count of sweeps
 would fail for a benchmark that calls `gc.collect()` more often than every
 `threshold0` kB, as create_gc_cycles does: each call resets the budget, so no
 automatic collection comes during its loops, and no sweep ends.
+
+pyperf calibrates each run's loops on that run's timings, so a benchmark's
+workers can run for different lengths under the two collectors. In the trace
+at b8d8db86a4c, json_loads' workers made 10 automatic collections under the
+incremental collector and 17 under the legacy one. A preset keeps one length,
+since a widget runs both collectors on one workload, and follows the
+incremental workers'. The yield test and `just compare` count only the
+workers' collections that start within the kB the preset's run allocates.
 
 Some workload parameters neither source fixes, such as the start-up heap's
 shape or the churn inside a library. The five benchmarks' workers start up

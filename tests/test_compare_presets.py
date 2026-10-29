@@ -26,6 +26,8 @@ def test_tally_files_each_record_where_the_runtimes_stats_would() -> None:
         },
         # What the young collection examined.
         first_examined=64,
+        # The clock of the full collection, the last before shutdown.
+        last_started=2_000,
     )
 
 
@@ -34,7 +36,7 @@ def test_tally_counts_real_objects_by_the_runs_constants() -> None:
 
     # 8 real objects to a simulated one at 128 B each.
     assert tally(records, Constants(real_object_size=128)) == Benchmark(
-        1, {(0, "automatic"): Tally(1, 32, 8)}, 32
+        1, {(0, "automatic"): Tally(1, 32, 8)}, 32, 2_000
     )
 
 
@@ -47,6 +49,7 @@ def test_the_report_sets_each_generation_and_kind_beside_the_benchmarks() -> Non
         workers=4,
         tallies={(0, "automatic"): Tally(8, 96, 0), (2, "explicit"): Tally(4, 80, 20)},
         first_examined=8_400,
+        last_started=20_001.5,
     )
     preset = Benchmark(1, {(2, "explicit"): Tally(1, 10_000, 3_000)}, None)
 
@@ -68,4 +71,8 @@ def test_the_report_sets_each_generation_and_kind_beside_the_benchmarks() -> Non
     ]
     assert lines[5] == (
         "  the first collection examines, in real objects: benchmark 8,400, preset -"
+    )
+    assert lines[6] == (
+        "  the last collection before shutdown starts, in kB allocated:"
+        " benchmark 20,002, preset -"
     )
