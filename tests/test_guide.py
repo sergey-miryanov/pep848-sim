@@ -486,7 +486,7 @@ def test_the_runtime_starts_two_collections_before_the_loops() -> None:
 
 
 def test_the_calls_cost_the_same_under_either_collector() -> None:
-    assert [thousands(w) for w in wpm("gc-collect-and-shutdown-3")] == [17.2, 17.2]
+    assert [thousands(w) for w in wpm("gc-collect-and-shutdown-3")] == [12.7, 12.6]
 
 
 def test_a_fifth_of_what_the_incremental_collector_examines_is_rings() -> None:
@@ -505,16 +505,16 @@ def test_shutdowns_second_collection_frees_the_tree() -> None:
     for records in run("gc-collect-and-shutdown-6"):
         shutdown = [r for r in records if r.kind == "shutdown"]
         assert [bool(r.freed) for r in shutdown] == [False, True, False]
-        assert round(shutdown[0].clock / 1000) == 72
+        assert round(shutdown[0].clock / 1000) == 98
         assert thousands(sum(before_shutdown(records)[-1].spaces_after)) == 1.1
         assert sum(shutdown[-1].spaces_after) <= 1
 
 
 def test_below_a_loops_build_the_runtime_collects_again() -> None:
     legacy, incremental = run("gc-collect-and-shutdown-7")
-    assert len(automatic(legacy)) == 558
+    assert len(automatic(legacy)) == 566
     assert sum(r.freed for r in automatic(legacy)) == 13
-    assert sum(map(work, automatic(incremental))) == 875
+    assert sum(map(work, automatic(incremental))) == 1_075
 
 
 def test_the_peps_thresholds_collect_every_2_mb() -> None:
