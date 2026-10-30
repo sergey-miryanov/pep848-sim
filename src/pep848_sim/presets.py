@@ -243,11 +243,19 @@ _XML_SLOT = 360
 # 3,864 kB before its first parse: the tree, and 11 kB of churn after each of its
 # objects. The workers' collections come threshold0 kB apart there.
 _XML_TREE_CHURN = 11
+_XML_TREE_BUILD = _XML_TREE * (1 + _XML_TREE_CHURN)
 # Records: a worker's values run 25,468 kB each. A value takes 71 slots, 25,560 kB,
 # so that each value's parses fall in the same slots. pyperf runs a warmup and
 # three values a worker, one loop each.
 _XML_VALUE = 71 * _XML_SLOT
 _XML_VALUES = 4
+# Code: each parsed tree goes as the next parse but one returns, two slots on, and
+# the collection that waits for that parse still finds it. A value's first parse
+# starts as soon as the value's own tree has built, 96 kB ahead of its slot, so
+# its tree lives that much longer to see the third parse return, and the rest as
+# long. Records: the workers' gen 0 collections examine three parsed trees while
+# they parse, 15,480 real objects.
+_XML_PARSED_LIFETIME = 2 * _XML_SLOT + -_XML_TREE_BUILD % _XML_SLOT + 1
 # Records: the workers' first late collection starts at 10,215 to 10,229 kB and
 # examines three parsed trees, so it follows their third parse, and their parses
 # start at about 9,150 kB. Their first value starts 660 kB after start-up ends.
@@ -281,12 +289,11 @@ XML_ETREE_PARSE = Preset(
                 shape=_XML_SHAPE,
                 size=_XML_TREE,
                 root="frame",
-                lifetime=_XML_VALUE - _XML_TREE * (1 + _XML_TREE_CHURN),
+                lifetime=_XML_VALUE - _XML_TREE_BUILD,
                 rebuild_interval=_XML_VALUE,
                 build_churn=_XML_TREE_CHURN,
             ),
-            # Code: the parsed trees, from the file and from the bytes in turn. Each
-            # goes as the next of its kind, the next build but one, builds. A
+            # Code: the parsed trees, from the file and from the bytes in turn. A
             # value's first parse waits for its own tree and runs into the next
             # slot, which it takes, so a value parses 60. The C accelerator's
             # parser builds each tree in C.
@@ -294,7 +301,7 @@ XML_ETREE_PARSE = Preset(
                 shape=_XML_SHAPE,
                 size=_XML_TREE,
                 root="frame",
-                lifetime=2 * _XML_SLOT,
+                lifetime=_XML_PARSED_LIFETIME,
                 rebuild_interval=_XML_SLOT,
                 build_churn=0,
                 built_in_c=True,

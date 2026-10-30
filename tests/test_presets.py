@@ -181,6 +181,31 @@ def test_xml_etree_parse_collects_as_a_parse_ends_if_one_is_under_way(
     assert sum(gap > threshold0 for gap, _ in gaps) == 40
 
 
+def test_xml_etree_parse_gen_0_collections_find_three_parsed_trees_as_it_parses() -> (
+    None
+):
+    """Under the legacy collector, a gen 0 collection a parse holds back finds the
+    tree it parsed and the two before it young, and one in a value's Python finds
+    less than a tree."""
+    preset = XML_ETREE_PARSE
+    parsed = preset.workload.structures[6].size
+    records = run_preset(preset, LegacyCollector)
+    starts = [0, *(r.clock for r in records)]
+    threshold0 = CollectorSettings().threshold0
+
+    gen_0 = [
+        (r.survived + r.freed, r.clock - last > threshold0)
+        for r, last in zip(records, starts, strict=False)
+        if r.kind == "gen 0"
+    ]
+
+    late = [examined for examined, held in gen_0 if held]
+    on_time = [examined for examined, held in gen_0[2:] if not held]
+    assert len(late) == 36
+    assert all(3 * parsed <= examined < 4 * parsed for examined in late)
+    assert all(examined < parsed for examined in on_time)
+
+
 def test_async_tree_io_tg_drops_each_runs_tree_as_the_next_run_starts() -> None:
     preset = ASYNC_TREE_IO_TG
     tree = preset.workload.structures[5]
