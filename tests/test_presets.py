@@ -227,12 +227,12 @@ def test_async_tree_io_tg_drops_each_runs_tree_before_the_next_run_starts() -> N
     assert [i for i, _, _ in workload.builds] == [0, 1, 2, 3, 4, 5, 8, *[6, 7] * 4]
     trees = [(first, last) for i, first, last in workload.builds if i == 6]
     finishes = [(first, last) for i, first, last in workload.builds if i == 7]
-    # Each run's tree goes while its tasks finish, and what they keep goes as the
-    # next run starts, the last as the worker ends.
+    # Each run's tree goes while its tasks finish, and what they keep goes 2 MB
+    # before the next run starts, the last 2 MB before the worker ends.
     for (_, built), (first, last) in zip(trees, finishes, strict=True):
         assert built + 1 == first
         assert first < built + tree.lifetime < last
-    ends = [last + finished.lifetime for _, last in finishes]
+    ends = [last + finished.lifetime + 2_000 for _, last in finishes]
     assert ends == [*(first - 1 for first, _ in trees[1:]), preset.run_length]
 
 

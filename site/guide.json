@@ -201,7 +201,7 @@
           "text": "Each old collection, between two young ones, moves objects from pending to visited. Once pending runs empty, the two swap: visited, holding the whole old generation, becomes the new pending, and a new sweep starts.",
           "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10},
           "marks": [
-            {"part": "figure.gen2_collections_sweeps", "note": "17 sweeps. While a tree grows, each runs about twice as long as the last: they end at 44, 64 and 104 MB. The fourth ends at 128 MB, as the tree goes."}
+            {"part": "figure.gen2_collections_sweeps", "note": "17 sweeps. While a tree grows, each runs about twice as long as the last: they end at 44, 64 and 104 MB. The fourth runs on to 164 MB."}
           ]
         },
         {
@@ -225,8 +225,8 @@
           "text": "The legacy collector's gen 1 collections take the nursery and the aging generation together, and its one gen 2 collection takes the whole heap.",
           "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10},
           "marks": [
-            {"part": "legacy.work", "note": "The tallest bars hold gen 1 collections, up to 11,150 objects each. The gen 2 collection, at 266 MB, comes between two trees and examines 1,486."},
-            {"part": "figure.work_per_mb", "note": "867 against 654. As each run ends, the legacy collector's gen 0 collections examine what the finishing tasks allocate, and the incremental collector's young collections come after the tree has gone."}
+            {"part": "legacy.work", "note": "The tallest bars hold gen 1 collections, up to 13,470 objects each. The gen 2 collection, at 266 MB, comes between two trees and examines 1,760."},
+            {"part": "figure.work_per_mb", "note": "853 against 677. As each run ends, the legacy collector's gen 0 collections examine what the finishing tasks allocate, and the incremental collector's young collections come after the tree has gone."}
           ]
         },
         {
@@ -243,7 +243,7 @@
           "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.6.size": 59300}},
           "marks": [
             {"part": "legacy.work", "note": "The gen 2 collection's bar at 266 MB stands more than four times as tall as the tallest gen 1 bar."},
-            {"part": "figure.peak_work", "note": "54.1K for that gen 2 collection, against 1.8K for the incremental collector."}
+            {"part": "figure.peak_work", "note": "55.3K for that gen 2 collection, against 1.8K for the incremental collector."}
           ]
         }
       ]
@@ -309,8 +309,8 @@
           "text": "Give each task a link back to its parent, and each tree turns into cyclic garbage as it goes. Now the old collections free whole trees, and the credit counts.",
           "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.6.shape": "tree"}},
           "marks": [
-            {"part": "incremental.work", "note": "Increments at 236 and 380 MB free two of the four trees, 52,487 objects each."},
-            {"part": "figure.gen2_collections_sweeps", "note": "8 sweeps."}
+            {"part": "incremental.work", "note": "Increments at 244, 428 and 444 MB free three of the four trees, 52,487 objects each."},
+            {"part": "figure.gen2_collections_sweeps", "note": "9 sweeps."}
           ]
         },
         {
@@ -318,7 +318,7 @@
           "text": "Set the multiplier to 0, and an increment that frees a tree pays nothing back into the budget.",
           "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.6.shape": "tree", "constants.freed_credit": 0}},
           "marks": [
-            {"part": "incremental.work", "note": "Increments at 236 and 468 MB free two trees, the second 88 MB later than with the credit."},
+            {"part": "incremental.work", "note": "Increments at 244 and 484 MB free two trees, the second 56 MB later than with the credit."},
             {"part": "figure.gen2_collections_sweeps", "note": "5 sweeps."}
           ]
         }
@@ -369,8 +369,8 @@
           "text": "The PEP expects peak memory to come out about the same, and bounds the extra a small program pays at 24 MB. A large program can come out ahead: here async_tree_io_tg, with a tenth of its churn starting cycles that live 10 MB on average.",
           "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.churn.cycle_share": "1/10", "workload.churn.lifetime_mean": 10000}},
           "marks": [
-            {"part": "figure.peak_uncollected_garbage", "note": "5.4 MB for the legacy collector, which leaves old cycles to its next gen 2 collection, against 1.2."},
-            {"part": "figure.work_per_mb", "note": "1,526 against 818."}
+            {"part": "figure.peak_uncollected_garbage", "note": "5.6 MB for the legacy collector, which leaves old cycles to its next gen 2 collection, against 1.2."},
+            {"part": "figure.work_per_mb", "note": "1,524 against 836."}
           ]
         }
       ]

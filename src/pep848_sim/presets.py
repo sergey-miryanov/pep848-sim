@@ -97,12 +97,15 @@ class _StartUp:
         return sum(s.build_length for s in self.structures)
 
     def set_up(
-        self, length: int, churn: int | Fraction | None = None, lifetime: int = 0
+        self,
+        length: int,
+        churn: int | Fraction | None = None,
+        lifetime: int | None = 0,
     ) -> StructureParameters:
         """What a worker allocates after start-up and before its loops, `length` kB
         at `churn`, or start-up's late churn: chains that build once, before the
-        loops repeat, and that refcounting frees `lifetime` kB after they end (ADR
-        0011)."""
+        loops repeat, and that refcounting frees `lifetime` kB after they end, or
+        never (ADR 0011)."""
         churn = self.late_churn if churn is None else churn
         return StructureParameters(
             shape=Chains(width=16),
@@ -358,13 +361,20 @@ _ASYNC_BUILD_CHURN = Fraction(117, 100)
 # collections examine 22,000 to 39,388 real objects each, 26,000 on average: 0.23
 # kB of churn for each kB the finishing tasks keep.
 _ASYNC_FINISH_CHURN = Fraction(23, 100)
-_ASYNC_TREE_LIFETIME = 6_000
+# Records: the workers' third tree stands at their 193rd collection, a gen 1, 6.4
+# MB after it has built: the collection examines 199,934 real objects. The tree
+# goes 8 MB on.
+_ASYNC_TREE_LIFETIME = 8_000
+# Records: the gen 0 collections fall back to 15,600 or below about 2 MB before
+# each run ends: 954 real objects at the 197th.
+_ASYNC_FINISHED_EARLY = 2_000
 # Records: the workers' first tree starts at 7,524 kB. Their third collection
 # examines 5,294 real objects at 6,000 kB, 7.26 kB of churn after each object, and
 # their fourth 6,901 at 8,000 kB, as the tree starts: what the set-up allocated
-# since the third outlives it.
+# since the third outlives it. It stays to shutdown: their gen 2 collection,
+# between two trees, examines 30,468, 6,700 more than start-up's.
 _ASYNC_SET_UP = _START_UP.set_up(
-    7_524 - _START_UP.length, churn=Fraction(726, 100), lifetime=500
+    7_524 - _START_UP.length, churn=Fraction(726, 100), lifetime=None
 )
 # Records: the automatic collections per worker. Each marks threshold0 kB of
 # allocation (ADR 0011), and the records cannot tell where before the next one the
@@ -381,7 +391,7 @@ _ASYNC_RUN = (
 ) // _ASYNC_RUNS
 # Code: the task tree, built a level at a time as asyncio runs each task after the
 # one that started it. No task links back to its parent, so refcounting frees it as
-# its tasks finish, here at once where the workers' heap peaks. Records: sys reaches
+# its tasks finish, here at once. Records: sys reaches
 # it, through the event loop that runs it. The branch's old collections mark from
 # sys alone, and spend their whole budget while they examine 643 real objects each.
 _ASYNC_TASK_TREE = StructureParameters(
@@ -392,10 +402,10 @@ _ASYNC_TASK_TREE = StructureParameters(
     rebuild_interval=_ASYNC_RUN,
     build_churn=_ASYNC_BUILD_CHURN,
 )
-# Records: what the tasks allocate as they finish and keep to the run's end,
-# reached through the event loop as the tree is. It fills the rest of the run, and
-# goes as the next starts.
-_ASYNC_FINISH_ROOM = _ASYNC_RUN - _ASYNC_TASK_TREE.build_length
+# Records: what the tasks allocate as they finish and keep until the last one has,
+# reached through the event loop as the tree is. It fills the run up to the last
+# 2 MB, and goes as it ends.
+_ASYNC_FINISH_ROOM = _ASYNC_RUN - _ASYNC_TASK_TREE.build_length - _ASYNC_FINISHED_EARLY
 _ASYNC_FINISH = _ASYNC_FINISH_ROOM // (1 + _ASYNC_FINISH_CHURN)
 _ASYNC_FINISHED = StructureParameters(
     shape=Chains(width=16),
