@@ -33,10 +33,11 @@ counts its interval from there, so its first build starts the first loop,
 whatever start-up's length. A worker that allocates more before its loops, as
 create_gc_cycles' workers do up to their first `gc.collect()` at 5,484 kB,
 gets a structure that builds once after start-up and ends where the records
-start the loops. Refcounting frees it as it ends, or later if a collection in
-the records still finds it, as async_tree_io_tg's fourth does (#278). The
-worker's automatic collections give its length if the loops leave
-no count in the records, as json_loads' calls leave none: it ends within
+start the loops. Refcounting frees it as it ends, or later if the records'
+collections still find it: async_tree_io_tg's fourth finds it, and so does its
+gen 2 collection, so it stays to shutdown (#278, #279). The worker's automatic
+collections give its length if the loops leave no count in the records, as
+json_loads' calls leave none: it ends within
 `threshold0` kB of the last one, and the preset ends halfway. A length set by a
 count of sweeps would fail for a benchmark that calls `gc.collect()` more often
 than every `threshold0` kB, as create_gc_cycles does: each call resets the
