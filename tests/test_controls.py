@@ -342,19 +342,33 @@ def home_entries() -> list[dict[str, Any]]:
     page = Path("site/index.html").read_text(encoding="utf-8")
     widget = page.split('<gc-widget id="home-widget">')[1]
     config = widget.split('<script type="application/json">')[1].split("</script>")[0]
-    return json.loads(config)["entries"]
+    entries: list[dict[str, Any]] = json.loads(config)["entries"]
+    return entries
+
+
+def parsed(s: StructureParameters) -> bool:
+    return s.built_in_c
+
+
+def rings(s: StructureParameters) -> bool:
+    return isinstance(s.shape, Rings)
+
+
+def task_tree(s: StructureParameters) -> bool:
+    return isinstance(s.shape, Hierarchy) and s.rebuild_interval is not None
+
+
+def graph(s: StructureParameters) -> bool:
+    return isinstance(s.shape, Graph)
 
 
 @pytest.mark.parametrize(
     ("name", "sized"),
     [
-        ("xml_etree_parse", lambda s: s.built_in_c),
-        ("create_gc_cycles", lambda s: isinstance(s.shape, Rings)),
-        (
-            "async_tree_io_tg",
-            lambda s: isinstance(s.shape, Hierarchy) and s.rebuild_interval,
-        ),
-        ("connected_components", lambda s: isinstance(s.shape, Graph)),
+        ("xml_etree_parse", parsed),
+        ("create_gc_cycles", rings),
+        ("async_tree_io_tg", task_tree),
+        ("connected_components", graph),
     ],
 )
 def test_each_home_page_slider_sizes_the_structure_its_benchmark_repeats_or_loads(
