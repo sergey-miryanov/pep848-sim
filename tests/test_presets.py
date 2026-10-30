@@ -244,16 +244,16 @@ def test_async_tree_io_tg_runs_leave_no_cyclic_garbage(
     assert freed == start_up_garbage(ASYNC_TREE_IO_TG)
 
 
-def test_connected_components_examines_its_graph_in_increments_while_it_loads() -> None:
-    """read_adjlist's frame holds the graph until it returns, so sys reaches none
-    of it while it loads, and an old collection's increment takes it: more than a
-    young collection's survivors, all the work budget gains from one, could pay
-    for."""
+def test_connected_components_marks_its_graph_a_budget_at_a_time() -> None:
+    """The module holds the graph from the start, so sys reaches it, and each old
+    collection marks no more than the young collection before it moved in."""
     records = run_preset(CONNECTED_COMPONENTS, IncrementalCollector)
 
-    examined = [r.survived + r.freed for r in records if r.kind == "old"]
+    old = [r for r in records if r.kind == "old"]
+    young = [r for r in records if r.kind == "young"]
 
-    assert max(examined) > CollectorSettings().threshold0
+    assert max(r.marked for r in old) == max(r.survived for r in young)
+    assert max(r.survived + r.freed for r in old) < CollectorSettings().threshold0
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])

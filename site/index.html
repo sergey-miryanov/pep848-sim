@@ -205,13 +205,15 @@ than while the tree grows. The churn's lifetimes remain placeholders.</p>
 <p>connected_components models a worker of the networkx benchmark of that
 name. As its module loads, it imports networkx and reads the Amazon
 co-purchasing graph, 262,111 products and 899,792 edges, into 1.4 million
-dicts that stay in the module's globals. Each of its four loops then walks the graph to count its components,
-and each iterator the walk makes goes once a node's neighbours run out.
-read_adjlist's frame holds the graph while it loads, so sys reaches none of it,
-and the incremental collector's old collections examine it in increments, each
-about twice the last: its peak work passes the legacy collector's. Once the
-module holds the graph, no young collection finds a survivor to add to the work
-budget, and the old collections go idle with the whole graph back in pending.
+dicts that stay in the module's globals. Each of its four loops then walks the
+graph to count its components, and each iterator the walk makes goes once a
+node's neighbours run out. read_adjlist's frame holds the graph while it loads,
+but the workers' old collections take it a budget at a time, so the preset
+lets sys reach it through the module from the start. The incremental
+collector's old collections mark it as young collections move it in, and its
+peak work stays far below the legacy collector's. Once the graph has left the
+aging generation, no young collection finds a survivor to add to the work
+budget, and the old collections go idle.
 The legacy collector runs no gen 2 collection before shutdown. The graph's
 dicts hold no cycle, but the module's globals lie on one with its functions, so
 the graph turns into cyclic garbage once the module goes, and the second

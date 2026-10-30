@@ -181,7 +181,7 @@ def test_the_gen_2_collection_takes_the_whole_graph_at_133_mb() -> None:
     assert (gen2.clock, work(gen2)) == (133_000, 91_577)
     assert legacy.index(gen2) == 132
     assert thousands(figures(legacy).peak_work) == 91.6
-    assert thousands(figures(incremental).peak_work) == 40.0
+    assert thousands(figures(incremental).peak_work) == 1.6
 
 
 def test_the_quarter_holds_gen_2_collections_back_once_the_graph_has_loaded() -> None:
@@ -192,11 +192,11 @@ def test_the_quarter_holds_gen_2_collections_back_once_the_graph_has_loaded() ->
     assert figures(legacy).gen2_collections == 3
 
 
-def test_the_incremental_collectors_tallest_bars_double_as_the_graph_loads() -> None:
+def test_the_incremental_collectors_bars_stand_no_taller_than_a_young_ones() -> None:
     _, incremental = run("the-legacy-collector-5")
-    tall = [r for r in before_shutdown(incremental) if work(r) > 5_000]
-    assert [r.clock for r in tall] == [36_000, 50_000, 78_000, 134_000]
-    assert [thousands(work(r)) for r in tall] == [6.1, 11.0, 20.6, 40.0]
+    old = [r for r in before_shutdown(incremental) if r.kind == "old"]
+    young = [r for r in before_shutdown(incremental) if r.kind == "young"]
+    assert max(map(work, old)) == max(map(work, young)) == 1_613
 
 
 def test_visited_stays_empty_until_the_young_collection_at_11_mb() -> None:
@@ -531,22 +531,25 @@ def test_half_the_threshold0_doubles_the_collections_and_halves_each() -> None:
 def test_peak_work_grows_and_leaps_for_the_legacy_collector() -> None:
     _, at_2000 = run("tuning-1")
     legacy, incremental = run("tuning-3")
-    assert thousands(figures(at_2000).peak_work) == 27.9
-    assert thousands(figures(incremental).peak_work) == 40.0
+    legacy_at_2000, _ = run("tuning-1")
+    assert thousands(figures(at_2000).peak_work) == 3.2
+    assert thousands(figures(incremental).peak_work) == 1.6
+    assert thousands(figures(legacy_at_2000).peak_work) == 19.4
     assert thousands(figures(legacy).peak_work) == 91.6
     assert [r.clock for r in legacy if r.kind == "gen 2"] == [133_000]
 
 
-def test_a_longer_aging_generation_delays_the_largest_increment() -> None:
+def first_marking(records: list[Record]) -> int:
+    """The clock of the first old collection that marks more than a few objects."""
+    return next(r.clock for r in records if r.kind == "old" and r.marked > 100)
+
+
+def test_a_longer_aging_generation_delays_the_marking() -> None:
     _, incremental = run("tuning-4")
+    _, at_10 = run("tuning-1")
     first = next(r for r in incremental if r.kind == "young" and work(r))
     assert first.clock == 42_000
-    assert [(c, thousands(w)) for c, w in increments(incremental)] == [
-        (68_000, 8.5),
-        (84_000, 15.0),
-        (116_000, 27.9),
-    ]
-    assert thousands(figures(incremental).peak_work) == 27.9
+    assert (first_marking(incremental), first_marking(at_10)) == (68_000, 48_000)
 
 
 def test_at_threshold1_2_two_gen_2_collections_fit_the_run() -> None:
