@@ -117,12 +117,13 @@ def test_a_requests_graph_holds_each_structure_and_the_churn() -> None:
     assert [tuple(s[field] for field in fields) for s in drawn["structures"]] == [
         ("a tree with parent pointers", 8, "frame", 0, None, False, False),
         ("16 chains", 121, "module", None, None, False, False),
-        ("a tree with parent pointers", 790, "module", None, None, False, False),
+        ("a tree with parent pointers", 401, "module", None, None, False, False),
         ("a tree with parent pointers", 5, "frame", 0, None, False, False),
+        ("a tree with parent pointers", 389, "module", None, None, False, False),
         ("16 chains", 232, "frame", None, None, False, False),
         ("a hierarchy of 50 branches", 322, "frame", 21_696, 25_560, False, False),
         ("a hierarchy of 50 branches", 322, "frame", 817, 360, False, True),
-        ("16 chains", 165, "frame", 0, None, False, False),
+        ("16 chains", 2, "frame", 0, None, False, False),
     ]
     assert all(s["objects"] and s["links"] for s in drawn["structures"])
     assert drawn["churn"] == {

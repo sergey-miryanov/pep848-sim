@@ -31,9 +31,11 @@ benchmark's loops as many times as the records show, and shutdown. The loops
 begin once the structures that build once have built: a repeating structure
 counts its interval from there, so its first build starts the first loop,
 whatever start-up's length. A worker that allocates more before its loops, as
-create_gc_cycles' workers allocate 860 kB before their first `gc.collect()`,
-gets a structure that builds once after start-up, which refcounting frees as
-it ends. The worker's automatic collections give its length if the loops leave
+create_gc_cycles' workers do up to their first `gc.collect()` at 5,484 kB,
+gets a structure that builds once after start-up and ends where the records
+start the loops. Refcounting frees it as it ends, or later if a collection in
+the records still finds it, as async_tree_io_tg's fourth does (#278). The
+worker's automatic collections give its length if the loops leave
 no count in the records, as json_loads' calls leave none: it ends within
 `threshold0` kB of the last one, and the preset ends halfway. A length set by a
 count of sweeps would fail for a benchmark that calls `gc.collect()` more often
@@ -50,25 +52,34 @@ workers' collections that start within the kB the preset's run allocates.
 
 Some workload parameters neither source fixes, such as the start-up heap's
 shape or the churn inside a library. The five benchmarks' workers start up
-alike: in #117's rerun, their first two collections agree within 5%. Their
-presets share one start-up of five structures. Under the module root hang a
-tree, which shutdown leaves as cyclic garbage, and chains, which refcounting
-frees. Shutdown's collections set no target: gcmon reads a worker once a tick,
-and a worker can end before gcmon reads them (#117). The tree's size comes from
-what `finalize_modules`' first collection frees, in the workers where gcmon
-caught it. Under a frame root hang chains for the objects sys does not reach,
+alike: in #117's rerun, their first collections agree within 5%. Their presets
+share one start-up of six structures. Under the module root hang a tree, which
+shutdown leaves as cyclic garbage, and chains, which refcounting frees.
+Shutdown's collections set no target: gcmon reads a worker once a tick, and a
+worker can end before gcmon reads them (#117). The tree's size comes from what
+`finalize_modules`' first collection frees, in the workers where gcmon caught
+it. Under a frame root hang chains for the objects sys does not reach,
 which the branch's full collections examine where they mark the rest. Start-up
-lets go of two trees as soon as it builds them, which give its first two
+lets go of two small trees as soon as it builds them, which give its first two
 collections the cyclic garbage they free (#260). The first comes before the
-module root's structures and the second after them, so the second collection
-still finds the second tree young.
+module root's structures and the second just after the first collection, so
+the second collection finds it young.
+
+Start-up allocates more kB to an object once its first collection has come.
+The workers' first collection examines 8,141 to 8,845 real objects at 2,000
+kB, and their second 5,658 to 6,352 (#278). Start-up takes two build churns,
+one up to the first collection and one past it, and the tree under the module
+root builds in two parts, one at each. connected_components' second collection
+examines 5,658, where the other four benchmarks' examine 5,855 to 6,352, and no
+churn puts a collection within 5% of both. Its preset takes a late churn of
+its own, and the other four share one.
 
 The objects a worker's first collection examines under the legacy collector
 set start-up's size, where the heap that collection reads would count more. A
 collection untracks a tuple that holds only objects it never sees, without
 examining it, and by start-up's end a third of its heap has gone that way. The
 simulator has no untracking, and the PEP's pseudocode has none (ADR 0003), so
-start-up's build churn takes in those tuples: they move the allocation clock,
+start-up's build churns take in those tuples: they move the allocation clock,
 and leave the heap before a collection sees them. The branch's incremental
 collector examines nothing at start-up, and keeps them tracked until a
 collection examines them: a json_loads worker's heap holds 29,700 real objects
@@ -113,9 +124,12 @@ comment says neither fixes it yet.
 - Untracking in the simulator: a share of each structure that a collection
   untracks without examining it. It needs a workload parameter, and a step the
   PEP's pseudocode does not have (ADR 0003).
-- A start-up for each preset: the five agree within 5% through their second
-  collection, and past it the records cannot tell start-up from the
-  benchmark's own work.
+- A start-up for each preset: the five agree within 5% through their first
+  collection, and through their second but for connected_components'. Past
+  the second the records cannot tell start-up from the benchmark's own work.
+- One churn for all of start-up, as this record first had it: each of the
+  first two collections examines about 8,000 real objects, where the workers'
+  second examines 5,658 to 6,352.
 - Start-up's cyclic garbage from the churn: the churn's parameters hold for
   the whole run, and json_loads' loops make no cycles.
 - Repeating structures that count their intervals from the run's start, with a

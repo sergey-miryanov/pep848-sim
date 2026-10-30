@@ -317,14 +317,14 @@ def test_a_control_reads_the_preset_a_request_names() -> None:
             "every": 20,
         }
     )
-    rings = CREATE_GC_CYCLES.workload.structures[5]
+    rings = CREATE_GC_CYCLES.workload.structures[6]
     assert rings.rebuild_interval is not None
 
-    [control] = controls(request, ["workload.structures.5.size"])
+    [control] = controls(request, ["workload.structures.6.size"])
 
     # A build without churn fits in the rebuild interval.
     assert control == Control(
-        "workload.structures.5.size",
+        "workload.structures.6.size",
         "Rings size",
         "kB",
         rings.size,

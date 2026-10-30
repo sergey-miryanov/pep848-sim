@@ -43,7 +43,7 @@
           "text": "Each object a collection examines and keeps is work that frees nothing. Early in the run the worker builds the objects it keeps to the end, and each collection examines them.",
           "request": {"preset": "json_loads", "settings": {"threshold0": 1000, "threshold1": 10, "threshold2": 10}, "every": 1, "changes": {"workload.churn.cycle_share": "1/10"}},
           "marks": [
-            {"part": "legacy.work", "note": "From 1 to 4 MB, survived, in violet, outweighs freed about three to one."},
+            {"part": "legacy.work", "note": "From 1 to 5 MB, survived, in violet, outweighs freed two or three to one."},
             {"part": "figure.yield", "note": "Yield, the share of examined objects a collection frees: 45.9% for the legacy collector, 70.5% for the incremental."}
           ]
         },
@@ -52,7 +52,7 @@
           "text": "PEP 848 spends the collector's work on older objects, likelier to be cyclic garbage. Its incremental collector lets an object age 10 to 12 MB here before it examines it, and examines it once. It takes the old generation an increment at a time, between young collections.",
           "request": {"preset": "json_loads", "settings": {"threshold0": 1000, "threshold1": 10, "threshold2": 10}, "every": 1, "changes": {"workload.churn.cycle_share": "1/10"}},
           "marks": [
-            {"part": "incremental.work", "note": "Its first bar comes at 11 MB. The bars at 17 and 19 MB free cycles and keep nothing."},
+            {"part": "incremental.work", "note": "Its first bar comes at 11 MB. The bars at 19 and 21 MB free cycles and keep nothing."},
             {"part": "figure.work_per_mb", "note": "284 work per MB for the legacy collector, 228 for the incremental."}
           ]
         }
@@ -85,7 +85,7 @@
           "request": {"preset": "connected_components", "settings": {"threshold0": 1000, "threshold1": 10, "threshold2": 10}, "every": 5},
           "marks": [
             {"part": "legacy.work", "note": "The tall bar at 133 MB holds the gen 2 collection, examining the whole graph."},
-            {"part": "figure.peak_work", "note": "91.6K objects in that one collection, against the incremental collector's 1.6K."}
+            {"part": "figure.peak_work", "note": "91.4K objects in that one collection, against the incremental collector's 1.6K."}
           ]
         },
         {
@@ -102,7 +102,7 @@
           "text": "The incremental collector takes the old generation an increment at a time. sys reaches the graph through its module, so each old collection marks what the young collection before it moved in, and no bar stands taller than a young collection's.",
           "request": {"preset": "connected_components", "settings": {"threshold0": 1000, "threshold1": 10, "threshold2": 10}, "every": 5},
           "marks": [
-            {"part": "incremental.work", "note": "Its tallest bars hold 1.6K objects each, against the legacy collector's 91.6K."}
+            {"part": "incremental.work", "note": "Its tallest bars hold 1.6K objects each, against the legacy collector's 91.4K."}
           ]
         }
       ]
@@ -142,8 +142,8 @@
           "text": "The incremental collector first examines an object when its aging space is the oldest: 10 to 12 MB after its allocation at this threshold0.",
           "request": {"preset": "json_loads", "settings": {"threshold0": 1000, "threshold1": 10, "threshold2": 10}, "every": 1},
           "marks": [
-            {"part": "incremental.heap", "note": "At 11, 13 and 15 MB, young collections move the worker's objects from the aging lane into visited, an aging space at a time."},
-            {"part": "incremental.work", "note": "Three bars, at 11, 13 and 15 MB, examine each object once."}
+            {"part": "incremental.heap", "note": "At 11, 13, 15 and 17 MB, young collections move the worker's objects from the aging lane into visited, an aging space at a time."},
+            {"part": "incremental.work", "note": "Four bars, at 11, 13, 15 and 17 MB, examine each object once."}
           ]
         },
         {
@@ -174,10 +174,10 @@
         },
         {
           "title": "A longer aging generation",
-          "text": "Raise threshold1 to 20, and the aging generation holds 10 aging spaces. The young generation grows to 22 MB, past the run. Only what the worker allocated in its first MB ages through it, and one young collection, at 21 MB, examines those 250 objects.",
+          "text": "Raise threshold1 to 20, and the aging generation holds 10 aging spaces. The young generation grows to 22 MB, past the run. Only what the worker allocated in its first MB ages through it, and one young collection, at 21 MB, examines those 265 objects.",
           "request": {"preset": "json_loads", "settings": {"threshold0": 1000, "threshold1": 20, "threshold2": 10}, "every": 1},
           "marks": [
-            {"part": "incremental.heap", "note": "The aging lane holds most of the worker's objects to the end. Visited takes 242 at 21 MB."},
+            {"part": "incremental.heap", "note": "The aging lane holds most of the worker's objects to the end. Visited takes 257 at 21 MB."},
             {"part": "incremental.work", "note": "One bar before shutdown, at 21 MB."}
           ]
         }
@@ -186,7 +186,7 @@
     {
       "id": "the-old-generation",
       "title": "The old generation",
-      "controls": ["workload.structures.5.size"],
+      "controls": ["workload.structures.6.size"],
       "steps": [
         {
           "title": "Pending and visited",
@@ -225,14 +225,14 @@
           "text": "The legacy collector's gen 1 collections take the nursery and the aging generation together, and its one gen 2 collection takes the whole heap.",
           "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10},
           "marks": [
-            {"part": "legacy.work", "note": "The tallest bars hold gen 1 collections, up to 11,148 objects each. The gen 2 collection, at 266 MB, comes between two trees and examines 1,486."},
-            {"part": "figure.work_per_mb", "note": "868 against 654. As each run ends, the legacy collector's gen 0 collections examine what the finishing tasks allocate, and the incremental collector's young collections come after the tree has gone."}
+            {"part": "legacy.work", "note": "The tallest bars hold gen 1 collections, up to 11,150 objects each. The gen 2 collection, at 266 MB, comes between two trees and examines 1,486."},
+            {"part": "figure.work_per_mb", "note": "867 against 654. As each run ends, the legacy collector's gen 0 collections examine what the finishing tasks allocate, and the incremental collector's young collections come after the tree has gone."}
           ]
         },
         {
           "title": "A smaller tree",
           "text": "Shrink the task tree to 100 kB, the slider's smallest. Young collections move too little into the old generation to lift the budget above zero.",
-          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.5.size": 100}},
+          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.6.size": 100}},
           "marks": [
             {"part": "figure.gen2_collections_sweeps", "note": "No sweep runs."}
           ]
@@ -240,7 +240,7 @@
         {
           "title": "The largest tree",
           "text": "Grow the task tree to 59,300 kB, the slider's largest. The legacy collector's gen 2 collection comes while a tree lives, and examines it with the rest of the heap.",
-          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.5.size": 59300}},
+          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.6.size": 59300}},
           "marks": [
             {"part": "legacy.work", "note": "The gen 2 collection's bar at 266 MB stands more than four times as tall as the tallest gen 1 bar."},
             {"part": "figure.peak_work", "note": "54.1K for that gen 2 collection, against 1.8K for the incremental collector."}
@@ -307,7 +307,7 @@
         {
           "title": "Trees that turn into garbage",
           "text": "Give each task a link back to its parent, and each tree turns into cyclic garbage as it goes. Now the old collections free whole trees, and the credit counts.",
-          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.5.shape": "tree"}},
+          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.6.shape": "tree"}},
           "marks": [
             {"part": "incremental.work", "note": "Increments at 236 and 380 MB free two of the four trees, 52,487 objects each."},
             {"part": "figure.gen2_collections_sweeps", "note": "8 sweeps."}
@@ -316,7 +316,7 @@
         {
           "title": "No credit",
           "text": "Set the multiplier to 0, and an increment that frees a tree pays nothing back into the budget.",
-          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.5.shape": "tree", "constants.freed_credit": 0}},
+          "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.6.shape": "tree", "constants.freed_credit": 0}},
           "marks": [
             {"part": "incremental.work", "note": "Increments at 236 and 468 MB free two trees, the second 88 MB later than with the credit."},
             {"part": "figure.gen2_collections_sweeps", "note": "5 sweeps."}
@@ -334,7 +334,7 @@
           "text": "The incremental collector first examines a new object once it has aged through the young generation, 24 MB at the PEP's defaults. The legacy collector's gen 0 collections take the nursery every threshold0 kB, 2,000 here. json_loads' run ends after 21 MB.",
           "request": {"preset": "json_loads", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 1},
           "marks": [
-            {"part": "figure.peak_uncollected_garbage", "note": "0.8 MB in both columns: start-up's tree, which turns into cyclic garbage at shutdown."}
+            {"part": "figure.peak_uncollected_garbage", "note": "0.8 MB in both columns: start-up's two trees, which turn into cyclic garbage at shutdown."}
           ]
         },
         {
@@ -370,7 +370,7 @@
           "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.churn.cycle_share": "1/10", "workload.churn.lifetime_mean": 10000}},
           "marks": [
             {"part": "figure.peak_uncollected_garbage", "note": "5.4 MB for the legacy collector, which leaves old cycles to its next gen 2 collection, against 1.2."},
-            {"part": "figure.work_per_mb", "note": "1,525 against 818."}
+            {"part": "figure.work_per_mb", "note": "1,526 against 818."}
           ]
         }
       ]
@@ -378,44 +378,44 @@
     {
       "id": "a-large-increment",
       "title": "A large increment",
-      "controls": ["workload.structures.6.size"],
+      "controls": ["workload.structures.7.size"],
       "steps": [
         {
           "title": "An increment is a closure",
           "text": "An increment is the least recently scanned pending object and every pending object it reaches. An old collection examines it whole, however little of the work budget is left. connected_components' module loads its graph inside read_adjlist, whose frame holds it until the call returns. The preset lets the module hold the graph from the start, as the workers' old collections take it a budget at a time. Here the frame holds it, so sys reaches none of the graph while it loads.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.6.built_in_frame": true}},
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.7.built_in_frame": true}},
           "marks": [
-            {"part": "incremental.work", "note": "The bars at 48, 64 and 96 MB each hold an increment from the graph's root: 8.5K, 15.0K, then 27.9K objects."}
+            {"part": "incremental.work", "note": "The bars at 48, 64 and 96 MB each hold an increment from the graph's root: 8.4K, 14.9K, then 27.8K objects."}
           ]
         },
         {
           "title": "Peak work",
           "text": "Each of those increments takes all of the graph loaded so far, so each is larger than the last.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.6.built_in_frame": true}},
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.7.built_in_frame": true}},
           "marks": [
-            {"part": "figure.peak_work", "note": "27.9K, the increment at 96 MB, above the legacy collector's 19.4K, a gen 1 collection."}
+            {"part": "figure.peak_work", "note": "27.8K, the increment at 96 MB, above the legacy collector's 19.4K, a gen 1 collection."}
           ]
         },
         {
           "title": "The budget pays for it",
           "text": "An old collection debits the budget with all of an increment, so a large one leaves the old collections after it idle.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.6.built_in_frame": true}},
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.7.built_in_frame": true}},
           "marks": [
-            {"part": "incremental.budget", "note": "At 96 MB the budget drops to -24,666, and young collections pay it back 3,226 at a time, the graph's share of 4 MB."}
+            {"part": "incremental.budget", "note": "At 96 MB the budget drops to -24,539, and young collections pay it back 3,226 at a time, the graph's share of 4 MB."}
           ]
         },
         {
           "title": "Half the graph",
           "text": "Halve the graph, to 45,000 kB. It has loaded before the third increment from its root comes.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.6.built_in_frame": true, "workload.structures.6.size": 45000}},
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.7.built_in_frame": true, "workload.structures.7.size": 45000}},
           "marks": [
-            {"part": "figure.peak_work", "note": "15.0K: the second increment from the graph's root, at 64 MB."}
+            {"part": "figure.peak_work", "note": "14.9K: the second increment from the graph's root, at 64 MB."}
           ]
         },
         {
           "title": "A quarter of the graph",
           "text": "Shrink the graph to 22,000 kB. It has loaded, and the module holds it, before the budget lets an old collection reach it, so no increment forms from it.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.6.built_in_frame": true, "workload.structures.6.size": 22000}},
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.7.built_in_frame": true, "workload.structures.7.size": 22000}},
           "marks": [
             {"part": "figure.peak_work", "note": "3.2K, what a young collection moves in."}
           ]
@@ -465,7 +465,7 @@
           "text": "Peak work counts the collections the runtime started, and leaves the calls out.",
           "request": {"preset": "create_gc_cycles", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 20},
           "marks": [
-            {"part": "figure.peak_work", "note": "502 for the legacy collector's gen 0 collection at 2 MB, and 0 for the incremental collector, whose young generation the run never fills."}
+            {"part": "figure.peak_work", "note": "531 for the legacy collector's gen 0 collection at 2 MB, and 0 for the incremental collector, whose young generation the run never fills."}
           ]
         },
         {
@@ -482,7 +482,7 @@
           "request": {"preset": "create_gc_cycles", "settings": {"threshold0": 100, "threshold1": 10, "threshold2": 10}, "every": 20},
           "marks": [
             {"part": "legacy.work", "note": "Gen 0 collections examine rings the loop is building. Over the whole run they free 13 objects, start-up's."},
-            {"part": "incremental.work", "note": "Young collections examine 1,075 objects over the whole run: each gc.collect() takes the whole young generation with it."}
+            {"part": "incremental.work", "note": "Young collections examine 971 objects over the whole run: each gc.collect() takes the whole young generation with it."}
           ]
         }
       ]
@@ -514,7 +514,7 @@
           "text": "The incremental collector's peak work halves too: its largest collection is a young one, or an old one that marks what a young one moved in. The legacy collector's leaps.",
           "request": {"preset": "connected_components", "settings": {"threshold0": 1000, "threshold1": 10, "threshold2": 10}, "every": 5},
           "marks": [
-            {"part": "figure.peak_work", "note": "The incremental collector's falls from 3.2K to 1.6K. The legacy collector's leaps from 19.4K to 91.6K: a gen 2 collection, at 133 MB, takes the whole graph."}
+            {"part": "figure.peak_work", "note": "The incremental collector's falls from 3.2K to 1.6K. The legacy collector's leaps from 19.4K to 91.4K: a gen 2 collection, at 133 MB, takes the whole graph."}
           ]
         },
         {
@@ -530,7 +530,7 @@
           "text": "Lower threshold1 to 2. The legacy collector's gen 1 collections come every fourth collection, and two gen 2 collections fit the run.",
           "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 2, "threshold2": 10}, "every": 5},
           "marks": [
-            {"part": "legacy.work", "note": "Gen 2 collections at 90 and 180 MB examine the whole heap: 63.4K objects as the graph loads, then 91.6K once it has."},
+            {"part": "legacy.work", "note": "Gen 2 collections at 90 and 180 MB examine the whole heap: 63.2K objects as the graph loads, then 91.4K once it has."},
             {"part": "figure.gen2_collections_sweeps", "note": "2 gen 2 collections."}
           ]
         }
