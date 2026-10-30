@@ -253,7 +253,7 @@ def test_connected_components_examines_its_graph_in_increments_while_it_loads() 
 def test_connected_components_frees_its_graph_with_its_module_at_shutdown(
     collector: type[Collector],
 ) -> None:
-    _, _, start_up_tree, _, _, graph = CONNECTED_COMPONENTS.workload.structures
+    _, _, start_up_tree, _, _, _, graph = CONNECTED_COMPONENTS.workload.structures
 
     *automatic, first, second, third = run_preset(CONNECTED_COMPONENTS, collector)
 

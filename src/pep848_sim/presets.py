@@ -382,27 +382,57 @@ ASYNC_TREE_IO_TG = Preset(
 )
 
 
-# connected_components, in bm_networkx: the module loads the Amazon co-purchasing
-# graph into its globals before pyperf starts, and each loop counts the graph's
-# connected components with a breadth-first walk.
+# connected_components, in bm_networkx: the module imports networkx and loads the
+# Amazon co-purchasing graph into its globals before pyperf starts, and each loop
+# counts the graph's connected components with a breadth-first walk.
 
+# Code: networkx's modules, functions and classes, globals of sys.modules until
+# shutdown. Records: the legacy collector's gen 0 collections examine 4,400 to 4,800
+# real objects each between start-up and the load, which starts at about 14,600 kB:
+# 1,425 simulated objects over 9,975 kB, with 6 kB of churn after each.
+_NETWORKX = StructureParameters(
+    shape=Chains(width=16),
+    size=1_425,
+    root="module",
+    lifetime=None,
+    rebuild_interval=None,
+    build_churn=6,
+)
 # Code: read_adjlist's 262,111 nodes with two dicts each and 899,792 edges with one,
 # 1,424,118 tracked objects in all under networkx 3.4.2: 89,007 simulated objects
 # (ADR 0002), with about two edges' dicts to a node's.
 _GRAPH = 1_424_118 // 16
 _GRAPH_SHAPE = Graph(edges=2)
+# Code: the graph, a global of the benchmark's module until shutdown.
+# graph = networkx.read_adjlist(...) stores it once read_adjlist returns, and
+# read_adjlist's frame holds it while it loads. Records: the branch's old collections
+# examine it in increments as it loads, up to 231,870 real objects in one.
+# Records: the legacy collector's gen 0 collections examine 24,700 to 27,600 real
+# objects each while it loads, and the 63rd, at 126,005 kB, half as many. The load
+# ends there, so read_adjlist's lists, tuples and throwaway dicts come to 0.24 kB for
+# each kB of graph (ADR 0023).
+_GRAPH_LOAD = StructureParameters(
+    shape=_GRAPH_SHAPE,
+    size=_GRAPH,
+    root="module",
+    lifetime=None,
+    rebuild_interval=None,
+    build_churn=Fraction(24, 100),
+    built_in_frame=True,
+)
 # Records: the automatic collections per worker. Each marks threshold0 kB of
 # allocation (ADR 0011), and the records cannot tell where before the next one the
 # worker ends, so the run ends about halfway, as json_loads' does.
 _CONNECTED_COMPONENTS_COLLECTIONS = 99
 # Code: pyperf runs a warmup and three values a worker, one loop each.
 _WALKS = 4
-# A loop's length on the clock: the worker's length after start-up and the load
-# over its loops, 26,342 kB.
+# A loop's length on the clock: the worker's length after start-up, the imports and
+# the load over its loops, 18,508 kB.
 _WALK = (
     (2 * _CONNECTED_COMPONENTS_COLLECTIONS + 1) * CollectorSettings().threshold0 // 2
     - _START_UP.length
-    - _GRAPH
+    - _NETWORKX.build_length
+    - _GRAPH_LOAD.build_length
 ) // _WALKS
 
 CONNECTED_COMPONENTS = Preset(
@@ -418,33 +448,17 @@ CONNECTED_COMPONENTS = Preset(
             long_share=Fraction(0),
             long_lifetimes=(1, 1),
         ),
-        structures=(
-            *_START_UP.structures,
-            # Code: the graph, a global of the benchmark's module until shutdown.
-            # G = nx.read_adjlist(...) stores it once read_adjlist returns, and
-            # read_adjlist's frame holds it while it loads. Records: the branch's
-            # old collections examine it in increments as it loads, up to 231,870
-            # real objects in one, and mark it once the module holds it.
-            # Records: the heap tops out after the 61st automatic collection,
-            # about 118 MB after start-up, so read_adjlist's lists, tuples and
-            # throwaway dicts come to about 0.3 kB for each kB of graph. A build's
-            # churn comes in whole kB, so the load leaves it out and ends about
-            # 29 MB early.
-            StructureParameters(
-                shape=_GRAPH_SHAPE,
-                size=_GRAPH,
-                root="module",
-                lifetime=None,
-                rebuild_interval=None,
-                build_churn=0,
-                built_in_frame=True,
-            ),
-        ),
+        structures=(*_START_UP.structures, _NETWORKX, _GRAPH_LOAD),
         seed=848,
         shutdown=True,
     ),
-    # The worker's own length: start-up, the load, then its loops.
-    run_length=_START_UP.length + _GRAPH + _WALKS * _WALK,
+    # The worker's own length: start-up, the imports, the load, then its loops.
+    run_length=(
+        _START_UP.length
+        + _NETWORKX.build_length
+        + _GRAPH_LOAD.build_length
+        + _WALKS * _WALK
+    ),
 )
 
 PRESETS = {
