@@ -15,7 +15,9 @@ collection's record: between collections, the live count misses the
 transients still alive. Comparing a lifetime with the next boundary is
 enough because both collectors collect at the same boundaries (ADR 0004). If
 their triggers ever differ, the two runs of a widget no longer make the same
-objects.
+objects. A build in C holds a collection back past its boundary in both runs
+alike (ADR 0022). Churn compares with the boundary all the same, or once it
+has passed, with the next kB: either errs early.
 
 A full collection is a boundary too (ADR 0012). It runs after the let-gos of
 its kB, and both collectors' runs call it at the same clock. A workload calls

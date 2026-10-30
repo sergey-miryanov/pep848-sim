@@ -275,6 +275,37 @@ def test_the_next_collection_is_the_first_a_new_object_can_meet() -> None:
     assert heap.next_collection() == 7
 
 
+def test_a_collection_held_back_comes_at_the_first_allocation_after_the_hold() -> None:
+    collector = Recording(threshold0=3)
+    heap = Heap(collector)
+
+    heap.hold_collections(True)
+    for _ in range(5):
+        heap.allocate_unseen()
+    # Due at 3, it waits, and an object allocated now could meet it at the next kB.
+    assert collector.clocks == []
+    assert heap.next_collection() == 6
+    heap.hold_collections(False)
+    for _ in range(4):
+        heap.allocate_unseen()
+
+    # It comes at 5, and the next threshold0 kB after it.
+    assert collector.clocks == [5, 8]
+
+
+def test_a_hold_that_ends_before_the_budget_runs_out_moves_no_collection() -> None:
+    collector = Recording(threshold0=3)
+    heap = Heap(collector)
+
+    heap.hold_collections(True)
+    heap.allocate_unseen()
+    heap.hold_collections(False)
+    for _ in range(3):
+        heap.allocate_unseen()
+
+    assert collector.clocks == [3]
+
+
 def test_letting_go_of_every_frame_root_frees_what_frames_alone_held() -> None:
     heap = new_heap()
     sys = heap.module_root

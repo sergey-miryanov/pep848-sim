@@ -87,6 +87,19 @@ class _StartUp:
         )
         return objects * (1 + self.churn)
 
+    def set_up(self, length: int) -> StructureParameters:
+        """What a worker allocates after start-up and before its loops, `length` kB
+        at start-up's churn: chains that build once, before the loops repeat, and
+        that refcounting frees as they end (ADR 0011)."""
+        return StructureParameters(
+            shape=Chains(width=16),
+            size=length // (1 + self.churn),
+            root="frame",
+            lifetime=0,
+            rebuild_interval=None,
+            build_churn=self.churn,
+        )
+
 
 # Start-up and imports: the interpreter, pyperf and the benchmark's own imports.
 # The five benchmarks' first collections agree within 5%, so their presets share
@@ -120,7 +133,7 @@ _START_UP = _StartUp(
 
 # Records: the workers' first gc.collect() starts at 5,484 kB, 860 kB after
 # start-up ends.
-_SET_UP = 860 // (1 + _START_UP.churn)
+_SET_UP = 860
 # Code: the list, and the rings' 2,100 nodes as 131 simulated objects (ADR 0002),
 # each a ring of its own, as a ring of 21 comes to about one.
 _RINGS = 132
@@ -161,26 +174,15 @@ CREATE_GC_CYCLES = Preset(
                 full_collections=True,
             ),
             # Records: what the workers allocate after start-up, before their first
-            # gc.collect(), at start-up's churn. It builds before the loops, as the
-            # rings repeat, and refcounting frees it as it ends.
-            StructureParameters(
-                shape=Chains(width=16),
-                size=_SET_UP,
-                root="frame",
-                lifetime=0,
-                rebuild_interval=None,
-                build_churn=_START_UP.churn,
-            ),
+            # gc.collect().
+            _START_UP.set_up(_SET_UP),
         ),
         seed=848,
         shutdown=True,
     ),
     # The worker's own length: start-up, what comes before the loops, then the
     # loops, the last ending with its second gc.collect().
-    run_length=_START_UP.length
-    + _SET_UP * (1 + _START_UP.churn)
-    + (_LOOPS - 1) * _LOOP
-    + _RINGS,
+    run_length=_START_UP.length + _SET_UP + (_LOOPS - 1) * _LOOP + _RINGS,
 )
 
 
@@ -231,25 +233,33 @@ JSON_LOADS = Preset(
 # 50, and no element links back to its parent.
 _XML_TREE = 322
 _XML_SHAPE = Hierarchy(branches=50)
-# Records: the automatic collections per worker. Each marks threshold0 kB of
-# allocation (ADR 0011), and the records cannot tell where before the next one the
-# worker ends, so the run ends about halfway, as json_loads' does.
-_XML_COLLECTIONS = 51
-# Code: a value's own tree and its 60 parses. pyperf runs a warmup and three values
-# a worker, one loop each.
-_XML_TREES = 61
+# Records: a parse allocates 360 kB, 72 B an element where ADR 0002 counts 64 B a
+# real object. Each parse's slot on the clock holds its tree, then churn for the
+# rest, as a build allocates its objects alone. The workers' collections come six
+# parses apart while they parse, 2,162 kB, as each waits for the parse under way
+# to return (ADR 0022).
+_XML_SLOT = 360
+# Records: building a value's own tree, serialising it and writing it allocate
+# 3,864 kB before its first parse: the tree, and 11 kB of churn after each of its
+# objects. The workers' collections come threshold0 kB apart there.
+_XML_TREE_CHURN = 11
+# Records: a worker's values run 25,468 kB each. A value takes 71 slots, 25,560 kB,
+# so that each value's parses fall in the same slots. pyperf runs a warmup and
+# three values a worker, one loop each.
+_XML_VALUE = 71 * _XML_SLOT
 _XML_VALUES = 4
-# Each tree's slot on the clock, the tree and the parser's other objects: the
-# worker's length after start-up over its 244 trees, 403 kB.
-_XML_SLOT = (
-    (2 * _XML_COLLECTIONS + 1) * CollectorSettings().threshold0 // 2 - _START_UP.length
-) // (_XML_VALUES * _XML_TREES)
-_XML_VALUE = _XML_TREES * _XML_SLOT
+# Records: the workers' first parse ends at 10,215 to 10,229 kB, so their first
+# value starts about 1,400 kB after start-up ends.
+_XML_SET_UP = 1_396
+# Records: the workers start shutdown at 109,612 kB, past their last value. pyperf
+# and the last value's serialising allocate the rest, which the run takes as the
+# start of a fifth value.
+_XML_SHUTDOWN = 109_612
 
 XML_ETREE_PARSE = Preset(
     benchmark="xml_etree_parse",
     workload=WorkloadParameters(
-        # The parser's own objects.
+        # The rest of each parse's slot, and the serialising of each value's tree.
         churn=ChurnParameters(
             # Records: each worker's collections free 249 real objects under either
             # collector, all start-up's, so the parser makes no cycles. The cycles
@@ -270,14 +280,15 @@ XML_ETREE_PARSE = Preset(
                 shape=_XML_SHAPE,
                 size=_XML_TREE,
                 root="frame",
-                lifetime=_XML_VALUE - _XML_TREE,
+                lifetime=_XML_VALUE - _XML_TREE * (1 + _XML_TREE_CHURN),
                 rebuild_interval=_XML_VALUE,
-                build_churn=0,
+                build_churn=_XML_TREE_CHURN,
             ),
             # Code: the parsed trees, from the file and from the bytes in turn. Each
             # goes as the next of its kind, the next build but one, builds. A
             # value's first parse waits for its own tree and runs into the next
-            # slot, which it takes, so a value parses 60.
+            # slot, which it takes, so a value parses 60. The C accelerator's
+            # parser builds each tree in C.
             StructureParameters(
                 shape=_XML_SHAPE,
                 size=_XML_TREE,
@@ -285,13 +296,17 @@ XML_ETREE_PARSE = Preset(
                 lifetime=2 * _XML_SLOT,
                 rebuild_interval=_XML_SLOT,
                 build_churn=0,
+                built_in_c=True,
             ),
+            # Records: what the workers allocate after start-up, before their first
+            # value.
+            _START_UP.set_up(_XML_SET_UP),
         ),
         seed=848,
         shutdown=True,
     ),
-    # The worker's own length: start-up, then its values.
-    run_length=_START_UP.length + _XML_VALUES * _XML_VALUE,
+    # The worker's own length: start-up, its values and what follows them.
+    run_length=_XML_SHUTDOWN,
 )
 
 

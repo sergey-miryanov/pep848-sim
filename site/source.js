@@ -175,6 +175,7 @@ export function toSource(request) {
       if (structure.build_churn) args.push(`build_churn=${py(structure.build_churn)}`);
       if (structure.full_collections) args.push("full_collections=True");
       if (structure.built_in_frame) args.push("built_in_frame=True");
+      if (structure.built_in_c) args.push("built_in_c=True");
       return `${call("    Structure(", args)},`;
     }),
     ...(structures.length ? ["]"] : []),
