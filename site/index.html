@@ -202,9 +202,9 @@ a time, and its peak work stays far below the legacy collector's, whose gen 1
 collections take the nursery and the aging generation whole. The event loop's
 churn remains a placeholder.</p>
 <p>connected_components models a worker of the networkx benchmark of that
-name. As its module loads, it reads the Amazon co-purchasing graph, 262,111
-products and 899,792 edges, into 1.4 million dicts that stay in the module's
-globals. Each of its four loops then walks the graph to count its components,
+name. As its module loads, it imports networkx and reads the Amazon
+co-purchasing graph, 262,111 products and 899,792 edges, into 1.4 million
+dicts that stay in the module's globals. Each of its four loops then walks the graph to count its components,
 and each iterator the walk makes goes once a node's neighbours run out.
 read_adjlist's frame holds the graph while it loads, so sys reaches none of it,
 and the incremental collector's old collections examine it in increments, each
