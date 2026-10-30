@@ -22,7 +22,8 @@ import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+e
  * @typedef {{ n: number[], panel: number[], kb?: (number | null)[] } & { [key in Series]?: (number | null)[] }} Columns
  */
 /**
- * @typedef {{ panels: string[], plots: { preset: string, collector: string, workers: Columns[], run: Columns }[] }} File
+ * The real objects one simulated object stands for travel as `object`.
+ * @typedef {{ panels: string[], object: number, plots: { preset: string, collector: string, workers: Columns[], run: Columns }[] }} File
  */
 
 /** @type {{ key: Series, label: string }[]} */
@@ -36,6 +37,9 @@ const SERIES = [
 const HEIGHT = 180;
 // Past this many collections a worker on average, a panel draws lines alone.
 const DOTS = 50;
+// A chart's scale spans at least this many simulated objects, so that a gap of
+// a few real objects looks as small as it is.
+const FLOOR = 10;
 
 const presetSelect = /** @type {HTMLSelectElement} */ (document.getElementById("preset"));
 const collectorSelect = /** @type {HTMLSelectElement} */ (document.getElementById("collector"));
@@ -115,14 +119,28 @@ const draw = () => {
     const dots = theirs.length / workers.length <= DOTS;
     const share = key === "yield";
     const y = { x: at, y: key };
+    // The run moves a simulated object at a time (ADR 0002): a band that wide
+    // either side of its line. Its running yield moves by one over all the panel
+    // has examined so far. Only the budget runs below zero.
+    let examined = 0;
+    const band = ours.map((p) => {
+      examined += p.examined ?? 0;
+      const step = share ? (examined ? file.object / examined : 0) : file.object;
+      const value = /** @type {number} */ (p[key]);
+      return { ...p, low: key === "budget" ? value - step : Math.max(0, value - step), high: value + step, step };
+    });
+    const values = [...theirs, ...ours].map((p) => /** @type {number} */ (p[key]));
+    const floor = FLOOR * Math.max(0, ...band.map((p) => p.step));
+    const domain = [Math.min(0, ...values), Math.max(floor, ...values, ...band.map((p) => p.high))];
     return () => figure.append(Plot.plot({
       width: figure.clientWidth, height: HEIGHT, marginLeft: 48,
       style: { background: "transparent", color: token("text-muted"), fontFamily: "inherit", fontSize: "11px" },
       x: { domain: [0, xMax], label: clocked ? "MB allocated in the worker" : "collection in the worker" },
-      y: { label: null, tickFormat: share ? ".2~p" : "~s" },
+      y: { domain, nice: true, label: null, tickFormat: share ? ".2~p" : "~s" },
       ariaLabel: caption,
       marks: [
         Plot.gridY({ stroke: token("grid"), strokeOpacity: 1 }),
+        Plot.areaY(band, { x: at, y1: "low", y2: "high", fill: token("run"), fillOpacity: 0.2 }),
         Plot.lineY(theirs, { ...y, z: "worker", stroke: token("workers"), strokeOpacity: 0.35, strokeWidth: 1 }),
         dots ? Plot.dot(theirs, { ...y, r: 2, fill: token("workers"), fillOpacity: 0.35 }) : null,
         Plot.lineY(ours, { ...y, stroke: token("run"), strokeWidth: 2.5 }),

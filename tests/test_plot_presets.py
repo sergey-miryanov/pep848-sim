@@ -1,5 +1,6 @@
 import pytest
 
+import plot_presets
 from benchmarks import Collection, Kind, Tally
 from pep848_sim.collectors.collector import Constants
 from plot_presets import PANELS, collections, columns, points
@@ -188,3 +189,15 @@ def test_a_mean_keeps_four_significant_digits_and_a_whole_one_its_int() -> None:
 
     assert columns(drawn)["examined"] == [33.33]
     assert columns(drawn)["freed"] == [10]
+
+
+def test_the_plot_gives_the_real_objects_one_simulated_object_stands_for(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The presets page draws a band that wide around each run."""
+    monkeypatch.setattr(plot_presets, "PRESETS", {})
+
+    drawn = plot_presets.plot()
+
+    assert drawn["object"] == Constants().real(1) == 16
+    assert drawn["plots"] == []
