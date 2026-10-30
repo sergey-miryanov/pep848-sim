@@ -13,6 +13,7 @@ from benchmarks import (
     load,
     load_data,
     read_workers,
+    summed,
 )
 from pep848_sim.collectors.collector import CollectorSettings
 
@@ -268,31 +269,97 @@ def test_a_worker_reads_as_its_collections_in_the_order_of_their_ts(
 ) -> None:
     path = tmp_path / "trace.csv"
     path.write_text(
-        f"{HEADER},increment_size,old_work\n"
+        f"{HEADER},increment_size,old_work,allocated\n"
         # A gc.collect() call, the worker's last manual row: shutdown's.
-        "json_loads,7,1,0,200,2,0,2,1,400,4,,0\n"
-        "json_loads,7,1,0,100,1,1,0,1,100,10,250,-4000\n",
+        "json_loads,7,1,0,200,2,0,2,1,400,4,,0,2051072\n"
+        "json_loads,7,1,0,100,1,1,0,1,100,10,250,-4000,2048512\n",
         newline="",
     )
 
+    # allocated in kB, from the row's bytes.
     assert read_workers(path) == {
         "json_loads": [
             [
-                Collection(1, "automatic", Tally(1, 100, 10), 250, -4000, False),
-                Collection(2, "explicit", Tally(1, 400, 4), None, 0, True),
+                Collection(
+                    1, "automatic", Tally(1, 100, 10), 250, -4000, False, 2000.5
+                ),
+                Collection(2, "explicit", Tally(1, 400, 4), None, 0, True, 2003),
             ]
         ]
     }
 
 
-def test_a_file_without_increment_size_and_old_work_reads_none(
+def test_a_file_without_increment_size_old_work_and_allocated_reads_none(
     tmp_path: Path,
 ) -> None:
     csv = write(tmp_path / "trace.csv", "json_loads,7,1,0,100,0,1,0,1,100,10")
 
     [[collection]] = read_workers(csv)["json_loads"]
 
-    assert (collection.increment_size, collection.old_work) == (None, None)
+    assert (
+        collection.increment_size,
+        collection.old_work,
+        collection.allocated,
+    ) == (None, None, None)
+
+
+def clocked(path: Path, *rows: str) -> list[list[Collection]]:
+    """The workers of a file whose rows end with allocated, in bytes."""
+    path.write_text("\n".join((f"{HEADER},allocated", *rows)) + "\n", newline="")
+    return read_workers(path)["json_loads"]
+
+
+def test_a_reach_leaves_out_the_collections_that_started_past_it(
+    tmp_path: Path,
+) -> None:
+    workers = clocked(
+        tmp_path / "trace.csv",
+        "json_loads,7,1,0,100,0,1,0,1,100,10,2048000",
+        "json_loads,7,1,0,200,0,1,0,2,200,20,4096000",
+        # Past a reach of 5,000 kB.
+        "json_loads,7,1,0,300,1,1,0,1,500,0,6144000",
+    )
+
+    assert summed(workers, 5_000).tallies == {(0, "automatic"): Tally(2, 200, 20)}
+    assert summed(workers).tallies == {
+        (0, "automatic"): Tally(2, 200, 20),
+        (1, "automatic"): Tally(1, 500, 0),
+    }
+
+
+def test_a_collection_without_allocated_counts_within_any_reach(
+    tmp_path: Path,
+) -> None:
+    csv = write(tmp_path / "trace.csv", "json_loads,7,1,0,100,0,1,0,1,100,10")
+
+    assert summed(read_workers(csv)["json_loads"], 1).tallies == {
+        (0, "automatic"): Tally(1, 100, 10)
+    }
+
+
+def test_the_last_collection_before_shutdown_starts_on_average_past_any_reach(
+    tmp_path: Path,
+) -> None:
+    workers = clocked(
+        tmp_path / "trace.csv",
+        "json_loads,7,1,0,100,0,1,0,1,100,10,2048000",
+        # Shutdown's, which the loader leaves out.
+        "json_loads,7,1,0,200,2,0,1,1,300,30,2050048",
+        "json_loads,8,1,0,100,0,1,0,1,100,10,2048000",
+        "json_loads,8,1,0,200,0,1,0,2,200,20,4096000",
+    )
+
+    assert summed(workers, 1).last_started == 3_000
+
+
+def test_a_trace_without_allocated_has_no_last_collection_to_start(
+    tmp_path: Path,
+) -> None:
+    csv = write(tmp_path / "trace.csv", "json_loads,7,1,0,100,0,1,0,1,100,10")
+
+    [benchmark] = load(csv).values()
+
+    assert benchmark.last_started is None
 
 
 def test_yield_is_collected_over_candidates() -> None:

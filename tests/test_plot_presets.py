@@ -15,25 +15,29 @@ def collection(
     increment_size: int | None = None,
     old_work: int | None = None,
     shutdown: bool = False,
+    allocated: float | None = None,
 ) -> Collection:
     """One of a worker's collections, by default an automatic young one."""
     kind: Kind = "explicit" if shutdown else "automatic"
-    return Collection(generation, kind, gained, increment_size, old_work, shutdown)
+    return Collection(
+        generation, kind, gained, increment_size, old_work, shutdown, allocated
+    )
 
 
 def test_a_runs_records_become_collections_in_real_objects() -> None:
     records = [
         record(kind="young", survived=3, freed=1)._replace(work_to_do=-50),
-        record(kind="old", marked=9, survived=5)._replace(work_to_do=20),
-        record(kind="full", survived=6, freed=2),
+        record(4_000, kind="old", marked=9, survived=5)._replace(work_to_do=20),
+        record(4_100, kind="full", survived=6, freed=2),
     ]
 
     # 16 real objects to a simulated one. The budget before the first record is
-    # the initial one, and before each later one the record before's.
+    # the initial one, and before each later one the record before's. The clock
+    # reads kB allocated.
     assert collections(records, Constants()) == [
-        Collection(0, "automatic", Tally(1, 64, 16), 64, -100_000, False),
-        Collection(1, "automatic", Tally(1, 80, 0), 224, -800, False),
-        Collection(2, "explicit", Tally(1, 128, 32), 128, 320, False),
+        Collection(0, "automatic", Tally(1, 64, 16), 64, -100_000, False, 2_000),
+        Collection(1, "automatic", Tally(1, 80, 0), 224, -800, False, 4_000),
+        Collection(2, "explicit", Tally(1, 128, 32), 128, 320, False, 4_100),
     ]
 
 
@@ -60,6 +64,23 @@ def test_a_point_stands_at_its_collections_number_in_the_worker() -> None:
     ]
 
     assert [point["n"] for point in points(worker, "legacy")] == [1, 3, 4]
+
+
+def test_a_point_stands_at_the_whole_kb_allocated_before_it() -> None:
+    worker = [
+        collection(allocated=2000.4),
+        # A record gcmon lost folds into this row, which reads the clock as its
+        # own collection starts.
+        collection(gained=Tally(2, 300, 30), allocated=6001.5),
+    ]
+
+    assert [point["kb"] for point in points(worker, "legacy")] == [2000, 6002]
+
+
+def test_a_point_without_kb_allocated_draws_none() -> None:
+    [point] = points([collection()], "legacy")
+
+    assert "kb" not in point
 
 
 def test_a_row_that_folds_lost_collections_draws_their_average() -> None:
@@ -137,13 +158,18 @@ def test_the_panels_are_every_generation_and_kind_a_collection_files_in() -> Non
 
 def test_columns_hold_a_series_each_with_null_where_a_point_has_none() -> None:
     drawn = points(
-        [collection(), collection(generation=2, increment_size=500)], "legacy"
+        [
+            collection(allocated=2000),
+            collection(generation=2, increment_size=500, allocated=4000),
+        ],
+        "legacy",
     )
 
     # Panels by their place in PANELS.
     assert columns(drawn) == {
         "n": [1, 2],
         "panel": [0, 2],
+        "kb": [2000, 4000],
         "examined": [100, 100],
         "freed": [10, 10],
         "yield": [0.1, 0.1],

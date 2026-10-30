@@ -2,15 +2,16 @@
 // The presets page: each preset's collections under a collector over its
 // benchmark's workers', from the plot.json `just site` writes beside this
 // script (ADR 0021). A panel per generation and kind of collection, as
-// compare_presets.py files them, and a collection's number in its worker along
-// the x-axis. Counts are real objects.
+// compare_presets.py files them, and the MB its worker had allocated before a
+// collection along the x-axis, or its number in the worker where a trace has no
+// allocation clock. Counts are real objects.
 // @ts-expect-error: an editor cannot fetch Plot's types from jsDelivr.
 import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+esm";
 
 /**
- * A collection: its number in its worker, its panel, and the series it has a
- * value for.
- * @typedef {{ n: number, panel: string, examined?: number, freed?: number, yield?: number, work?: number, budget?: number }} Point
+ * A collection: its number in its worker, its panel, the kB allocated before it,
+ * and the series it has a value for.
+ * @typedef {{ n: number, panel: string, kb?: number, examined?: number, freed?: number, yield?: number, work?: number, budget?: number }} Point
  */
 /** @typedef {"examined" | "freed" | "yield" | "work" | "budget"} Series */
 /** @typedef {{ preset: string, collector: string, workers: Point[][], run: Point[] }} Plotted */
@@ -18,7 +19,7 @@ import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+e
  * A worker's collections as plot.json holds them, a column to a series: each
  * panel by its place in the file's panels, and null where a collection has no
  * value. A series no collection has a value for has no column.
- * @typedef {{ n: number[], panel: number[] } & { [key in Series]?: (number | null)[] }} Columns
+ * @typedef {{ n: number[], panel: number[], kb?: (number | null)[] } & { [key in Series]?: (number | null)[] }} Columns
  */
 /**
  * @typedef {{ panels: string[], plots: { preset: string, collector: string, workers: Columns[], run: Columns }[] }} File
@@ -52,6 +53,8 @@ const KEYS = ["examined", "freed", "yield", "work", "budget"];
 const points = (columns) => columns.n.map((n, i) => {
   /** @type {Point} */
   const point = { n, panel: file.panels[columns.panel[i]] };
+  const kb = columns.kb?.[i];
+  if (kb !== undefined && kb !== null) point.kb = kb;
   for (const key of KEYS) {
     const value = columns[key]?.[i];
     if (value !== undefined && value !== null) point[key] = value;
@@ -85,8 +88,11 @@ const draw = () => {
     `the benchmark's ${workers.length} workers`;
   const style = getComputedStyle(document.documentElement);
   const token = (/** @type {string} */ name) => style.getPropertyValue(`--${name}`).trim();
+  // MB allocated, where every collection carries it, else the collection's number.
+  const clocked = [run, ...workers].every((points) => points.every((p) => p.kb !== undefined));
+  const at = (/** @type {Point} */ p) => (clocked ? /** @type {number} */ (p.kb) / 1000 : p.n);
   // Every panel shares the worker's length, so a collection lines up across them.
-  const xMax = Math.max(...[run, ...workers].flatMap((points) => points.map((p) => p.n)));
+  const xMax = Math.max(...[run, ...workers].flatMap((points) => points.map(at)));
   const names = unique([run, ...workers].flatMap((points) => points.map((p) => p.panel))).sort();
 
   /**
@@ -108,11 +114,11 @@ const draw = () => {
     figure.append(Object.assign(document.createElement("figcaption"), { textContent: caption }));
     const dots = theirs.length / workers.length <= DOTS;
     const share = key === "yield";
-    const y = { x: "n", y: key };
+    const y = { x: at, y: key };
     return () => figure.append(Plot.plot({
       width: figure.clientWidth, height: HEIGHT, marginLeft: 48,
       style: { background: "transparent", color: token("text-muted"), fontFamily: "inherit", fontSize: "11px" },
-      x: { domain: [0, xMax], label: "collection in the worker" },
+      x: { domain: [0, xMax], label: clocked ? "MB allocated in the worker" : "collection in the worker" },
       y: { label: null, tickFormat: share ? ".2~p" : "~s" },
       ariaLabel: caption,
       marks: [
@@ -124,7 +130,8 @@ const draw = () => {
         Plot.ruleY([0], { stroke: token("baseline") }),
         Plot.tip(ours, Plot.pointerX({
           ...y, fill: token("surface"), stroke: token("baseline"),
-          title: (/** @type {Point} */ p) => `collection ${p.n}\n${caption}: ${format(share, p[key])}`,
+          title: (/** @type {Point} */ p) =>
+            `collection ${p.n}${clocked ? ` at ${at(p).toFixed(1)} MB` : ""}\n${caption}: ${format(share, p[key])}`,
         })),
       ],
     }));
