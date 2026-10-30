@@ -85,7 +85,7 @@
           "request": {"preset": "connected_components", "settings": {"threshold0": 1000, "threshold1": 10, "threshold2": 10}, "every": 5},
           "marks": [
             {"part": "legacy.work", "note": "The tall bar at 133 MB holds the gen 2 collection, examining the whole graph."},
-            {"part": "figure.peak_work", "note": "91.6K objects in that one collection, against the incremental collector's 40.0K."}
+            {"part": "figure.peak_work", "note": "91.6K objects in that one collection, against the incremental collector's 1.6K."}
           ]
         },
         {
@@ -99,10 +99,10 @@
         },
         {
           "title": "The incremental collector, for contrast",
-          "text": "The incremental collector takes the old generation an increment at a time. Its tallest bars come from increments that take the part of the graph still pending, which grows as the graph loads.",
+          "text": "The incremental collector takes the old generation an increment at a time. sys reaches the graph through its module, so each old collection marks what the young collection before it moved in, and no bar stands taller than a young collection's.",
           "request": {"preset": "connected_components", "settings": {"threshold0": 1000, "threshold1": 10, "threshold2": 10}, "every": 5},
           "marks": [
-            {"part": "incremental.work", "note": "Its tallest bars, at 36, 50, 78 and 134 MB, each hold an increment about twice the last, up to 40.0K."}
+            {"part": "incremental.work", "note": "Its tallest bars hold 1.6K objects each, against the legacy collector's 91.6K."}
           ]
         }
       ]
@@ -382,8 +382,8 @@
       "steps": [
         {
           "title": "An increment is a closure",
-          "text": "An increment is the least recently scanned pending object and every pending object it reaches. An old collection examines it whole, however little of the work budget is left. connected_components' module loads its graph inside read_adjlist, whose frame holds it until the call returns, so sys reaches none of the graph while it loads.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5},
+          "text": "An increment is the least recently scanned pending object and every pending object it reaches. An old collection examines it whole, however little of the work budget is left. connected_components' module loads its graph inside read_adjlist, whose frame holds it until the call returns. The preset lets the module hold the graph from the start, as the workers' old collections take it a budget at a time. Here the frame holds it, so sys reaches none of the graph while it loads.",
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.6.built_in_frame": true}},
           "marks": [
             {"part": "incremental.work", "note": "The bars at 48, 64 and 96 MB each hold an increment from the graph's root: 8.5K, 15.0K, then 27.9K objects."}
           ]
@@ -391,7 +391,7 @@
         {
           "title": "Peak work",
           "text": "Each of those increments takes all of the graph loaded so far, so each is larger than the last.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5},
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.6.built_in_frame": true}},
           "marks": [
             {"part": "figure.peak_work", "note": "27.9K, the increment at 96 MB, above the legacy collector's 19.4K, a gen 1 collection."}
           ]
@@ -399,7 +399,7 @@
         {
           "title": "The budget pays for it",
           "text": "An old collection debits the budget with all of an increment, so a large one leaves the old collections after it idle.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5},
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.6.built_in_frame": true}},
           "marks": [
             {"part": "incremental.budget", "note": "At 96 MB the budget drops to -24,666, and young collections pay it back 3,226 at a time, the graph's share of 4 MB."}
           ]
@@ -407,7 +407,7 @@
         {
           "title": "Half the graph",
           "text": "Halve the graph, to 45,000 kB. It has loaded before the third increment from its root comes.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.6.size": 45000}},
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.6.built_in_frame": true, "workload.structures.6.size": 45000}},
           "marks": [
             {"part": "figure.peak_work", "note": "15.0K: the second increment from the graph's root, at 64 MB."}
           ]
@@ -415,7 +415,7 @@
         {
           "title": "A quarter of the graph",
           "text": "Shrink the graph to 22,000 kB. It has loaded, and the module holds it, before the budget lets an old collection reach it, so no increment forms from it.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.6.size": 22000}},
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.6.built_in_frame": true, "workload.structures.6.size": 22000}},
           "marks": [
             {"part": "figure.peak_work", "note": "3.2K, what a young collection moves in."}
           ]
@@ -510,19 +510,19 @@
           ]
         },
         {
-          "title": "Peak work does not follow",
-          "text": "Peak work reads the largest increment, which grows with the graph loaded when an increment starts from its root.",
+          "title": "Peak work parts ways",
+          "text": "The incremental collector's peak work halves too: its largest collection is a young one, or an old one that marks what a young one moved in. The legacy collector's leaps.",
           "request": {"preset": "connected_components", "settings": {"threshold0": 1000, "threshold1": 10, "threshold2": 10}, "every": 5},
           "marks": [
-            {"part": "figure.peak_work", "note": "The incremental collector's grows from 27.9K to 40.0K. The legacy collector's leaps to 91.6K: a gen 2 collection, at 133 MB, takes the whole graph."}
+            {"part": "figure.peak_work", "note": "The incremental collector's falls from 3.2K to 1.6K. The legacy collector's leaps from 19.4K to 91.6K: a gen 2 collection, at 133 MB, takes the whole graph."}
           ]
         },
         {
           "title": "Raise threshold1",
-          "text": "Raise threshold1 to 20, and the young generation grows to 44 MB. The graph outlasts it either way, but reaches the old generation later, and the increments from its root come later.",
+          "text": "Raise threshold1 to 20, and the young generation grows to 44 MB. The graph outlasts it either way, but reaches the old generation later, and the old collections start marking it later.",
           "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 20, "threshold2": 10}, "every": 5},
           "marks": [
-            {"part": "figure.peak_work", "note": "The largest increment stays 27.9K, and comes at 116 MB against 96."}
+            {"part": "figure.peak_work", "note": "The first old collection to mark the graph comes at 68 MB, against 48."}
           ]
         },
         {
