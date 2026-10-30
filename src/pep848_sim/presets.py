@@ -248,9 +248,10 @@ _XML_TREE_CHURN = 11
 # three values a worker, one loop each.
 _XML_VALUE = 71 * _XML_SLOT
 _XML_VALUES = 4
-# Records: the workers' first parse ends at 10,215 to 10,229 kB, so their first
-# value starts about 1,400 kB after start-up ends.
-_XML_SET_UP = 1_396
+# Records: the workers' first late collection starts at 10,215 to 10,229 kB and
+# examines three parsed trees, so it follows their third parse, and their parses
+# start at about 9,150 kB. Their first value starts 660 kB after start-up ends.
+_XML_SET_UP = 660
 # Records: the workers start shutdown at 109,612 kB, past their last value. pyperf
 # and the last value's serialising allocate the rest, which the run takes as the
 # start of a fifth value.
