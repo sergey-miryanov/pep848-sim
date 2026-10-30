@@ -45,10 +45,13 @@ class Heap:
         collector.attach(self)
         collector.add_module_root(self._module_root)
         self._clock = 0
-        # When the next automatic collection comes: threshold0 kB after the last
-        # collection of any kind, as every collection on the branch resets its budget
-        # (ADR 0011).
+        # When the next automatic collection falls due: threshold0 kB after the
+        # last collection of any kind, as every collection on the branch resets its
+        # budget (ADR 0011).
         self._due = self.threshold0
+        # Whether C code runs, which holds back a collection that falls due until
+        # it returns (ADR 0022).
+        self._held = False
 
     def __len__(self) -> int:
         """The alive objects, sys among them."""
@@ -168,15 +171,28 @@ class Heap:
 
     def next_collection(self) -> int:
         """The clock of the first automatic collection an object allocated now can
-        meet, unless a full collection comes first."""
-        return self._due if self._due > self._clock else self._clock + self.threshold0
+        meet, unless a full collection comes first. Held back, a collection comes
+        later than it fell due, and one that has fallen due comes at the next kB
+        at the soonest: either errs early (ADR 0005)."""
+        if self._due > self._clock:
+            return self._due
+        return self._clock + 1 if self._held else self._clock + self.threshold0
+
+    def hold_collections(self, held: bool) -> None:
+        """Hold back automatic collections while C code runs, or let them come
+        once it returns. The branch starts a collection at the interpreter's next
+        check for pending work once its budget runs out, and C code makes no such
+        check (ADR 0022). One that fell due meanwhile comes at the next
+        allocation."""
+        self._held = held
 
     def collect_if_due(self) -> None:
         """Collect if threshold0 kB have passed since the last collection, or since
-        the start. Each allocation calls it first, so the collection follows the
-        let-gos of the kB before it (ADR 0005). A run that ends on a boundary calls
-        it once more, as its next allocation would."""
-        if self._clock == self._due:
+        the start, unless C code holds the collection back. Each allocation calls it
+        first, so the collection follows the let-gos of the kB before it (ADR 0005).
+        A run that ends on a boundary calls it once more, as its next allocation
+        would."""
+        if self._clock >= self._due and not self._held:
             self._collector.collect()
             self._due = self._clock + self.threshold0
 

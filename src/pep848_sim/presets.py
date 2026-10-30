@@ -87,6 +87,19 @@ class _StartUp:
         )
         return objects * (1 + self.churn)
 
+    def set_up(self, length: int) -> StructureParameters:
+        """What a worker allocates after start-up and before its loops, `length` kB
+        at start-up's churn: chains that build once, before the loops repeat, and
+        that refcounting frees as they end (ADR 0011)."""
+        return StructureParameters(
+            shape=Chains(width=16),
+            size=length // (1 + self.churn),
+            root="frame",
+            lifetime=0,
+            rebuild_interval=None,
+            build_churn=self.churn,
+        )
+
 
 # Start-up and imports: the interpreter, pyperf and the benchmark's own imports.
 # The five benchmarks' first collections agree within 5%, so their presets share
@@ -120,7 +133,7 @@ _START_UP = _StartUp(
 
 # Records: the workers' first gc.collect() starts at 5,484 kB, 860 kB after
 # start-up ends.
-_SET_UP = 860 // (1 + _START_UP.churn)
+_SET_UP = 860
 # Code: the list, and the rings' 2,100 nodes as 131 simulated objects (ADR 0002),
 # each a ring of its own, as a ring of 21 comes to about one.
 _RINGS = 132
@@ -161,26 +174,15 @@ CREATE_GC_CYCLES = Preset(
                 full_collections=True,
             ),
             # Records: what the workers allocate after start-up, before their first
-            # gc.collect(), at start-up's churn. It builds before the loops, as the
-            # rings repeat, and refcounting frees it as it ends.
-            StructureParameters(
-                shape=Chains(width=16),
-                size=_SET_UP,
-                root="frame",
-                lifetime=0,
-                rebuild_interval=None,
-                build_churn=_START_UP.churn,
-            ),
+            # gc.collect().
+            _START_UP.set_up(_SET_UP),
         ),
         seed=848,
         shutdown=True,
     ),
     # The worker's own length: start-up, what comes before the loops, then the
     # loops, the last ending with its second gc.collect().
-    run_length=_START_UP.length
-    + _SET_UP * (1 + _START_UP.churn)
-    + (_LOOPS - 1) * _LOOP
-    + _RINGS,
+    run_length=_START_UP.length + _SET_UP + (_LOOPS - 1) * _LOOP + _RINGS,
 )
 
 
@@ -231,25 +233,42 @@ JSON_LOADS = Preset(
 # 50, and no element links back to its parent.
 _XML_TREE = 322
 _XML_SHAPE = Hierarchy(branches=50)
-# Records: the automatic collections per worker. Each marks threshold0 kB of
-# allocation (ADR 0011), and the records cannot tell where before the next one the
-# worker ends, so the run ends about halfway, as json_loads' does.
-_XML_COLLECTIONS = 51
-# Code: a value's own tree and its 60 parses. pyperf runs a warmup and three values
-# a worker, one loop each.
-_XML_TREES = 61
+# Records: a parse allocates 360 kB, 72 B an element where ADR 0002 counts 64 B a
+# real object. Each parse's slot on the clock holds its tree, then churn for the
+# rest, as a build allocates its objects alone. The workers' collections come six
+# parses apart while they parse, 2,162 kB, as each waits for the parse under way
+# to return (ADR 0022).
+_XML_SLOT = 360
+# Records: building a value's own tree, serialising it and writing it allocate
+# 3,864 kB before its first parse: the tree, and 11 kB of churn after each of its
+# objects. The workers' collections come threshold0 kB apart there.
+_XML_TREE_CHURN = 11
+_XML_TREE_BUILD = _XML_TREE * (1 + _XML_TREE_CHURN)
+# Records: a worker's values run 25,468 kB each. A value takes 71 slots, 25,560 kB,
+# so that each value's parses fall in the same slots. pyperf runs a warmup and
+# three values a worker, one loop each.
+_XML_VALUE = 71 * _XML_SLOT
 _XML_VALUES = 4
-# Each tree's slot on the clock, the tree and the parser's other objects: the
-# worker's length after start-up over its 244 trees, 403 kB.
-_XML_SLOT = (
-    (2 * _XML_COLLECTIONS + 1) * CollectorSettings().threshold0 // 2 - _START_UP.length
-) // (_XML_VALUES * _XML_TREES)
-_XML_VALUE = _XML_TREES * _XML_SLOT
+# Code: each parsed tree goes as the next parse but one returns, two slots on, and
+# the collection that waits for that parse still finds it. A value's first parse
+# starts as soon as the value's own tree has built, 96 kB ahead of its slot, so
+# its tree lives that much longer to see the third parse return, and the rest as
+# long. Records: the workers' gen 0 collections examine three parsed trees while
+# they parse, 15,480 real objects.
+_XML_PARSED_LIFETIME = 2 * _XML_SLOT + -_XML_TREE_BUILD % _XML_SLOT + 1
+# Records: the workers' first late collection starts at 10,215 to 10,229 kB and
+# examines three parsed trees, so it follows their third parse, and their parses
+# start at about 9,150 kB. Their first value starts 660 kB after start-up ends.
+_XML_SET_UP = 660
+# Records: the workers start shutdown at 109,612 kB, past their last value. pyperf
+# and the last value's serialising allocate the rest, which the run takes as the
+# start of a fifth value.
+_XML_SHUTDOWN = 109_612
 
 XML_ETREE_PARSE = Preset(
     benchmark="xml_etree_parse",
     workload=WorkloadParameters(
-        # The parser's own objects.
+        # The rest of each parse's slot, and the serialising of each value's tree.
         churn=ChurnParameters(
             # Records: each worker's collections free 249 real objects under either
             # collector, all start-up's, so the parser makes no cycles. The cycles
@@ -270,28 +289,32 @@ XML_ETREE_PARSE = Preset(
                 shape=_XML_SHAPE,
                 size=_XML_TREE,
                 root="frame",
-                lifetime=_XML_VALUE - _XML_TREE,
+                lifetime=_XML_VALUE - _XML_TREE_BUILD,
                 rebuild_interval=_XML_VALUE,
-                build_churn=0,
+                build_churn=_XML_TREE_CHURN,
             ),
-            # Code: the parsed trees, from the file and from the bytes in turn. Each
-            # goes as the next of its kind, the next build but one, builds. A
+            # Code: the parsed trees, from the file and from the bytes in turn. A
             # value's first parse waits for its own tree and runs into the next
-            # slot, which it takes, so a value parses 60.
+            # slot, which it takes, so a value parses 60. The C accelerator's
+            # parser builds each tree in C.
             StructureParameters(
                 shape=_XML_SHAPE,
                 size=_XML_TREE,
                 root="frame",
-                lifetime=2 * _XML_SLOT,
+                lifetime=_XML_PARSED_LIFETIME,
                 rebuild_interval=_XML_SLOT,
                 build_churn=0,
+                built_in_c=True,
             ),
+            # Records: what the workers allocate after start-up, before their first
+            # value.
+            _START_UP.set_up(_XML_SET_UP),
         ),
         seed=848,
         shutdown=True,
     ),
-    # The worker's own length: start-up, then its values.
-    run_length=_START_UP.length + _XML_VALUES * _XML_VALUE,
+    # The worker's own length: start-up, its values and what follows them.
+    run_length=_XML_SHUTDOWN,
 )
 
 
@@ -306,21 +329,61 @@ _TASKS = sum(6**level for level in range(7))
 # future and timer handle. A worker's heap peaks at 857,000 to 866,000 real
 # objects, less start-up's.
 _REAL_PER_TASK = 15
-# Placeholder: the event loop's churn after each task it starts.
-_ASYNC_BUILD_CHURN = 1
 _ASYNC_TREE = _TASKS * _REAL_PER_TASK // 16
+# Records: the legacy collector's gen 0 collections examine 15,260 to 15,600 real
+# objects each while a tree builds, and the first builds from about 7,500 kB to
+# about 123,000. The event loop's handles and callbacks come to 1.17 kB for each kB
+# of tree (ADR 0023).
+_ASYNC_BUILD_CHURN = Fraction(117, 100)
+# Records: the heap grows faster once a tree has built, peaks about 6 MB on, and
+# falls to start-up's by the next run. Meanwhile the legacy collector's gen 0
+# collections examine 22,000 to 39,388 real objects each, 26,000 on average: 0.23
+# kB of churn for each kB the finishing tasks keep.
+_ASYNC_FINISH_CHURN = Fraction(23, 100)
+_ASYNC_TREE_LIFETIME = 6_000
+# Records: the workers' first tree starts 2,900 kB after start-up ends.
+_ASYNC_SET_UP = _START_UP.set_up(2_900)
 # Records: the automatic collections per worker. Each marks threshold0 kB of
 # allocation (ADR 0011), and the records cannot tell where before the next one the
 # worker ends, so the run ends about halfway, as json_loads' does.
 _ASYNC_COLLECTIONS = 261
 # Code: pyperf runs a warmup and three values a worker, one loop each.
 _ASYNC_RUNS = 4
-# A run's length on the clock: the worker's length after start-up over its runs,
-# 129,594 kB.
+# A run's length on the clock: the worker's length after start-up and the set-up
+# over its runs, 128,869 kB.
 _ASYNC_RUN = (
     (2 * _ASYNC_COLLECTIONS + 1) * CollectorSettings().threshold0 // 2
     - _START_UP.length
+    - _ASYNC_SET_UP.build_length
 ) // _ASYNC_RUNS
+# Code: the task tree, built a level at a time as asyncio runs each task after the
+# one that started it. No task links back to its parent, so refcounting frees it as
+# its tasks finish, here at once where the workers' heap peaks. Records: sys reaches
+# it, through the event loop that runs it. The branch's old collections mark from
+# sys alone, and spend their whole budget while they examine 643 real objects each.
+_ASYNC_TASK_TREE = StructureParameters(
+    shape=Hierarchy(branches=6),
+    size=_ASYNC_TREE,
+    root="module",
+    lifetime=_ASYNC_TREE_LIFETIME,
+    rebuild_interval=_ASYNC_RUN,
+    build_churn=_ASYNC_BUILD_CHURN,
+)
+# Records: what the tasks allocate as they finish and keep to the run's end,
+# reached through the event loop as the tree is. It fills the rest of the run, and
+# goes as the next starts.
+_ASYNC_FINISH_ROOM = _ASYNC_RUN - _ASYNC_TASK_TREE.build_length
+_ASYNC_FINISH = _ASYNC_FINISH_ROOM // (1 + _ASYNC_FINISH_CHURN)
+_ASYNC_FINISHED = StructureParameters(
+    shape=Chains(width=16),
+    size=_ASYNC_FINISH,
+    root="module",
+    lifetime=_ASYNC_FINISH_ROOM
+    - _ASYNC_FINISH
+    - int(_ASYNC_FINISH * _ASYNC_FINISH_CHURN),
+    rebuild_interval=_ASYNC_RUN,
+    build_churn=_ASYNC_FINISH_CHURN,
+)
 
 ASYNC_TREE_IO_TG = Preset(
     benchmark="async_tree_io_tg",
@@ -336,50 +399,73 @@ ASYNC_TREE_IO_TG = Preset(
         ),
         structures=(
             *_START_UP.structures,
-            # Code: the task tree, built a level at a time as asyncio runs each
-            # task after the one that started it. No task links back to its parent,
-            # so refcounting frees the tree as the run ends. Records: sys reaches
-            # it, through the event loop that runs it. The branch's old collections
-            # mark from sys alone, and spend their whole budget while they examine
-            # 643 real objects each.
-            StructureParameters(
-                shape=Hierarchy(branches=6),
-                size=_ASYNC_TREE,
-                root="module",
-                lifetime=_ASYNC_RUN - _ASYNC_TREE * (1 + _ASYNC_BUILD_CHURN),
-                rebuild_interval=_ASYNC_RUN,
-                build_churn=_ASYNC_BUILD_CHURN,
-            ),
+            _ASYNC_TASK_TREE,
+            _ASYNC_FINISHED,
+            _ASYNC_SET_UP,
         ),
         seed=848,
         shutdown=True,
     ),
-    # The worker's own length: start-up, then its runs.
-    run_length=_START_UP.length + _ASYNC_RUNS * _ASYNC_RUN,
+    # The worker's own length: start-up, the set-up, then its runs.
+    run_length=(
+        _START_UP.length + _ASYNC_SET_UP.build_length + _ASYNC_RUNS * _ASYNC_RUN
+    ),
 )
 
 
-# connected_components, in bm_networkx: the module loads the Amazon co-purchasing
-# graph into its globals before pyperf starts, and each loop counts the graph's
-# connected components with a breadth-first walk.
+# connected_components, in bm_networkx: the module imports networkx and loads the
+# Amazon co-purchasing graph into its globals before pyperf starts, and each loop
+# counts the graph's connected components with a breadth-first walk.
 
+# Code: networkx's modules, functions and classes, globals of sys.modules until
+# shutdown. Records: the legacy collector's gen 0 collections examine 4,400 to 4,800
+# real objects each between start-up and the load, which starts at about 14,600 kB:
+# 1,425 simulated objects over 9,975 kB, with 6 kB of churn after each.
+_NETWORKX = StructureParameters(
+    shape=Chains(width=16),
+    size=1_425,
+    root="module",
+    lifetime=None,
+    rebuild_interval=None,
+    build_churn=6,
+)
 # Code: read_adjlist's 262,111 nodes with two dicts each and 899,792 edges with one,
 # 1,424,118 tracked objects in all under networkx 3.4.2: 89,007 simulated objects
 # (ADR 0002), with about two edges' dicts to a node's.
 _GRAPH = 1_424_118 // 16
 _GRAPH_SHAPE = Graph(edges=2)
+# Code: the graph, a global of the benchmark's module until shutdown.
+# graph = networkx.read_adjlist(...) stores it once read_adjlist returns, and
+# read_adjlist's frame holds it while it loads. Records: the branch's old collections
+# take it about 50,000 real objects at a time, a budget each, but for one increment
+# of 231,870 at the 30th. The module holds it from the start here, so the old
+# collections mark it a budget at a time. A frame would let one increment take all
+# of it pending at 96 MB, 446,256 real objects.
+# Records: the legacy collector's gen 0 collections examine 24,700 to 27,600 real
+# objects each while it loads, and the 63rd, at 126,005 kB, half as many. The load
+# ends there, so read_adjlist's lists, tuples and throwaway dicts come to 0.24 kB for
+# each kB of graph (ADR 0023).
+_GRAPH_LOAD = StructureParameters(
+    shape=_GRAPH_SHAPE,
+    size=_GRAPH,
+    root="module",
+    lifetime=None,
+    rebuild_interval=None,
+    build_churn=Fraction(24, 100),
+)
 # Records: the automatic collections per worker. Each marks threshold0 kB of
 # allocation (ADR 0011), and the records cannot tell where before the next one the
 # worker ends, so the run ends about halfway, as json_loads' does.
 _CONNECTED_COMPONENTS_COLLECTIONS = 99
 # Code: pyperf runs a warmup and three values a worker, one loop each.
 _WALKS = 4
-# A loop's length on the clock: the worker's length after start-up and the load
-# over its loops, 26,342 kB.
+# A loop's length on the clock: the worker's length after start-up, the imports and
+# the load over its loops, 18,508 kB.
 _WALK = (
     (2 * _CONNECTED_COMPONENTS_COLLECTIONS + 1) * CollectorSettings().threshold0 // 2
     - _START_UP.length
-    - _GRAPH
+    - _NETWORKX.build_length
+    - _GRAPH_LOAD.build_length
 ) // _WALKS
 
 CONNECTED_COMPONENTS = Preset(
@@ -395,33 +481,17 @@ CONNECTED_COMPONENTS = Preset(
             long_share=Fraction(0),
             long_lifetimes=(1, 1),
         ),
-        structures=(
-            *_START_UP.structures,
-            # Code: the graph, a global of the benchmark's module until shutdown.
-            # G = nx.read_adjlist(...) stores it once read_adjlist returns, and
-            # read_adjlist's frame holds it while it loads. Records: the branch's
-            # old collections examine it in increments as it loads, up to 231,870
-            # real objects in one, and mark it once the module holds it.
-            # Records: the heap tops out after the 61st automatic collection,
-            # about 118 MB after start-up, so read_adjlist's lists, tuples and
-            # throwaway dicts come to about 0.3 kB for each kB of graph. A build's
-            # churn comes in whole kB, so the load leaves it out and ends about
-            # 29 MB early.
-            StructureParameters(
-                shape=_GRAPH_SHAPE,
-                size=_GRAPH,
-                root="module",
-                lifetime=None,
-                rebuild_interval=None,
-                build_churn=0,
-                built_in_frame=True,
-            ),
-        ),
+        structures=(*_START_UP.structures, _NETWORKX, _GRAPH_LOAD),
         seed=848,
         shutdown=True,
     ),
-    # The worker's own length: start-up, the load, then its loops.
-    run_length=_START_UP.length + _GRAPH + _WALKS * _WALK,
+    # The worker's own length: start-up, the imports, the load, then its loops.
+    run_length=(
+        _START_UP.length
+        + _NETWORKX.build_length
+        + _GRAPH_LOAD.build_length
+        + _WALKS * _WALK
+    ),
 )
 
 PRESETS = {

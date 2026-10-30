@@ -68,8 +68,8 @@ def sample(structure: StructureParameters) -> Sample:
 
 def graph(request: str) -> str:
     """The request's structures, each with its shape, size, root, lifetime,
-    rebuild interval, whether it calls `gc.collect()`, whether a frame builds it,
-    and its sample, and the churn's parameters, as JSON text for the widget's
+    rebuild interval, whether it calls `gc.collect()`, whether a frame or C code
+    builds it, and its sample, and the churn's parameters, as JSON text for the widget's
     legend and drawing."""
     workload = parse(request).workload
     churn = workload.churn
@@ -84,6 +84,7 @@ def graph(request: str) -> str:
                     "rebuild_interval": structure.rebuild_interval,
                     "full_collections": structure.full_collections,
                     "built_in_frame": structure.built_in_frame,
+                    "built_in_c": structure.built_in_c,
                     **sample(structure)._asdict(),
                 }
                 for structure in workload.structures

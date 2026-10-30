@@ -73,8 +73,8 @@ def structure_parameters(draw: st.DrawFn, own: bool = True) -> StructureParamete
     and either root, sys's built in a frame or not: long-lived, built once and
     dropped, or repeating."""
     size = draw(st.integers(min_value=1, max_value=6))
-    build_churn = draw(st.integers(min_value=0, max_value=2))
-    build = size * (1 + build_churn)
+    build_churn = Fraction(draw(st.integers(min_value=0, max_value=8)), 4)
+    build = size + size * build_churn.numerator // build_churn.denominator
     kind = draw(st.sampled_from(["long-lived", "once", "repeating"]))
     shapes = [
         st.builds(Chains, st.integers(1, 4)),
@@ -95,6 +95,7 @@ def structure_parameters(draw: st.DrawFn, own: bool = True) -> StructureParamete
         build_churn=build_churn,
         full_collections=draw(st.booleans()),
         built_in_frame=root == "module" and draw(st.booleans()),
+        built_in_c=draw(st.booleans()),
     )
 
 
@@ -345,6 +346,35 @@ def test_the_builds_churn_follows_each_built_object() -> None:
     assert built == [True, *[True, False, False] * 3]
 
 
+def test_a_fraction_of_churn_follows_some_built_objects_and_not_others() -> None:
+    collector = Collector(CollectorSettings(threshold0=1_000))
+    heap = Heap(collector)
+    # Churn that makes a cycle of one object with every allocation.
+    cycles = ChurnParameters(
+        cycle_share=Fraction(1),
+        cycle_size=1,
+        lifetime_mean=1,
+        long_share=Fraction(0),
+        long_lifetimes=(1, 1),
+    )
+    chain = StructureParameters(
+        shape=Chains(width=1),
+        size=4,
+        root="module",
+        lifetime=None,
+        rebuild_interval=None,
+        build_churn=Fraction(1, 2),
+    )
+    parameters = WorkloadParameters(churn=cycles, structures=(chain,), seed=848)
+
+    Workload(heap, parameters).run_to(6)
+
+    # sys, then two objects and a churn allocation, twice.
+    structure = reached_from(heap, [heap.module_root])
+    built = [x in structure for x in collector.nursery]
+    assert built == [True, *[True, True, False] * 2]
+
+
 def test_sys_takes_a_structure_built_in_a_frame_once_its_builds_churn_ends() -> None:
     heap = Heap(Collector(CollectorSettings(threshold0=1_000)))
     chain = StructureParameters(
@@ -436,7 +466,7 @@ def test_a_workload_runs_to_any_point_and_its_builds_never_overlap(
     assert all(last < first for (_, _, last), (_, first, _) in pairwise(builds))
     for i, first, last in builds:
         structure = structures[i]
-        assert last - first + 1 == structure.size * (1 + structure.build_churn)
+        assert last - first + 1 == structure.build_length
     interval = structures[0].rebuild_interval
     if len(structures) == 1 and interval is not None:
         starts = [first for _, first, _ in builds]
@@ -483,6 +513,28 @@ def test_a_collection_follows_the_let_gos_of_the_kb_before_it() -> None:
 
     # The tree's build ends in kB 3, and its lifetime in kB 6, on the boundary.
     assert collector.garbage == [3]
+
+
+def test_a_build_in_c_holds_back_a_collection_until_its_churn_ends() -> None:
+    collector = Recording(threshold0=4)
+    heap = Heap(collector)
+    chain = StructureParameters(
+        shape=Chains(width=1),
+        size=3,
+        root="frame",
+        lifetime=0,
+        rebuild_interval=10,
+        build_churn=1,
+        built_in_c=True,
+    )
+    parameters = WorkloadParameters(churn=QUIET, structures=(chain,), seed=848)
+
+    Workload(heap, parameters).run_to(24)
+
+    # Builds take kB 1 to 6, 11 to 16 and 21 to 26. The budget runs out at 4 and
+    # the build holds the collection back to 6; again at 10, between builds, and
+    # at 14, within one, which holds it back to 16. The next is due at 20.
+    assert collector.clocks == [6, 10, 16, 20]
 
 
 def test_a_structure_that_asks_gets_a_full_collection_around_each_build() -> None:

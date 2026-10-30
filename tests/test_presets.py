@@ -145,32 +145,88 @@ def test_xml_etree_parse_builds_a_tree_then_parses_60_in_each_value() -> None:
 
     workload.run_to(preset.run_length)
 
-    # Start-up's five structures, then each of the four values: its own tree, the
-    # sixth structure, and 60 parses of it, the seventh.
+    # Start-up's five structures and what comes before the values, the eighth,
+    # then each of the four values: its own tree, the sixth structure, and 60
+    # parses of it, the seventh.
     built = [i for i, _, _ in workload.builds]
-    assert built == [0, 1, 2, 3, 4, *[5, *[6] * 60] * 4]
-    # Each value ends as the next begins, and the last as the run does.
-    value = preset.workload.structures[5].rebuild_interval
-    assert value is not None
-    starts = [first for i, first, _ in workload.builds if i == 5]
-    assert [b - a for a, b in pairwise(starts)] == [value] * 3
-    assert starts[-1] - 1 + value == preset.run_length
-
-
-def test_async_tree_io_tg_drops_each_runs_tree_as_the_next_run_starts() -> None:
-    preset = ASYNC_TREE_IO_TG
+    assert built == [0, 1, 2, 3, 4, 7, *[5, *[6] * 60] * 4]
+    # Each value ends as the next begins, and the run ends as a fifth one's tree
+    # builds.
     tree = preset.workload.structures[5]
+    assert tree.rebuild_interval is not None
+    starts = [first for i, first, _ in workload.builds if i == 5]
+    assert [b - a for a, b in pairwise(starts)] == [tree.rebuild_interval] * 3
+    fifth = starts[-1] + tree.rebuild_interval
+    assert fifth <= preset.run_length < fifth + tree.size * (1 + tree.build_churn)
+
+
+@pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
+def test_xml_etree_parse_collects_as_a_parse_ends_if_one_is_under_way(
+    collector: type[Collector],
+) -> None:
+    """C code parses each tree, and holds back a collection until it returns."""
+    preset = XML_ETREE_PARSE
+    collecting = collector(CollectorSettings())
+    workload = Workload(Heap(collecting), preset.workload)
+    workload.run_to(preset.run_length)
+    parses = {last for i, _, last in workload.builds if i == 6}
+    clocks = [0, *(r.clock for r in collecting.records)]
+
+    gaps = [(b - a, b in parses) for a, b in pairwise(clocks)]
+
+    # Each collection comes threshold0 kB after the last, or later as a parse ends.
+    # Each worker whose 51 gcmon read starts 40 more than 5 kB late.
+    threshold0 = CollectorSettings().threshold0
+    assert all(gap == threshold0 or (gap > threshold0 and ends) for gap, ends in gaps)
+    assert sum(gap > threshold0 for gap, _ in gaps) == 40
+
+
+def test_xml_etree_parse_gen_0_collections_find_three_parsed_trees_as_it_parses() -> (
+    None
+):
+    """Under the legacy collector, a gen 0 collection a parse holds back finds the
+    tree it parsed and the two before it young, and one in a value's Python finds
+    less than a tree."""
+    preset = XML_ETREE_PARSE
+    parsed = preset.workload.structures[6].size
+    records = run_preset(preset, LegacyCollector)
+    starts = [0, *(r.clock for r in records)]
+    threshold0 = CollectorSettings().threshold0
+
+    gen_0 = [
+        (r.survived + r.freed, r.clock - last > threshold0)
+        for r, last in zip(records, starts, strict=False)
+        if r.kind == "gen 0"
+    ]
+
+    late = [examined for examined, held in gen_0 if held]
+    on_time = [examined for examined, held in gen_0[2:] if not held]
+    assert len(late) == 36
+    assert all(3 * parsed <= examined < 4 * parsed for examined in late)
+    assert all(examined < parsed for examined in on_time)
+
+
+def test_async_tree_io_tg_drops_each_runs_tree_before_the_next_run_starts() -> None:
+    preset = ASYNC_TREE_IO_TG
+    tree, finished = preset.workload.structures[5:7]
     assert tree.lifetime is not None
+    assert finished.lifetime is not None
     workload = Workload(Heap(LegacyCollector()), preset.workload)
 
     workload.run_to(preset.run_length)
 
-    # Start-up's five structures, then the tree once a run, four times.
-    assert [i for i, _, _ in workload.builds] == [0, 1, 2, 3, 4, *[5] * 4]
-    # Each run's tree goes as the next run starts, and the last as the worker ends.
+    # Start-up's five structures and the set-up, then the tree and what its tasks
+    # keep as they finish, once a run, four times.
+    assert [i for i, _, _ in workload.builds] == [0, 1, 2, 3, 4, 7, *[5, 6] * 4]
     trees = [(first, last) for i, first, last in workload.builds if i == 5]
-    drops = [last + tree.lifetime for _, last in trees]
-    assert drops == [*(first - 1 for first, _ in trees[1:]), preset.run_length]
+    finishes = [(first, last) for i, first, last in workload.builds if i == 6]
+    # Each run's tree goes while its tasks finish, and what they keep goes as the
+    # next run starts, the last as the worker ends.
+    for (_, built), (first, last) in zip(trees, finishes, strict=True):
+        assert built + 1 == first
+        assert first < built + tree.lifetime < last
+    ends = [last + finished.lifetime for _, last in finishes]
+    assert ends == [*(first - 1 for first, _ in trees[1:]), preset.run_length]
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
@@ -188,23 +244,23 @@ def test_async_tree_io_tg_runs_leave_no_cyclic_garbage(
     assert freed == start_up_garbage(ASYNC_TREE_IO_TG)
 
 
-def test_connected_components_examines_its_graph_in_increments_while_it_loads() -> None:
-    """read_adjlist's frame holds the graph until it returns, so sys reaches none
-    of it while it loads, and an old collection's increment takes it: more than a
-    young collection's survivors, all the work budget gains from one, could pay
-    for."""
+def test_connected_components_marks_its_graph_a_budget_at_a_time() -> None:
+    """The module holds the graph from the start, so sys reaches it, and each old
+    collection marks no more than the young collection before it moved in."""
     records = run_preset(CONNECTED_COMPONENTS, IncrementalCollector)
 
-    examined = [r.survived + r.freed for r in records if r.kind == "old"]
+    old = [r for r in records if r.kind == "old"]
+    young = [r for r in records if r.kind == "young"]
 
-    assert max(examined) > CollectorSettings().threshold0
+    assert max(r.marked for r in old) == max(r.survived for r in young)
+    assert max(r.survived + r.freed for r in old) < CollectorSettings().threshold0
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
 def test_connected_components_frees_its_graph_with_its_module_at_shutdown(
     collector: type[Collector],
 ) -> None:
-    _, _, start_up_tree, _, _, graph = CONNECTED_COMPONENTS.workload.structures
+    _, _, start_up_tree, _, _, _, graph = CONNECTED_COMPONENTS.workload.structures
 
     *automatic, first, second, third = run_preset(CONNECTED_COMPONENTS, collector)
 

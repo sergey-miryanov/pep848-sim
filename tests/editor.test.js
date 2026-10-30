@@ -7,7 +7,9 @@
 import { test } from "node:test";
 // @ts-expect-error: as above.
 import assert from "node:assert/strict";
-import { OWN, SHAPES, indentAfter, move, nameOf, newStructure, percentOf, realOnes, shapeNamed, shareOf } from "../site/editor.js";
+import {
+  OWN, SHAPES, churnFrom, churnOf, indentAfter, move, nameOf, newStructure, percentOf, realOnes, shapeNamed, shareOf,
+} from "../site/editor.js";
 
 test("a shape takes its name's default parameter, a tree none, and the reader's own a list's code", () => {
   assert.deepEqual(shapeNamed("chains"), { chains: 16 });
@@ -44,6 +46,15 @@ test("a share shows as a percentage to a tenth, and goes back in thousandths", (
   assert.equal(shareOf(percentOf("1/20")), "50/1000");
 });
 
+test("a build's churn shows to a hundredth, and goes back whole or in hundredths", () => {
+  assert.equal(churnOf(3), 3);
+  assert.equal(churnOf("13/50"), 0.26);
+  assert.equal(churnOf("1/3"), 0.33);
+  assert.equal(churnFrom(2), 2);
+  assert.equal(churnFrom(0.26), "26/100");
+  assert.equal(churnFrom(churnOf("121/100")), "121/100");
+});
+
 test("a dot stands for the real objects that fill 1 kB", () => {
   assert.equal(realOnes(64), "16 real ones");
   assert.equal(realOnes(48), "about 21.3 real ones");
@@ -55,5 +66,5 @@ test("a dot stands for the real objects that fill 1 kB", () => {
 test("a new structure builds within its rebuild interval", () => {
   const { size, build_churn: churn, rebuild_interval: interval } = newStructure();
 
-  assert.ok(size * (1 + churn) <= /** @type {number} */ (interval));
+  assert.ok(size * (1 + churnOf(churn)) <= /** @type {number} */ (interval));
 });

@@ -300,6 +300,11 @@ class Workload:
             i = self._waiting.pop(0)
             if self._structures[i].full_collections:
                 self._heap.collect_full("full")
+            if self._structures[i].built_in_c:
+                # A collection due as the build starts comes first, as the
+                # interpreter checks before it calls the C code.
+                self._heap.collect_if_due()
+                self._heap.hold_collections(True)
             self._current = (
                 i,
                 Build(self._heap, self._structures[i]),
@@ -314,7 +319,7 @@ class Workload:
             self._churn_left -= 1
         else:
             build.add()
-            self._churn_left = self._structures[i].build_churn
+            self._churn_left = self._structures[i].churn_after(build.built)
         if build.done and not self._churn_left:
             self._finish(i, build, first_kb)
 
@@ -340,6 +345,8 @@ class Workload:
         build.finish()
         self._builds.append((i, first_kb, clock))
         structure = self._structures[i]
+        if structure.built_in_c:
+            self._heap.hold_collections(False)
         if structure.lifetime is not None:
             drop = clock + structure.lifetime
             self._let_gos.at(drop, build.drop)
