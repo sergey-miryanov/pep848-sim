@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 presets</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="v/7e92f33514af/theme.css">
-<script src="v/7e92f33514af/theme.js"></script>
+<link rel="stylesheet" href="v/15d1924d2fa7/theme.css">
+<script src="v/15d1924d2fa7/theme.js"></script>
 <style>
   /* The preset's run takes the nursery's teal, the benchmark's workers the
      muted gray. */
@@ -39,7 +39,7 @@
   figure { margin: 0; min-width: 0; }
   figcaption { font-size: 13px; color: var(--text-secondary); }
 </style>
-<script type="module" src="v/7e92f33514af/presets.js"></script>
+<script type="module" src="v/15d1924d2fa7/presets.js"></script>
 </head>
 <body>
 <main>
@@ -58,8 +58,9 @@ branch, and this page draws them beside the preset's run, a collection at a
 time: what each collection examined and freed, its generation's yield so far,
 and the work an old collection did. Where the bold line leaves the faint
 ones, the preset drifts from its benchmark.</p>
-<p>A point stands at the collection's number in its worker, since the trace
-has no allocation clock. Counts are real objects.</p>
+<p>A point stands at the MB its worker had allocated when the collection
+started, on the clock the simulator runs on, so a run that ends early stops
+short of its workers. Counts are real objects.</p>
 <div class="pick">
   <label>Preset <select id="preset"></select></label>
   <label>Collector <select id="collector"></select></label>
