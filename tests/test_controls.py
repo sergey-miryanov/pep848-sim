@@ -1,4 +1,6 @@
 import json
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -6,7 +8,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from pep848_sim.collectors.collector import CollectorSettings, Constants
-from pep848_sim.presets import CREATE_GC_CYCLES
+from pep848_sim.presets import CREATE_GC_CYCLES, PRESETS
+from pep848_sim.structures import Graph, Hierarchy, Rings, StructureParameters
 from pep848_sim.widget.controls import Control, controls
 from pep848_sim.widget.request import Request, dump, expand, runs
 from pep848_sim.workload import WorkloadParameters, geometric_thresholds
@@ -332,3 +335,38 @@ def test_a_control_reads_the_preset_a_request_names() -> None:
         rings.rebuild_interval,
         1,
     )
+
+
+def home_entries() -> list[dict[str, Any]]:
+    """The presets the home page's widget offers, as its config lists them."""
+    page = Path("site/index.html").read_text(encoding="utf-8")
+    widget = page.split('<gc-widget id="home-widget">')[1]
+    config = widget.split('<script type="application/json">')[1].split("</script>")[0]
+    return json.loads(config)["entries"]
+
+
+@pytest.mark.parametrize(
+    ("name", "sized"),
+    [
+        ("xml_etree_parse", lambda s: s.built_in_c),
+        ("create_gc_cycles", lambda s: isinstance(s.shape, Rings)),
+        (
+            "async_tree_io_tg",
+            lambda s: isinstance(s.shape, Hierarchy) and s.rebuild_interval,
+        ),
+        ("connected_components", lambda s: isinstance(s.shape, Graph)),
+    ],
+)
+def test_each_home_page_slider_sizes_the_structure_its_benchmark_repeats_or_loads(
+    name: str, sized: Callable[[StructureParameters], bool]
+) -> None:
+    """The parsed trees, the rings, the task tree and the graph, past the
+    start-up structures every preset shares (ADR 0011)."""
+    [entry] = [e for e in home_entries() if e["name"] == name]
+    [path] = entry["controls"]
+    index = int(path.split(".")[2])
+
+    [control] = controls(json.dumps(entry["request"]), [path])
+
+    assert sized(PRESETS[name].workload.structures[index])
+    assert control.value == PRESETS[name].workload.structures[index].size
