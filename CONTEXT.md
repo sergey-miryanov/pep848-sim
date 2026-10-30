@@ -133,7 +133,10 @@ heap), cluster
 The stretch of the allocation clock in which the workload allocates one
 structure. The workload follows each built object with a fixed number of
 churn allocations, the build's churn, so a build spreads over more kB than
-the structure holds. Builds of a repeating structure never overlap.
+the structure holds. Builds of a repeating structure never overlap. A build
+in C stands for C code that makes a structure without returning to the
+interpreter, as a parser makes its tree: a collection that falls due during
+it waits until it ends.
 _Avoid_: construction, setup, phase, iteration (that is the benchmark's word
 for a build plus everything until the next one)
 

@@ -136,6 +136,7 @@ def _structure(
     build_churn: int = 0,
     full_collections: bool = False,
     built_in_frame: bool = False,
+    built_in_c: bool = False,
 ) -> StructureParameters:
     """A structure, as `Structure(Tree(), size=1_000, root="frame")` sets one."""
     if not isinstance(shape, get_args(Shape.__value__)):
@@ -152,6 +153,7 @@ def _structure(
         build_churn,
         full_collections,
         built_in_frame,
+        built_in_c,
     )
 
 

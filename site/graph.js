@@ -15,7 +15,7 @@
  * @typedef {{
  *   shape: string, size: number, root: "module" | "frame", lifetime: number | null,
  *   rebuild_interval: number | null, full_collections: boolean, built_in_frame: boolean,
- *   objects: [number, number][], links: [number, number, boolean][],
+ *   built_in_c: boolean, objects: [number, number][], links: [number, number, boolean][],
  * }} Structure
  */
 /**
@@ -111,6 +111,7 @@ export function describe(structure) {
     when = `rebuilt every ${size(interval)}, ${lifetime ? `each dropped ${size(lifetime)} later` : "each dropped as soon as built"}`;
     if (collects) when += ", gc.collect() before each build and after each drop";
   }
+  if (structure.built_in_c) when += ", built in C: a collection due meanwhile waits until the build ends";
   return `${shape}, ${structure.size.toLocaleString("en")} objects, ${held}: ${when}`;
 }
 

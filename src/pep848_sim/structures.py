@@ -302,6 +302,10 @@ class StructureParameters:
     # `X = build()` holds what build() makes until it returns: sys takes it once the
     # build ends, its churn included.
     built_in_frame: bool = False
+    # Whether C code builds the structure, as a parser builds its tree: an
+    # automatic collection that falls due during the build waits until it ends,
+    # its churn included (ADR 0022).
+    built_in_c: bool = False
 
     def __post_init__(self) -> None:
         if self.root not in get_args(Root.__value__):

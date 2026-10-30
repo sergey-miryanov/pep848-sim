@@ -22,7 +22,7 @@ import { describe, describeChurn, describeConstants, describeRun } from "./graph
  * @typedef {{
  *   shape: Shape, size: number, root: "module" | "frame", lifetime: number | null,
  *   rebuild_interval: number | null, build_churn: number, full_collections: boolean,
- *   built_in_frame: boolean,
+ *   built_in_frame: boolean, built_in_c: boolean,
  * }} Structure
  */
 /**
@@ -131,7 +131,7 @@ const holderOf = (structure) => (structure.root === "module" && structure.built_
  */
 export const newStructure = () => ({
   shape: "tree", size: 1000, root: "frame", lifetime: 2000, rebuild_interval: 4000, build_churn: 0, full_collections: false,
-  built_in_frame: false,
+  built_in_frame: false, built_in_c: false,
 });
 
 /**
@@ -398,6 +398,8 @@ export class Editor {
       })),
       this.#check(`${i}:full_collections`, "gc.collect() before each build and after each drop", structure.full_collections,
         (checked) => { structure.full_collections = checked; }),
+      this.#check(`${i}:built_in_c`, "Built in C: a collection due meanwhile waits until the build ends", structure.built_in_c,
+        (checked) => { structure.built_in_c = checked; }),
     );
     const buttons = document.createElement("div");
     buttons.className = "wide";

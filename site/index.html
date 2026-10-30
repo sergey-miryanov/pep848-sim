@@ -172,9 +172,10 @@ and checked against that benchmark's yield. The guide's sections run them.</p>
 <p>The widget opens on xml_etree_parse, which models a worker of the xml_etree
 benchmark's parse task. Four times over, it builds a tree of 5,103 elements,
 then parses it 60 times, from a file and from bytes in turn, and each parsed
-tree replaces the last of its kind. No element links back to its parent, so
-refcounting frees each tree as the next replaces it, and a collection that
-examines a tree finds it alive. Before shutdown, the collections find no
+tree replaces the last of its kind. C code parses each one, so a collection
+that falls due during a parse waits until it ends. No element links back to its
+parent, so refcounting frees each tree as the next replaces it, and a
+collection that examines a tree finds it alive. Before shutdown, the collections find no
 cyclic garbage beyond a few cycles that start-up lets go of. Its workload's
 slider sets the parsed trees' size.</p>
 <p>create_gc_cycles models a worker of the benchmark of that name. After

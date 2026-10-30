@@ -145,16 +145,40 @@ def test_xml_etree_parse_builds_a_tree_then_parses_60_in_each_value() -> None:
 
     workload.run_to(preset.run_length)
 
-    # Start-up's five structures, then each of the four values: its own tree, the
-    # sixth structure, and 60 parses of it, the seventh.
+    # Start-up's five structures and what comes before the values, the eighth,
+    # then each of the four values: its own tree, the sixth structure, and 60
+    # parses of it, the seventh.
     built = [i for i, _, _ in workload.builds]
-    assert built == [0, 1, 2, 3, 4, *[5, *[6] * 60] * 4]
-    # Each value ends as the next begins, and the last as the run does.
-    value = preset.workload.structures[5].rebuild_interval
-    assert value is not None
+    assert built == [0, 1, 2, 3, 4, 7, *[5, *[6] * 60] * 4]
+    # Each value ends as the next begins, and the run ends as a fifth one's tree
+    # builds.
+    tree = preset.workload.structures[5]
+    assert tree.rebuild_interval is not None
     starts = [first for i, first, _ in workload.builds if i == 5]
-    assert [b - a for a, b in pairwise(starts)] == [value] * 3
-    assert starts[-1] - 1 + value == preset.run_length
+    assert [b - a for a, b in pairwise(starts)] == [tree.rebuild_interval] * 3
+    fifth = starts[-1] + tree.rebuild_interval
+    assert fifth <= preset.run_length < fifth + tree.size * (1 + tree.build_churn)
+
+
+@pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
+def test_xml_etree_parse_collects_as_a_parse_ends_if_one_is_under_way(
+    collector: type[Collector],
+) -> None:
+    """C code parses each tree, and holds back a collection until it returns."""
+    preset = XML_ETREE_PARSE
+    collecting = collector(CollectorSettings())
+    workload = Workload(Heap(collecting), preset.workload)
+    workload.run_to(preset.run_length)
+    parses = {last for i, _, last in workload.builds if i == 6}
+    clocks = [0, *(r.clock for r in collecting.records)]
+
+    gaps = [(b - a, b in parses) for a, b in pairwise(clocks)]
+
+    # Each collection comes threshold0 kB after the last, or later as a parse ends.
+    # Each worker whose 51 gcmon read starts 40 more than 5 kB late.
+    threshold0 = CollectorSettings().threshold0
+    assert all(gap == threshold0 or (gap > threshold0 and ends) for gap, ends in gaps)
+    assert sum(gap > threshold0 for gap, _ in gaps) == 40
 
 
 def test_async_tree_io_tg_drops_each_runs_tree_as_the_next_run_starts() -> None:
