@@ -21,18 +21,24 @@ A loop that allocates less than `threshold0` kB between two calls leaves no
 automatic collection to count, so we took its length from the code's counts.
 From revision b8d8db86a4c on, each record carries `allocated`, the bytes the
 worker had allocated that way as the collection started (#267). We read
-lengths from it, between any two collections, explicit ones included.
+lengths from it, between any two collections, explicit ones included. A
+loop's real objects can outweigh ADR 0002's 64 B, as create_gc_cycles' nodes
+do at 88 B: its structures keep the count of objects its collections examine,
+and churn makes up the kB the loop allocates past them (#268).
 
 A preset runs for its worker's own length on the clock: start-up, the
 benchmark's loops as many times as the records show, and shutdown. The loops
-begin as start-up ends: a repeating structure counts its interval from there,
-so its first build starts the first loop, whatever start-up's length. The
-worker's automatic collections give its length if the loops leave no count in
-the records, as json_loads' calls leave none: it ends within `threshold0` kB of
-the last one, and the preset ends halfway. A length set by a count of sweeps
-would fail for a benchmark that calls `gc.collect()` more often than every
-`threshold0` kB, as create_gc_cycles does: each call resets the budget, so no
-automatic collection comes during its loops, and no sweep ends.
+begin once the structures that build once have built: a repeating structure
+counts its interval from there, so its first build starts the first loop,
+whatever start-up's length. A worker that allocates more before its loops, as
+create_gc_cycles' workers allocate 860 kB before their first `gc.collect()`,
+gets a structure that builds once after start-up, which refcounting frees as
+it ends. The worker's automatic collections give its length if the loops leave
+no count in the records, as json_loads' calls leave none: it ends within
+`threshold0` kB of the last one, and the preset ends halfway. A length set by a
+count of sweeps would fail for a benchmark that calls `gc.collect()` more often
+than every `threshold0` kB, as create_gc_cycles does: each call resets the
+budget, so no automatic collection comes during its loops, and no sweep ends.
 
 pyperf calibrates each run's loops on that run's timings, so a benchmark's
 workers can run for different lengths under the two collectors. In the trace

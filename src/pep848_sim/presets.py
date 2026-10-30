@@ -118,13 +118,18 @@ _START_UP = _StartUp(
 # create_gc_cycles, in bm_gc_collect: each loop calls gc.collect(), builds 100 rings
 # of 21 Node objects in a list, drops the list and calls gc.collect() again.
 
+# Records: the workers' first gc.collect() starts at 5,484 kB, 860 kB after
+# start-up ends.
+_SET_UP = 860 // (1 + _START_UP.churn)
 # Code: the list, and the rings' 2,100 nodes as 131 simulated objects (ADR 0002),
 # each a ring of its own, as a ring of 21 comes to about one.
 _RINGS = 132
-# Records: a loop allocates its rings and nothing else that outlives it. At each
-# gc.collect() the heap holds 18,291 or 20,391 real objects in every worker, the
-# rings' 2,100 apart.
-_LOOP = _RINGS
+# Records: a loop allocates 180.5 kB between its two calls, its rings and nothing
+# else that outlives it: the nodes come to 88 B each, where ADR 0002 counts 64 B
+# a real object. At each gc.collect() the heap holds 18,291 or 20,391 real
+# objects in every worker, the rings' 2,100 apart. A build allocates its objects
+# alone, so churn makes up the rest after the second call.
+_LOOP = 181
 # Records: the incremental workers' 1,024 gc.collect() calls, two a loop. pyperf
 # calibrated the legacy workers to 64 loops a value, not 128, so they ran 256.
 _LOOPS = 512
@@ -155,13 +160,27 @@ CREATE_GC_CYCLES = Preset(
                 build_churn=0,
                 full_collections=True,
             ),
+            # Records: what the workers allocate after start-up, before their first
+            # gc.collect(), at start-up's churn. It builds before the loops, as the
+            # rings repeat, and refcounting frees it as it ends.
+            StructureParameters(
+                shape=Chains(width=16),
+                size=_SET_UP,
+                root="frame",
+                lifetime=0,
+                rebuild_interval=None,
+                build_churn=_START_UP.churn,
+            ),
         ),
         seed=848,
         shutdown=True,
     ),
-    # The worker's own length: start-up, then its loops, the last ending with its
-    # second gc.collect().
-    run_length=_START_UP.length + (_LOOPS - 1) * _LOOP + _RINGS,
+    # The worker's own length: start-up, what comes before the loops, then the
+    # loops, the last ending with its second gc.collect().
+    run_length=_START_UP.length
+    + _SET_UP * (1 + _START_UP.churn)
+    + (_LOOPS - 1) * _LOOP
+    + _RINGS,
 )
 
 

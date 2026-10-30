@@ -86,13 +86,16 @@ def test_create_gc_cycles_runs_its_loops_between_start_up_and_shutdown(
     collector: type[Collector],
 ) -> None:
     preset = CREATE_GC_CYCLES
-    _, _, start_up_tree, _, _, rings = preset.workload.structures
+    _, _, start_up_tree, _, _, rings, _ = preset.workload.structures
 
     whole = run_preset(preset, collector)
 
     kinds = [record.kind for record in whole]
     first_loop = kinds.index("full")
     loops, shutdown = whole[first_loop:-3], whole[-3:]
+    # The loops begin once the structures that build once have built.
+    once = [s for s in preset.workload.structures if s.rebuild_interval is None]
+    assert loops[0].clock == sum(s.size * (1 + s.build_churn) for s in once)
     # gc.collect() comes too often for the runtime to start a collection once the
     # loops begin, and the last loop's second call ends the run.
     assert {record.kind for record in loops} == {"full"}

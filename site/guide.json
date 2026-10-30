@@ -445,11 +445,11 @@
         },
         {
           "title": "The same work either way",
-          "text": "A program that calls gc.collect() this often does the same work under either collector.",
+          "text": "A program that calls gc.collect() this often does the same work under either collector, give or take 0.1%.",
           "request": {"preset": "create_gc_cycles", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 20},
           "marks": [
             {"part": "legacy.work", "note": "Faded bars, full collections, of the same height in both columns."},
-            {"part": "figure.work_per_mb", "note": "17.2K in both."}
+            {"part": "figure.work_per_mb", "note": "12.7K against 12.6K."}
           ]
         },
         {
@@ -473,7 +473,7 @@
           "text": "Shutdown runs three full collections. The first frees nothing, since the last loop's call freed its rings. Once the modules go, the second frees the tree with parent pointers, cyclic garbage once sys lets go of it. The third finds nothing left.",
           "request": {"preset": "create_gc_cycles", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 20},
           "marks": [
-            {"part": "legacy.heap", "note": "At 72 MB, past the dashed line, the heap falls from 1.1 MB to nothing."}
+            {"part": "legacy.heap", "note": "At 98 MB, past the dashed line, the heap falls from 1.1 MB to nothing."}
           ]
         },
         {
@@ -482,7 +482,7 @@
           "request": {"preset": "create_gc_cycles", "settings": {"threshold0": 100, "threshold1": 10, "threshold2": 10}, "every": 20},
           "marks": [
             {"part": "legacy.work", "note": "Gen 0 collections examine rings the loop is building. Over the whole run they free 13 objects, start-up's."},
-            {"part": "incremental.work", "note": "Young collections examine 875 objects over the whole run: each gc.collect() takes the whole young generation with it."}
+            {"part": "incremental.work", "note": "Young collections examine 1,075 objects over the whole run: each gc.collect() takes the whole young generation with it."}
           ]
         }
       ]

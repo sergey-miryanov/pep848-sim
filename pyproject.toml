@@ -62,5 +62,6 @@ precision = 2
 show_missing = true
 
 [tool.typos.default]
-# A playground link holds its request in base64url, whose letters read as typos.
-extend-ignore-re = ['playground\.request=[\w-]+']
+# A playground link holds its request in base64url, and a pinned run's digest
+# is 16 hex digits: both have letters that read as typos.
+extend-ignore-re = ['playground\.request=[\w-]+', '"[0-9a-f]{16}"']
