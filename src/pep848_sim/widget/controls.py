@@ -2,6 +2,7 @@
 a label and a range of values that keeps the request valid. A path names a
 workload parameter, a collector setting or a collector constant."""
 
+import math
 from collections.abc import Iterable
 from typing import NamedTuple
 
@@ -91,10 +92,8 @@ def _control(request: Request, path: str) -> Control:
             # unless the request's own outgrows it.
             room = structure.rebuild_interval
             if room is None:
-                room = max(
-                    request.run_length, structure.size * (1 + structure.build_churn)
-                )
-            high = room // (1 + structure.build_churn)
+                room = max(request.run_length, structure.build_length)
+            high = math.floor(room / (1 + structure.build_churn))
             return _ranged(path, f"{name} size", "kB", structure.size, 1, high)
         case ["workload", "structures", index, "rebuild_interval"] if index.isdigit():
             structure = _structure(request, int(index))
@@ -103,7 +102,7 @@ def _control(request: Request, path: str) -> Control:
             if interval is None:
                 raise ValueError(f"structure {index} is never rebuilt")
             # From the build to the run's end, or to the request's own interval.
-            build = structure.size * (1 + structure.build_churn)
+            build = structure.build_length
             high = max(request.run_length, interval)
             label = f"{name} rebuild interval"
             return _ranged(path, label, "kB", interval, build, high)

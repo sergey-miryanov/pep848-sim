@@ -12,7 +12,7 @@
        "lifetime": 40000, "rebuild_interval": 80000, "build_churn": 1,
        "full_collections": false, "built_in_frame": false, "built_in_c": false},
       {"shape": {"hierarchy": 6}, "size": 100, "root": "frame",
-       "lifetime": 0, "rebuild_interval": 1000, "build_churn": 0,
+       "lifetime": 0, "rebuild_interval": 1000, "build_churn": "1/2",
        "full_collections": false, "built_in_frame": false, "built_in_c": true},
       {"shape": {"graph": 2}, "size": 100, "root": "module",
        "lifetime": null, "rebuild_interval": null, "build_churn": 0,

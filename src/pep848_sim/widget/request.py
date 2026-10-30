@@ -118,7 +118,11 @@ def dump(request: Request) -> str:
                     "long_lifetimes": list(churn.long_lifetimes),
                 },
                 "structures": [
-                    asdict(structure) | {"shape": _named(structure.shape)}
+                    asdict(structure)
+                    | {
+                        "shape": _named(structure.shape),
+                        "build_churn": _written(structure.build_churn),
+                    }
                     for structure in workload.structures
                 ],
                 "seed": workload.seed,
@@ -222,7 +226,31 @@ def _structure(values: dict[str, Any]) -> StructureParameters:
         "structure",
         optional=["built_in_frame", "built_in_c"],
     )
-    return _check(StructureParameters(**values | {"shape": _shape(values["shape"])}))
+    return _check(
+        StructureParameters(
+            **values
+            | {
+                "shape": _shape(values["shape"]),
+                "build_churn": _fraction(values["build_churn"], "a build's churn"),
+            }
+        )
+    )
+
+
+def _fraction(value: Any, what: str) -> Fraction:
+    """A whole number, or a fraction as text such as "1/4"."""
+    if isinstance(value, bool) or not isinstance(value, int | str):
+        raise ValueError(f"{what} of {value!r} is no number")
+    try:
+        return Fraction(value)
+    except ValueError:
+        raise ValueError(f"{what} of {value!r} is no number") from None
+
+
+def _written(churn: int | Fraction) -> int | str:
+    """A build's churn as a request holds it: a whole one as a number, and a
+    fraction as text, as a share is."""
+    return churn if isinstance(churn, int) else str(churn)
 
 
 def _check(structure: StructureParameters) -> StructureParameters:

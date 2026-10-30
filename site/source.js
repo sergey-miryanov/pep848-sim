@@ -172,7 +172,8 @@ export function toSource(request) {
       const args = [shapeOf(structure.shape), `size=${py(structure.size)}`, `root=${pyText(structure.root)}`];
       if (structure.lifetime !== null) args.push(`lifetime=${py(structure.lifetime)}`);
       if (structure.rebuild_interval !== null) args.push(`rebuild_interval=${py(structure.rebuild_interval)}`);
-      if (structure.build_churn) args.push(`build_churn=${py(structure.build_churn)}`);
+      const churn = structure.build_churn;
+      if (churn) args.push(`build_churn=${typeof churn === "string" ? pyText(churn) : py(churn)}`);
       if (structure.full_collections) args.push("full_collections=True");
       if (structure.built_in_frame) args.push("built_in_frame=True");
       if (structure.built_in_c) args.push("built_in_c=True");

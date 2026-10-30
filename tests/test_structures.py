@@ -1,4 +1,5 @@
 from collections import Counter
+from fractions import Fraction
 
 import pytest
 from hypothesis import given
@@ -314,6 +315,29 @@ def test_a_build_that_outlasts_its_rebuild_interval_is_refused() -> None:
     repeating(30)
     with pytest.raises(ValueError, match="outlasts"):
         repeating(29)
+
+
+def test_a_fraction_of_churn_spreads_over_the_builds_objects() -> None:
+    chain = StructureParameters(
+        shape=Chains(width=1),
+        size=10,
+        root="frame",
+        lifetime=None,
+        rebuild_interval=None,
+        build_churn=Fraction(3, 4),
+    )
+
+    # By its k-th object a build has made 3k/4 churn allocations, rounded down.
+    churn = [chain.churn_after(k) for k in range(1, 11)]
+    assert churn == [0, 1, 1, 1, 0, 1, 1, 1, 0, 1]
+    assert chain.build_length == 17
+
+
+def test_a_whole_fraction_of_churn_reads_as_an_int() -> None:
+    chain = StructureParameters(Chains(width=1), 2, "frame", None, None, Fraction(2))
+
+    assert chain.build_churn == 2
+    assert type(chain.build_churn) is int
 
 
 @given(
