@@ -206,20 +206,27 @@ def test_xml_etree_parse_gen_0_collections_find_three_parsed_trees_as_it_parses(
     assert all(examined < parsed for examined in on_time)
 
 
-def test_async_tree_io_tg_drops_each_runs_tree_as_the_next_run_starts() -> None:
+def test_async_tree_io_tg_drops_each_runs_tree_before_the_next_run_starts() -> None:
     preset = ASYNC_TREE_IO_TG
-    tree = preset.workload.structures[5]
+    tree, finished = preset.workload.structures[5:7]
     assert tree.lifetime is not None
+    assert finished.lifetime is not None
     workload = Workload(Heap(LegacyCollector()), preset.workload)
 
     workload.run_to(preset.run_length)
 
-    # Start-up's five structures, then the tree once a run, four times.
-    assert [i for i, _, _ in workload.builds] == [0, 1, 2, 3, 4, *[5] * 4]
-    # Each run's tree goes as the next run starts, and the last as the worker ends.
+    # Start-up's five structures and the set-up, then the tree and what its tasks
+    # keep as they finish, once a run, four times.
+    assert [i for i, _, _ in workload.builds] == [0, 1, 2, 3, 4, 7, *[5, 6] * 4]
     trees = [(first, last) for i, first, last in workload.builds if i == 5]
-    drops = [last + tree.lifetime for _, last in trees]
-    assert drops == [*(first - 1 for first, _ in trees[1:]), preset.run_length]
+    finishes = [(first, last) for i, first, last in workload.builds if i == 6]
+    # Each run's tree goes while its tasks finish, and what they keep goes as the
+    # next run starts, the last as the worker ends.
+    for (_, built), (first, last) in zip(trees, finishes, strict=True):
+        assert built + 1 == first
+        assert first < built + tree.lifetime < last
+    ends = [last + finished.lifetime for _, last in finishes]
+    assert ends == [*(first - 1 for first, _ in trees[1:]), preset.run_length]
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])

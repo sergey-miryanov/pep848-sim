@@ -199,8 +199,9 @@ as the run ends, and before shutdown the collections find no cyclic garbage
 beyond a few cycles that start-up lets go of. sys reaches the tree through the
 event loop, so the incremental collector's old collections mark it a budget at
 a time, and its peak work stays far below the legacy collector's, whose gen 1
-collections take the nursery and the aging generation whole. The event loop's
-churn remains a placeholder.</p>
+collections take the nursery and the aging generation whole. As each run ends
+and its tasks finish, the legacy collector's gen 0 collections examine more
+than while the tree grows. The churn's lifetimes remain placeholders.</p>
 <p>connected_components models a worker of the networkx benchmark of that
 name. As its module loads, it imports networkx and reads the Amazon
 co-purchasing graph, 262,111 products and 899,792 edges, into 1.4 million

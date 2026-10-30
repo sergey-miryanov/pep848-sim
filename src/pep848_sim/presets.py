@@ -329,21 +329,61 @@ _TASKS = sum(6**level for level in range(7))
 # future and timer handle. A worker's heap peaks at 857,000 to 866,000 real
 # objects, less start-up's.
 _REAL_PER_TASK = 15
-# Placeholder: the event loop's churn after each task it starts.
-_ASYNC_BUILD_CHURN = 1
 _ASYNC_TREE = _TASKS * _REAL_PER_TASK // 16
+# Records: the legacy collector's gen 0 collections examine 15,260 to 15,600 real
+# objects each while a tree builds, and the first builds from about 7,500 kB to
+# about 123,000. The event loop's handles and callbacks come to 1.17 kB for each kB
+# of tree (ADR 0023).
+_ASYNC_BUILD_CHURN = Fraction(117, 100)
+# Records: the heap grows faster once a tree has built, peaks about 6 MB on, and
+# falls to start-up's by the next run. Meanwhile the legacy collector's gen 0
+# collections examine 22,000 to 39,388 real objects each, 26,000 on average: 0.23
+# kB of churn for each kB the finishing tasks keep.
+_ASYNC_FINISH_CHURN = Fraction(23, 100)
+_ASYNC_TREE_LIFETIME = 6_000
+# Records: the workers' first tree starts 2,900 kB after start-up ends.
+_ASYNC_SET_UP = _START_UP.set_up(2_900)
 # Records: the automatic collections per worker. Each marks threshold0 kB of
 # allocation (ADR 0011), and the records cannot tell where before the next one the
 # worker ends, so the run ends about halfway, as json_loads' does.
 _ASYNC_COLLECTIONS = 261
 # Code: pyperf runs a warmup and three values a worker, one loop each.
 _ASYNC_RUNS = 4
-# A run's length on the clock: the worker's length after start-up over its runs,
-# 129,594 kB.
+# A run's length on the clock: the worker's length after start-up and the set-up
+# over its runs, 128,869 kB.
 _ASYNC_RUN = (
     (2 * _ASYNC_COLLECTIONS + 1) * CollectorSettings().threshold0 // 2
     - _START_UP.length
+    - _ASYNC_SET_UP.build_length
 ) // _ASYNC_RUNS
+# Code: the task tree, built a level at a time as asyncio runs each task after the
+# one that started it. No task links back to its parent, so refcounting frees it as
+# its tasks finish, here at once where the workers' heap peaks. Records: sys reaches
+# it, through the event loop that runs it. The branch's old collections mark from
+# sys alone, and spend their whole budget while they examine 643 real objects each.
+_ASYNC_TASK_TREE = StructureParameters(
+    shape=Hierarchy(branches=6),
+    size=_ASYNC_TREE,
+    root="module",
+    lifetime=_ASYNC_TREE_LIFETIME,
+    rebuild_interval=_ASYNC_RUN,
+    build_churn=_ASYNC_BUILD_CHURN,
+)
+# Records: what the tasks allocate as they finish and keep to the run's end,
+# reached through the event loop as the tree is. It fills the rest of the run, and
+# goes as the next starts.
+_ASYNC_FINISH_ROOM = _ASYNC_RUN - _ASYNC_TASK_TREE.build_length
+_ASYNC_FINISH = _ASYNC_FINISH_ROOM // (1 + _ASYNC_FINISH_CHURN)
+_ASYNC_FINISHED = StructureParameters(
+    shape=Chains(width=16),
+    size=_ASYNC_FINISH,
+    root="module",
+    lifetime=_ASYNC_FINISH_ROOM
+    - _ASYNC_FINISH
+    - int(_ASYNC_FINISH * _ASYNC_FINISH_CHURN),
+    rebuild_interval=_ASYNC_RUN,
+    build_churn=_ASYNC_FINISH_CHURN,
+)
 
 ASYNC_TREE_IO_TG = Preset(
     benchmark="async_tree_io_tg",
@@ -359,26 +399,17 @@ ASYNC_TREE_IO_TG = Preset(
         ),
         structures=(
             *_START_UP.structures,
-            # Code: the task tree, built a level at a time as asyncio runs each
-            # task after the one that started it. No task links back to its parent,
-            # so refcounting frees the tree as the run ends. Records: sys reaches
-            # it, through the event loop that runs it. The branch's old collections
-            # mark from sys alone, and spend their whole budget while they examine
-            # 643 real objects each.
-            StructureParameters(
-                shape=Hierarchy(branches=6),
-                size=_ASYNC_TREE,
-                root="module",
-                lifetime=_ASYNC_RUN - _ASYNC_TREE * (1 + _ASYNC_BUILD_CHURN),
-                rebuild_interval=_ASYNC_RUN,
-                build_churn=_ASYNC_BUILD_CHURN,
-            ),
+            _ASYNC_TASK_TREE,
+            _ASYNC_FINISHED,
+            _ASYNC_SET_UP,
         ),
         seed=848,
         shutdown=True,
     ),
-    # The worker's own length: start-up, then its runs.
-    run_length=_START_UP.length + _ASYNC_RUNS * _ASYNC_RUN,
+    # The worker's own length: start-up, the set-up, then its runs.
+    run_length=(
+        _START_UP.length + _ASYNC_SET_UP.build_length + _ASYNC_RUNS * _ASYNC_RUN
+    ),
 )
 
 
