@@ -133,12 +133,13 @@ def _structure(
     root: Root = "frame",
     lifetime: int | None = None,
     rebuild_interval: int | None = None,
-    build_churn: int = 0,
+    build_churn: Share = 0,
     full_collections: bool = False,
     built_in_frame: bool = False,
     built_in_c: bool = False,
 ) -> StructureParameters:
-    """A structure, as `Structure(Tree(), size=1_000, root="frame")` sets one."""
+    """A structure, as `Structure(Tree(), size=1_000, root="frame")` sets one. Its
+    build's churn is a whole number, or a fraction as a share is."""
     if not isinstance(shape, get_args(Shape.__value__)):
         raise ValueError(
             f"{shape!r} is no shape: Chains(...), Tree(), Hierarchy(...), Graph(...),"
@@ -150,7 +151,7 @@ def _structure(
         root,
         lifetime,
         rebuild_interval,
-        build_churn,
+        _share(build_churn),
         full_collections,
         built_in_frame,
         built_in_c,

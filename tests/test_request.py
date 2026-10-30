@@ -73,6 +73,8 @@ def test_the_fixed_request_is_the_one_its_digests_are_pinned_for() -> None:
             '"build_churn": -1',
             "a build cannot follow each object with -1 churn allocations",
         ),
+        ('"build_churn": 1', '"build_churn": 0.5', "a build's churn of 0.5 is no"),
+        ('"build_churn": 1', '"build_churn": "half"', "a build's churn of 'half' is"),
         ('"1/4"', '"5/4"', "a cycle share of 5/4 lies outside 0 to 1"),
         ('"cycle_size": 3', '"cycle_size": 0', "a cycle of 0 objects holds none"),
         (

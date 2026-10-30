@@ -5,10 +5,12 @@ A shape gives the links each new object gets, by its index among the structure's
 objects; the root is object 0.
 """
 
+import math
 import traceback
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from fractions import Fraction
 from types import FunctionType
 from typing import Any, Literal, get_args
 
@@ -293,8 +295,10 @@ class StructureParameters:
     root: Root
     lifetime: int | None
     rebuild_interval: int | None
-    # The churn allocations after each built object.
-    build_churn: int
+    # The churn allocations after each built object. A fraction spreads them: by its
+    # k-th object a build has made k times as many, rounded down, so a churn of 1/2
+    # follows every second object with one (ADR 0023).
+    build_churn: int | Fraction
     # Whether the workload calls `gc.collect()` before each build and after each
     # drop, as create_gc_cycles does.
     full_collections: bool = False
@@ -321,11 +325,24 @@ class StructureParameters:
                 f"a build cannot follow each object with {self.build_churn} churn"
                 " allocations"
             )
-        build = self.size * (1 + self.build_churn)
+        # A whole churn reads as an int, however it was given.
+        if isinstance(self.build_churn, Fraction) and self.build_churn.is_integer():
+            object.__setattr__(self, "build_churn", int(self.build_churn))
+        build = self.build_length
         if self.rebuild_interval is not None and build > self.rebuild_interval:
             raise ValueError(
                 f"a {build} kB build outlasts its {self.rebuild_interval} kB interval"
             )
+
+    @property
+    def build_length(self) -> int:
+        """The kB a build takes: its objects and the churn after them."""
+        return self.size + math.floor(self.size * self.build_churn)
+
+    def churn_after(self, k: int) -> int:
+        """The churn allocations after a build's k-th object."""
+        churn = self.build_churn
+        return math.floor(k * churn) - math.floor((k - 1) * churn)
 
 
 class Build:
@@ -336,6 +353,11 @@ class Build:
         self._heap = heap
         self._parameters = parameters
         self._objects: list[int] = []
+
+    @property
+    def built(self) -> int:
+        """How many of its objects the build has made."""
+        return len(self._objects)
 
     @property
     def done(self) -> bool:

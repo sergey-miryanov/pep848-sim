@@ -319,7 +319,7 @@ class Workload:
             self._churn_left -= 1
         else:
             build.add()
-            self._churn_left = self._structures[i].build_churn
+            self._churn_left = self._structures[i].churn_after(build.built)
         if build.done and not self._churn_left:
             self._finish(i, build, first_kb)
 
