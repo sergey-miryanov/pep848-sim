@@ -152,19 +152,20 @@ def test_xml_etree_parse_builds_a_tree_then_parses_60_in_each_value() -> None:
 
     workload.run_to(preset.run_length)
 
-    # Start-up's six structures and what comes before the values, the ninth, then
-    # each of the four values: its own tree, the seventh structure, and 60 parses
-    # of it, the eighth.
+    # Start-up's six structures and the cycles xml.etree lets go of, the tenth,
+    # then each of the four values: its own tree, the seventh structure, its
+    # serialising, the eighth, and 60 parses of the tree, the ninth. A fifth
+    # value's tree builds as the run ends.
     built = [i for i, _, _ in workload.builds]
-    assert built == [0, 1, 2, 3, 4, 5, 8, *[6, *[7] * 60] * 4]
-    # Each value ends as the next begins, and the run ends as a fifth one's tree
-    # builds.
-    tree = preset.workload.structures[6]
+    assert built == [0, 1, 2, 3, 4, 5, 9, *[6, 7, *[8] * 60] * 4, 6]
+    # Each value ends as the next begins, and the run ends while the fifth one
+    # serialises its tree.
+    tree, serialising = preset.workload.structures[6:8]
     assert tree.rebuild_interval is not None
     starts = [first for i, first, _ in workload.builds if i == 6]
-    assert [b - a for a, b in pairwise(starts)] == [tree.rebuild_interval] * 3
-    fifth = starts[-1] + tree.rebuild_interval
-    assert fifth <= preset.run_length < fifth + tree.size * (1 + tree.build_churn)
+    assert [b - a for a, b in pairwise(starts)] == [tree.rebuild_interval] * 4
+    python = tree.build_length + serialising.build_length
+    assert starts[-1] + tree.build_length <= preset.run_length < starts[-1] + python
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
@@ -176,7 +177,7 @@ def test_xml_etree_parse_collects_as_a_parse_ends_if_one_is_under_way(
     collecting = collector(CollectorSettings())
     workload = Workload(Heap(collecting), preset.workload)
     workload.run_to(preset.run_length)
-    parses = {last for i, _, last in workload.builds if i == 7}
+    parses = {last for i, _, last in workload.builds if i == 8}
     clocks = [0, *(r.clock for r in collecting.records)]
 
     gaps = [(b - a, b in parses) for a, b in pairwise(clocks)]
@@ -193,9 +194,9 @@ def test_xml_etree_parse_gen_0_collections_find_three_parsed_trees_as_it_parses(
 ):
     """Under the legacy collector, a gen 0 collection a parse holds back finds the
     tree it parsed and the two before it young, and one in a value's Python finds
-    less than a tree."""
+    the value's own tree at most, with start-up's last at the first."""
     preset = XML_ETREE_PARSE
-    parsed = preset.workload.structures[7].size
+    parsed = preset.workload.structures[8].size
     records = run_preset(preset, LegacyCollector)
     starts = [0, *(r.clock for r in records)]
     threshold0 = CollectorSettings().threshold0
@@ -210,7 +211,7 @@ def test_xml_etree_parse_gen_0_collections_find_three_parsed_trees_as_it_parses(
     on_time = [examined for examined, held in gen_0[2:] if not held]
     assert len(late) == 36
     assert all(3 * parsed <= examined < 4 * parsed for examined in late)
-    assert all(examined < parsed for examined in on_time)
+    assert all(examined < 2 * parsed for examined in on_time)
 
 
 def test_async_tree_io_tg_drops_each_runs_tree_before_the_next_run_starts() -> None:
