@@ -308,14 +308,13 @@ def move_unreachable(heap: Heap, examined: list[int]) -> tuple[list[int], list[i
     # and marks what it holds that the walk has not reached as reachable. One it
     # finds with nothing outside holding it goes to the unreachable list, until an
     # object the walk reaches later holds it: then it goes back on the end of the
-    # list, which the walk reaches in turn.
+    # list, which the walk reaches in turn. So the walk meets each object once,
+    # and once more at most, after the object has left the unreachable list.
     walk = list(examined)
     unscanned = set(walk)
     unreachable: set[int] = set()
     reachable: list[int] = []
     for x in walk:
-        if x in unreachable or x not in unscanned:
-            continue
         if not gc_refs[x]:
             unreachable.add(x)
             continue

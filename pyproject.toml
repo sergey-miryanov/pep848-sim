@@ -57,7 +57,7 @@ addopts = ["--cov=pep848_sim", "--cov-report=term", "--cov-report=xml"]
 branch = true
 
 [tool.coverage.report]
-fail_under = 99
+fail_under = 100
 precision = 2
 show_missing = true
 

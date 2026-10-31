@@ -470,6 +470,26 @@ def test_an_old_collection_without_a_positive_budget_is_idle() -> None:
     assert collector.counts == [CollectionCounts("old", 0, 0, 0)]
 
 
+def test_a_swap_that_leaves_sys_visited_marks_nothing_and_swaps_back() -> None:
+    collector = IncrementalCollector(CollectorSettings(threshold0=1_000))
+    heap = Heap(collector)
+    sys = heap.module_root
+    collector.visited_index = 1
+    collector.work_to_do = 1
+    collector.young_next = False
+
+    collector.collect()
+
+    # The swap makes old[0] visited, whose tag sys carries while it is young, so
+    # nothing goes on reachable. Pending stays empty, the budget stays unspent, and
+    # the spaces swap back, which puts sys on reachable.
+    assert collector.counts == [CollectionCounts("old", 0, 0, 0)]
+    assert collector.sweeps == 2
+    assert collector.visited_index == 1
+    assert list(collector.reachable) == [sys]
+    assert collector.work_to_do == 0
+
+
 def test_an_older_cycle_that_a_newer_one_holds_waits_for_the_next_sweep() -> None:
     collector = IncrementalCollector(CollectorSettings(threshold0=1_000))
     heap = Heap(collector)
