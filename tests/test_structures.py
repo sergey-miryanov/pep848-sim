@@ -1,4 +1,5 @@
 from collections import Counter
+from dataclasses import replace
 from fractions import Fraction
 
 import pytest
@@ -518,6 +519,26 @@ def test_a_structure_keeps_the_counts_true_and_its_drop_counts_its_cycles(
     build.drop()
 
     assert heap.uncollected_garbage == len(set(collector.nursery) - reachable(heap))
+
+
+@pytest.mark.parametrize(
+    ("interval", "delay", "skips", "message"),
+    [
+        (10, -1, False, "cannot fall due -1 kB early"),
+        (None, 5, False, "builds once neither waits nor skips"),
+        (None, 0, True, "builds once neither waits nor skips"),
+    ],
+)
+def test_a_structure_refuses_a_delay_or_a_skip_it_cannot_keep(
+    interval: int | None, delay: int, skips: bool, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        replace(
+            long_lived(Tree(), 2, "frame"),
+            rebuild_interval=interval,
+            delay=delay,
+            skips_while_busy=skips,
+        )
 
 
 def test_an_own_shape_links_each_object_as_its_code_says() -> None:

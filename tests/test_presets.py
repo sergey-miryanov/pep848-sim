@@ -152,12 +152,13 @@ def test_xml_etree_parse_builds_a_tree_then_parses_60_in_each_value() -> None:
 
     workload.run_to(preset.run_length)
 
-    # Start-up's six structures and the cycles xml.etree lets go of, the tenth,
-    # then each of the four values: its own tree, the seventh structure, its
-    # serialising, the eighth, and 60 parses of the tree, the ninth. A fifth
-    # value's tree builds as the run ends.
+    # Start-up's six structures, the cycles xml.etree lets go of and what pyperf
+    # allocates, the eleventh and the twelfth, then each of the four values: its
+    # own tree, the seventh structure, its serialising, the eighth, 60 parses of
+    # the tree, the ninth, and the serialising of the last two parsed trees, the
+    # tenth. A fifth value's tree builds as the run ends.
     built = [i for i, _, _ in workload.builds]
-    assert built == [0, 1, 2, 3, 4, 5, 9, *[6, 7, *[8] * 60] * 4, 6]
+    assert built == [0, 1, 2, 3, 4, 5, 10, 11, *[6, 7, *[8] * 60, 9] * 4, 6]
     # Each value ends as the next begins, and the run ends while the fifth one
     # serialises its tree.
     tree, serialising = preset.workload.structures[6:8]

@@ -180,6 +180,8 @@ export function toSource(request) {
       if (structure.full_collections) args.push("full_collections=True");
       if (structure.built_in_frame) args.push("built_in_frame=True");
       if (structure.built_in_c) args.push("built_in_c=True");
+      if (structure.delay) args.push(`delay=${py(structure.delay)}`);
+      if (structure.skips_while_busy) args.push("skips_while_busy=True");
       return `${call("    Structure(", args)},`;
     }),
     ...(structures.length ? ["]"] : []),

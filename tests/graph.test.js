@@ -16,7 +16,8 @@ import { describe, describeChurn, describeConstants, describeRun, describeYoung,
 function structure(fields = {}) {
   return {
     shape: "1 chains", size: 2, root: "module", lifetime: null, rebuild_interval: null, full_collections: false,
-    built_in_frame: false, built_in_c: false, objects: [[0, 0], [1, 1]], links: [[0, 1, false]],
+    built_in_frame: false, built_in_c: false, delay: 0, skips_while_busy: false, objects: [[0, 0], [1, 1]],
+    links: [[0, 1, false]],
     ...fields,
   };
 }
@@ -88,6 +89,10 @@ test("the legend says what holds each structure, and when the workload builds an
   assert.equal(
     describe(structure({ shape: "a hierarchy of 50 branches", size: 322, root: "frame", lifetime: 720, rebuild_interval: 360, built_in_c: true })),
     "a hierarchy of 50 branches, 322 objects, held by a frame: rebuilt every 360 kB, each dropped 720 kB later, built in C: a collection due meanwhile waits until the build ends",
+  );
+  assert.equal(
+    describe(structure({ size: 4, root: "frame", lifetime: 0, rebuild_interval: 25_848, delay: 23_913, skips_while_busy: true })),
+    "1 chains, 4 objects, held by a frame: rebuilt every 25.8 MB, first 23.9 MB into the loops, skipping each rebuild due while another builds, each dropped as soon as built",
   );
 });
 
