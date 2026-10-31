@@ -13,9 +13,10 @@ import { describe, describeChurn, describeConstants, describeRun } from "./graph
 
 /** @typedef {import("./graph.js").Graph} Graph */
 /**
- * A shape as a request names it: "tree", its name with its one parameter, such
- * as { chains: 16 }, or { own: code } for the reader's own.
- * @typedef {"tree" | { [name: string]: number | string }} Shape
+ * A shape as a request names it: "tree", "amazon0302" or "task_groups", its name
+ * with its one parameter, such as { chains: 16 }, or { own: code } for the
+ * reader's own.
+ * @typedef {"tree" | "amazon0302" | "task_groups" | { [name: string]: number | string }} Shape
  */
 /**
  * One structure as a request holds it.
@@ -39,15 +40,20 @@ import { describe, describeChurn, describeConstants, describeRun } from "./graph
  */
 
 /**
- * The shapes a structure can take: each one's title, and the label, default and
- * least value of its parameter, as pep848_sim.structures refuses less.
- * @type {{ [name: string]: { title: string, parameter?: { label: string, value: number, min: number } } }}
+ * The shapes a structure can take: each one's title, the label, default and
+ * least value of its parameter, as pep848_sim.structures refuses less, and the
+ * Python that makes it where its name, capitalised, does not.
+ * @type {{ [name: string]: {
+ *   title: string, parameter?: { label: string, value: number, min: number }, python?: string,
+ * } }}
  */
 export const SHAPES = {
   chains: { title: "Chains", parameter: { label: "Chains", value: 16, min: 1 } },
   tree: { title: "Tree with parent pointers" },
   hierarchy: { title: "Hierarchy", parameter: { label: "Branches", value: 6, min: 1 } },
   graph: { title: "Graph", parameter: { label: "Edges a node", value: 2, min: 0 } },
+  amazon0302: { title: "networkx's amazon0302 graph" },
+  task_groups: { title: "asyncio's tasks in TaskGroups", python: "TaskGroups" },
   rings: { title: "Rings", parameter: { label: "Objects a ring", value: 21, min: 1 } },
   own: { title: "Your own, in Python" },
 };
@@ -76,7 +82,7 @@ export const nameOf = (/** @type {Shape} */ shape) => (typeof shape === "string"
 export function shapeNamed(name) {
   if (name === "own") return { own: OWN };
   const { parameter } = SHAPES[name];
-  return parameter ? { [name]: parameter.value } : "tree";
+  return parameter ? { [name]: parameter.value } : /** @type {Shape} */ (name);
 }
 
 /**

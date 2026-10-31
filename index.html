@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 cycle collector</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="v/c0c0c591a30c/theme.css">
-<script src="v/c0c0c591a30c/theme.js"></script>
+<link rel="stylesheet" href="v/8e2e96d2233e/theme.css">
+<script src="v/8e2e96d2233e/theme.js"></script>
 <style>
   body {
     margin: 0;
@@ -23,7 +23,7 @@
   nav { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 20px; font-size: 14px; color: var(--text-secondary); }
   nav [aria-current] { color: var(--text-primary); font-weight: 600; text-decoration: none; }
 </style>
-<script type="module" src="v/c0c0c591a30c/gc-widget.js"></script>
+<script type="module" src="v/8e2e96d2233e/gc-widget.js"></script>
 </head>
 <body>
 <main>
@@ -194,8 +194,8 @@ budget to spend. Lower threshold0 to give it more collections.</p>
 <p>async_tree_io_tg models a worker of the benchmark of that name. Four times
 over, it starts a tree of 55,987 asyncio tasks, six levels of six under the
 root, each level under a <code>TaskGroup</code>, and each leaf sleeps 50 ms.
-No task links back to the one that started it, so refcounting frees the tree
-as the run ends, and before shutdown the collections find no cyclic garbage
+Each task links back to the one that started it and cuts those links as it
+finishes, so refcounting frees the tree as the run ends, and before shutdown the collections find no cyclic garbage
 beyond a few cycles that start-up lets go of. sys reaches the tree through the
 event loop, so the incremental collector's old collections mark it a budget at
 a time, and its peak work stays far below the legacy collector's, whose gen 1
