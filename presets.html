@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PEP 848 presets</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="v/bdb8434386fb/theme.css">
-<script src="v/bdb8434386fb/theme.js"></script>
+<link rel="stylesheet" href="v/c0c0c591a30c/theme.css">
+<script src="v/c0c0c591a30c/theme.js"></script>
 <style>
   /* The preset's run takes the nursery's teal, the benchmark's workers the
      muted gray. */
@@ -30,6 +30,10 @@
     vertical-align: middle; border-top: 1px solid var(--workers);
   }
   .legend .run::before { border-top: 3px solid var(--run); }
+  .legend .band::before {
+    height: 10px; border-top: 0;
+    background: color-mix(in srgb, var(--run) 20%, transparent);
+  }
   .legend .workers::before { opacity: 0.6; }
   .note { margin: 0 0 8px; font-size: 14px; color: var(--text-secondary); }
   /* Four columns, one to a series, so that a series lines up down the page. */
@@ -39,7 +43,7 @@
   figure { margin: 0; min-width: 0; }
   figcaption { font-size: 13px; color: var(--text-secondary); }
 </style>
-<script type="module" src="v/bdb8434386fb/presets.js"></script>
+<script type="module" src="v/c0c0c591a30c/presets.js"></script>
 </head>
 <body>
 <main>
@@ -61,6 +65,11 @@ ones, the preset drifts from its benchmark.</p>
 <p>A point stands at the MB its worker had allocated when the collection
 started, on the clock the simulator runs on, so a run that ends early stops
 short of its workers. Counts are real objects.</p>
+<p>A simulated object stands for 16 real ones, so a run's count moves 16 at a
+time. The band around the bold line spans one simulated object either side: a
+worker inside it sits as close as the run can come. Each chart's scale spans
+at least ten simulated objects, so a gap of a few real objects looks as small
+as it is.</p>
 <div class="pick">
   <label>Preset <select id="preset"></select></label>
   <label>Collector <select id="collector"></select></label>
@@ -68,6 +77,7 @@ short of its workers. Counts are real objects.</p>
 <p class="legend">
   <span class="workers" id="workers">the benchmark's workers</span>
   <span class="run">the preset's run</span>
+  <span class="band">one simulated object either side</span>
 </p>
 <div id="panels"><p>Loading the collections.</p></div>
 </main>
