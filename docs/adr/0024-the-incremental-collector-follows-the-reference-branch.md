@@ -57,8 +57,8 @@ async_tree_io_tg's young collections examine within 37% of its workers',
 against 19%. sys reaches its task tree, so in the sweeps where young objects
 carry pending's tag, marking takes every young task before a young collection
 can examine it. The workers' young collections keep examining 7,500 to 30,000
-real objects. Its preset needs part of each run held by frames, which sys does
-not reach.
+real objects. ADR 0026 gives the tree the shape asyncio makes and brings them
+within 9%.
 
 The legacy collector does not change.
 

@@ -13,6 +13,7 @@ from fractions import Fraction
 from pep848_sim.collectors.collector import CollectorSettings
 from pep848_sim.structures import (
     AMAZON0302_SIZE,
+    TASK_GROUPS_SIZE,
     Amazon0302,
     Chains,
     Hierarchy,
@@ -20,6 +21,7 @@ from pep848_sim.structures import (
     Root,
     Shape,
     StructureParameters,
+    TaskGroups,
     Tree,
 )
 from pep848_sim.workload import ChurnParameters, WorkloadParameters
@@ -373,27 +375,22 @@ XML_ETREE_PARSE = Preset(
 # parent's, and each leaf sleeps 50 ms. A task goes as it finishes, and the whole
 # tree by the run's end.
 
-# Code: the root task and six levels of six branches under it.
-_TASKS = sum(6**level for level in range(7))
-# Records: real objects to a task, with its coroutine, its group and its sleep's
-# future and timer handle. A worker's heap peaks at 857,000 to 866,000 real
-# objects, less start-up's.
-_REAL_PER_TASK = 15
-_ASYNC_TREE = _TASKS * _REAL_PER_TASK // 16
 # Records: the legacy collector's gen 0 collections examine 15,260 to 15,600 real
 # objects each while a tree builds, and the first builds from about 7,500 kB to
-# about 123,000. The event loop's handles and callbacks come to 1.17 kB for each kB
-# of tree (ADR 0023).
-_ASYNC_BUILD_CHURN = Fraction(117, 100)
+# about 123,000. What the tasks allocate and drop as they run comes to 1.07 kB for
+# each kB of tree (ADR 0023).
+_ASYNC_BUILD_CHURN = Fraction(107, 100)
 # Records: the heap grows faster once a tree has built, peaks about 6 MB on, and
 # falls to start-up's by the next run. Meanwhile the legacy collector's gen 0
 # collections examine 22,000 to 39,388 real objects each, 26,000 on average: 0.23
 # kB of churn for each kB the finishing tasks keep.
 _ASYNC_FINISH_CHURN = Fraction(23, 100)
-# Records: the workers' third tree stands at their 193rd collection, a gen 1, 6.4
-# MB after it has built: the collection examines 199,934 real objects. The tree
-# goes 8 MB on.
-_ASYNC_TREE_LIFETIME = 8_000
+# Records: the incremental workers' old collection at 132 MB still marks 30,519 real
+# objects of the first tree, and their young collection at 134 MB finds 12,796
+# where the one before found 30,519. The tree goes between them, 10 MB after it has
+# built at 122,241 kB. The legacy workers' third tree stands at their 193rd
+# collection, 6.4 MB after it has built.
+_ASYNC_TREE_LIFETIME = 10_000
 # Records: the gen 0 collections fall back to 15,600 or below about 2 MB before
 # each run ends: 954 real objects at the 197th.
 _ASYNC_FINISHED_EARLY = 2_000
@@ -419,13 +416,14 @@ _ASYNC_RUN = (
     - _ASYNC_SET_UP.build_length
 ) // _ASYNC_RUNS
 # Code: the task tree, built a level at a time as asyncio runs each task after the
-# one that started it. No task links back to its parent, so refcounting frees it as
-# its tasks finish, here at once. Records: sys reaches
-# it, through the event loop that runs it. The branch's old collections mark from
-# sys alone, and spend their whole budget while they examine 643 real objects each.
+# one that made it, under an event loop that sys reaches (ADR 0026). The tasks cut
+# their links back to their parents as they finish, so refcounting frees the tree,
+# here at once. Records: on the reference build, a running task that starts a
+# TaskGroup holds 13 tracked objects of its own and a leaf 14, besides the handle
+# and the TaskStepMethWrapper that the ready queue lets go as the task first runs.
 _ASYNC_TASK_TREE = StructureParameters(
-    shape=Hierarchy(branches=6),
-    size=_ASYNC_TREE,
+    shape=TaskGroups(),
+    size=TASK_GROUPS_SIZE,
     root="module",
     lifetime=_ASYNC_TREE_LIFETIME,
     rebuild_interval=_ASYNC_RUN,

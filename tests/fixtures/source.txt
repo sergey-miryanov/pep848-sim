@@ -60,6 +60,8 @@ structures = [
     Structure(Own(shape_11), size=50, root="frame"),
     Structure(Amazon0302(), size=300, root="frame",
               build_churn="6/25"),
+    Structure(TaskGroups(), size=200, root="frame", lifetime=400,
+              rebuild_interval=1000),
 ]
 
 run_length = 150_000

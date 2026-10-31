@@ -28,6 +28,7 @@ from pep848_sim.structures import (
     Rings,
     Shape,
     StructureParameters,
+    TaskGroups,
     Tree,
 )
 from pep848_sim.widget import source
@@ -267,6 +268,8 @@ def _named(shape: Shape) -> str | dict[str, int] | dict[str, str]:
         return "tree"
     if isinstance(shape, Amazon0302):
         return "amazon0302"
+    if isinstance(shape, TaskGroups):
+        return "task_groups"
     if isinstance(shape, Chains):
         return {"chains": shape.width}
     if isinstance(shape, Hierarchy):
@@ -279,12 +282,15 @@ def _named(shape: Shape) -> str | dict[str, int] | dict[str, str]:
 
 
 def _shape(shape: Any) -> Shape:
-    """A shape: "tree", "amazon0302", {"chains": width}, {"hierarchy": branches},
-    {"graph": edges}, {"rings": length}, or {"own": code} for the reader's own."""
+    """A shape: "tree", "amazon0302", "task_groups", {"chains": width},
+    {"hierarchy": branches}, {"graph": edges}, {"rings": length}, or {"own": code}
+    for the reader's own."""
     if shape == "tree":
         return Tree()
     if shape == "amazon0302":
         return Amazon0302()
+    if shape == "task_groups":
+        return TaskGroups()
     if isinstance(shape, dict) and list(shape) == ["chains"]:
         return Chains(shape["chains"])
     if isinstance(shape, dict) and list(shape) == ["hierarchy"]:

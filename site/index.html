@@ -194,8 +194,8 @@ budget to spend. Lower threshold0 to give it more collections.</p>
 <p>async_tree_io_tg models a worker of the benchmark of that name. Four times
 over, it starts a tree of 55,987 asyncio tasks, six levels of six under the
 root, each level under a <code>TaskGroup</code>, and each leaf sleeps 50 ms.
-No task links back to the one that started it, so refcounting frees the tree
-as the run ends, and before shutdown the collections find no cyclic garbage
+Each task links back to the one that started it and cuts those links as it
+finishes, so refcounting frees the tree as the run ends, and before shutdown the collections find no cyclic garbage
 beyond a few cycles that start-up lets go of. sys reaches the tree through the
 event loop, so the incremental collector's old collections mark it a budget at
 a time, and its peak work stays far below the legacy collector's, whose gen 1

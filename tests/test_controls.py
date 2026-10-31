@@ -9,7 +9,7 @@ from hypothesis import strategies as st
 
 from pep848_sim.collectors.collector import CollectorSettings, Constants
 from pep848_sim.presets import CREATE_GC_CYCLES, PRESETS
-from pep848_sim.structures import Amazon0302, Hierarchy, Rings, StructureParameters
+from pep848_sim.structures import Amazon0302, Rings, StructureParameters, TaskGroups
 from pep848_sim.widget.controls import Control, controls
 from pep848_sim.widget.request import Request, dump, expand, runs
 from pep848_sim.workload import WorkloadParameters, geometric_thresholds
@@ -355,7 +355,7 @@ def rings(s: StructureParameters) -> bool:
 
 
 def task_tree(s: StructureParameters) -> bool:
-    return isinstance(s.shape, Hierarchy) and s.rebuild_interval is not None
+    return isinstance(s.shape, TaskGroups)
 
 
 def graph(s: StructureParameters) -> bool:

@@ -235,6 +235,197 @@ def _amazon0302() -> list[tuple[int, ...]]:
     return held
 
 
+# bm_async_tree's tree: the root task and six levels of six tasks under it, each
+# level's under a TaskGroup of its parent's.
+_BRANCHES = 6
+_LEVELS = 6
+_TASKS = sum(_BRANCHES**level for level in range(_LEVELS + 1))
+_INNER_TASKS = _TASKS - _BRANCHES**_LEVELS
+# One simulated object stands for an object of one role in each of 16 tasks that
+# asyncio makes and runs one after another (ADR 0002).
+_GROUP = 16
+_GROUPS = -(-_TASKS // _GROUP)
+_INNER_GROUPS = -(-_INNER_TASKS // _GROUP)
+# Records: on the reference build, a walk from sys, first in, first out as the
+# branch marks, scans 16,520 objects before asyncio's event loop, 7 references
+# down. TaskGroups reaches its loop through a path of this many objects, which puts
+# it past the objects of start-up's that sys reaches.
+TASK_GROUPS_PATH = 10
+_LOOP = TASK_GROUPS_PATH
+_READY = _LOOP + 1
+_TIMERS = _LOOP + 2
+# TaskGroups' objects before its tasks': the path, the loop, the loop's queue of
+# handles ready to run and its heap of timers.
+TASK_GROUPS_HEAD = _LOOP + 3
+# Its objects: a group's tasks are made with 7 each, then a group of tasks that
+# start TaskGroups makes 8 more as it runs, and a group of leaves 9.
+TASK_GROUPS_SIZE = (
+    TASK_GROUPS_HEAD + 7 * _GROUPS + 8 * _INNER_GROUPS + 9 * (_GROUPS - _INNER_GROUPS)
+)
+
+
+@dataclass(frozen=True)
+class TaskGroups:
+    """bm_async_tree's tree of asyncio tasks, as its io variant with --task-groups
+    builds it (ADR 0026). sys reaches asyncio's event loop down a path, and the
+    loop holds a queue of handles ready to run and a heap of timers. asyncio runs
+    the tasks in the order it makes them, a level at a time. A task's parent makes
+    it with its coroutine, two Contexts, a done-callback into the parent's
+    TaskGroup, and a handle in the ready queue. When the task runs, the queue lets
+    go of its handle. A task with children then starts a TaskGroup, whose set
+    holds them, and waits on a Future; a leaf sleeps on a Future that a timer
+    holds. Each task links back to its parent, and to itself through the Future it
+    waits on, and the program cuts those links as the tasks finish. A larger
+    structure starts the tree again under the same loop."""
+
+    def cyclic_garbage(self, size: int) -> int:
+        return 0
+
+    def links(self, i: int) -> list[tuple[int, int]]:
+        if not i:
+            return []
+        if i <= _LOOP:
+            return [(i - 1, i)]
+        if i < TASK_GROUPS_HEAD:
+            return [(_LOOP, i)]
+        return _repeated(i, _task_groups().links)
+
+    def unlinks(self, i: int) -> list[tuple[int, int]]:
+        """The links object i's making cuts: a group's tasks' handles leave the
+        ready queue as they run."""
+        if i < TASK_GROUPS_HEAD:
+            return []
+        return _repeated(i, _task_groups().unlinks)
+
+    def teardown(self, size: int) -> list[tuple[int, int]]:
+        """The links the program cuts among a structure's first `size` objects
+        before it goes, which leaves no cycle: each task's links back to its
+        parent and to itself."""
+        period = len(_task_groups().links)
+        cuts: list[tuple[int, int]] = []
+        for shift in range(0, size - TASK_GROUPS_HEAD, period):
+            cuts += [
+                (source + shift, target + shift)
+                for source, target in _task_groups().teardown
+                if max(source, target) + shift < size
+            ]
+        return cuts
+
+
+def _repeated(i: int, table: list[list[tuple[int, int]]]) -> list[tuple[int, int]]:
+    """Object i's pairs from the table of one tree's objects past the head, moved
+    to the tree object i falls in."""
+    repeat, j = divmod(i - TASK_GROUPS_HEAD, len(table))
+    shift = repeat * len(table)
+    return [
+        (
+            source + shift if source >= TASK_GROUPS_HEAD else source,
+            target + shift if target >= TASK_GROUPS_HEAD else target,
+        )
+        for source, target in table[j]
+    ]
+
+
+@dataclass
+class _TaskTable:
+    """One tree's objects past TaskGroups' head: each one's links and the links
+    its making cuts, and the links the program cuts before the tree goes."""
+
+    links: list[list[tuple[int, int]]] = field(default_factory=list)
+    unlinks: list[list[tuple[int, int]]] = field(default_factory=list)
+    teardown: list[tuple[int, int]] = field(default_factory=list)
+
+    def add(
+        self,
+        *holders: int,
+        holds: tuple[int, ...] = (),
+        back: tuple[int, ...] = (),
+        cut: tuple[tuple[int, int], ...] = (),
+    ) -> int:
+        """The next object: what holds it, what it holds, what it holds that the
+        program lets go before the tree goes, and the links its making cuts."""
+        i = TASK_GROUPS_HEAD + len(self.links)
+        self.links.append(
+            [(holder, i) for holder in holders] + [(i, held) for held in holds + back]
+        )
+        self.unlinks.append(list(cut))
+        self.teardown += [(i, held) for held in back]
+        return i
+
+
+@cache
+def _task_groups() -> _TaskTable:
+    """The objects of bm_async_tree's tree in the order asyncio makes them."""
+    table = _TaskTable()
+    task: dict[int, int] = {}
+    coroutine: dict[int, int] = {}
+    context: dict[int, int] = {}
+    handle: dict[int, int] = {}
+    task_group: dict[int, int] = {}
+    children: dict[int, int] = {}
+
+    def parent(group: int) -> int:
+        """The group of the parent of the group's first task."""
+        return (_GROUP * group - 1) // _BRANCHES // _GROUP
+
+    def make(group: int) -> None:
+        """A group's tasks as their parent's step makes them."""
+        if group:
+            up = parent(group)
+            # The set of the parent's TaskGroup holds a task, which the parent
+            # awaits.
+            task[group] = table.add(children[up], back=(task[up],))
+        else:
+            task[group] = table.add(_LOOP)
+        coroutine[group] = table.add(task[group])
+        context[group] = table.add(task[group])
+        table.add(task[group])
+        handle[group] = table.add(_READY)
+        # The handle's TaskStepMethWrapper.
+        table.add(handle[group], holds=(task[group],))
+        # The done-callback, a method of the parent's TaskGroup.
+        table.add(task[group], back=(task_group[parent(group)],) if group else ())
+
+    def run(group: int, made: list[int]) -> None:
+        """A group's tasks as they first run."""
+        me = task[group]
+        ran = ((_READY, handle[group]),)
+        if group < _INNER_GROUPS:
+            task_group[group] = table.add(coroutine[group], back=(me,), cut=ran)
+            table.add(task_group[group])
+            children[group] = table.add(task_group[group])
+            for child in made:
+                make(child)
+            # __aexit__ and _aexit, then the Future they wait on.
+            aexit = table.add(coroutine[group], holds=(task_group[group],))
+            waiting = table.add(aexit, holds=(task_group[group],))
+            future = table.add(task_group[group], me, holds=(context[group],))
+            # The Future's wake-up call.
+            table.add(future, back=(me,))
+        else:
+            # workload_func, mock_io_call and asyncio.sleep, then sleep's Future
+            # and its wake-up call.
+            work = table.add(coroutine[group], cut=ran)
+            io = table.add(work)
+            waiting = table.add(io)
+            future = table.add(waiting, me, holds=(context[group],))
+            table.add(future, back=(me,))
+            timer = table.add(_TIMERS, waiting)
+            # The timer's arguments and its Context.
+            table.add(timer, holds=(future,))
+            table.add(timer)
+        # The FutureIter that awaits the Future.
+        table.add(waiting, holds=(future,))
+
+    made: dict[int, list[int]] = defaultdict(list)
+    for group in range(1, _GROUPS):
+        made[parent(group)].append(group)
+    make(0)
+    for group in range(_GROUPS):
+        run(group, made[group])
+    return table
+
+
 def _scramble(i: int) -> int:
     """i's bits mixed, the same on every run: splitmix64's finaliser."""
     z = (i + 0x9E3779B97F4A7C15) % 2**64
@@ -367,13 +558,19 @@ def _raised(error: Exception, call: str = "") -> str:
     return f"{call} raised {name}{where}: {error}"
 
 
-type Shape = Chains | Tree | Hierarchy | Graph | Amazon0302 | Rings | Own
+type Shape = Chains | Tree | Hierarchy | Graph | Amazon0302 | TaskGroups | Rings | Own
 
 
 def unlinks(shape: Shape, i: int) -> list[tuple[int, int]]:
-    """The links object i takes over from earlier objects, which they let go once
-    it holds what they held."""
-    return shape.unlinks(i) if isinstance(shape, Amazon0302) else []
+    """The links object i's making cuts among earlier objects: what it takes over
+    from them, or what they let go as it comes."""
+    return shape.unlinks(i) if isinstance(shape, Amazon0302 | TaskGroups) else []
+
+
+def teardown(shape: Shape, size: int) -> list[tuple[int, int]]:
+    """The links the program cuts among a structure's first `size` objects before
+    the structure goes."""
+    return shape.teardown(size) if isinstance(shape, TaskGroups) else []
 
 
 @dataclass(frozen=True)
@@ -485,10 +682,14 @@ class Build:
         heap.let_go_frame_root(root)
 
     def drop(self) -> None:
-        """Let go of the structure's root. What lies on its shape's cycles stays as
-        cyclic garbage, and refcounting frees the rest on the spot."""
+        """Cut the links the program cuts before the structure goes, then let go of
+        its root. What lies on its shape's cycles stays as cyclic garbage, and
+        refcounting frees the rest on the spot."""
         heap = self._heap
-        root = self._objects[0]
+        objects = self._objects
+        for source, target in teardown(self._parameters.shape, len(objects)):
+            heap.unlink(objects[source], objects[target])
+        root = objects[0]
         unreachable = self._parameters.shape.cyclic_garbage(len(self._objects))
         if self._parameters.root == "module":
             heap.unlink(heap.module_root, root, leaves_unreachable=unreachable)

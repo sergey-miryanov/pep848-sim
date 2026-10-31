@@ -46,6 +46,9 @@
        "full_collections": false, "built_in_frame": false, "built_in_c": false},
       {"shape": "amazon0302", "size": 300, "root": "frame",
        "lifetime": null, "rebuild_interval": null, "build_churn": "6/25",
+       "full_collections": false, "built_in_frame": false, "built_in_c": false},
+      {"shape": "task_groups", "size": 200, "root": "frame",
+       "lifetime": 400, "rebuild_interval": 1000, "build_churn": 0,
        "full_collections": false, "built_in_frame": false, "built_in_c": false}
     ],
     "seed": 7,
