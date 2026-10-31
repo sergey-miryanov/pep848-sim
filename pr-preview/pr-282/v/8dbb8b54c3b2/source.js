@@ -148,7 +148,7 @@ export function toSource(request) {
   const shapeOf = (/** @type {Shape} */ shape) => {
     const name = nameOf(shape);
     if (!Object.hasOwn(SHAPES, name)) throw new TypeError(`no shape ${JSON.stringify(name)}`);
-    if (name === "tree") return "Tree()";
+    if (typeof shape === "string") return `${name[0].toUpperCase()}${name.slice(1)}()`;
     const value = /** @type {{ [name: string]: number | string }} */ (shape)[name];
     if (name === "own") return `Own(${names.get(String(value))})`;
     return `${name[0].toUpperCase()}${name.slice(1)}(${py(Number(value))})`;
