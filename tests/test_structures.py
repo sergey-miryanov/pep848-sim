@@ -8,6 +8,9 @@ from hypothesis import strategies as st
 from pep848_sim.collectors.collector import Collector
 from pep848_sim.collectors.heap import Heap
 from pep848_sim.structures import (
+    AMAZON0302_HEAD,
+    AMAZON0302_SIZE,
+    Amazon0302,
     Build,
     Chains,
     Graph,
@@ -247,6 +250,50 @@ def test_a_late_nodes_edges_reach_back_across_the_whole_graph() -> None:
     assert sum(node < 4_500 for node in shared) > 800
 
 
+def test_amazon0302s_dict_takes_graph_and_node_over_from_g() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    build = built(heap, long_lived(Amazon0302(), AMAZON0302_HEAD, "frame"))
+    g, graph, node, dict_, cache, adj = list(collector.nursery)[1:]
+
+    assert heap.references(g) == (dict_,)
+    assert heap.references(dict_) == (graph, node, cache, adj)
+    assert build.done
+
+
+def test_amazon0302s_objects_hang_off_adj_node_or_their_endpoints() -> None:
+    shape = Amazon0302()
+    adj, node = AMAZON0302_HEAD - 1, 2
+    kinds: Counter[str] = Counter()
+    for i in range(AMAZON0302_HEAD, AMAZON0302_SIZE):
+        holders = [source for source, _ in shape.links(i)]
+        assert all(source < i for source in holders)
+        if holders == [adj]:
+            kinds["adjacency"] += 1
+        elif holders == [node]:
+            kinds["attributes"] += 1
+        else:
+            # An edge hangs off one or two objects that stand for adjacency dicts.
+            assert all(h == adj or shape.links(h) == [(adj, h)] for h in holders)
+            kinds["edge"] += 1
+    # The file's 262,111 nodes, two dicts each, and its 899,792 edges, one in 16:
+    # taking every 16th object of read_adjlist's order lands within 2% of that.
+    assert kinds["adjacency"] == pytest.approx(262_111 / 16, rel=0.02)
+    assert kinds["attributes"] == pytest.approx(262_111 / 16, rel=0.02)
+    assert kinds["edge"] == pytest.approx(899_792 / 16, rel=0.02)
+
+
+def test_a_larger_amazon0302_repeats_the_files_pattern() -> None:
+    shape = Amazon0302()
+    body = AMAZON0302_SIZE - AMAZON0302_HEAD
+    for i in range(AMAZON0302_HEAD, AMAZON0302_HEAD + 1_000):
+        once, again = shape.links(i), shape.links(i + body)
+        if once[0][0] < AMAZON0302_HEAD:
+            assert again == [(s, t + body) for s, t in once]
+        else:
+            assert again == [(s + body, t + body) for s, t in once]
+
+
 @pytest.mark.parametrize("root", ["module", "frame"])
 def test_a_dropped_graph_stays_as_cyclic_garbage_with_its_roots_cycle(
     root: Root,
@@ -362,6 +409,7 @@ def test_a_whole_fraction_of_churn_reads_as_an_int() -> None:
         st.just(Tree()),
         st.builds(Hierarchy, branches=st.integers(1, 8)),
         st.builds(Graph, edges=st.integers(0, 4)),
+        st.just(Amazon0302()),
         st.builds(Rings, length=st.integers(1, 8)),
         own_shapes(),
     ),

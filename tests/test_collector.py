@@ -213,6 +213,19 @@ def test_collecting_cycles_frees_the_garbage_and_returns_the_survivors() -> None
     assert heap.uncollected_garbage == 0
 
 
+def test_a_survivor_scanned_before_what_holds_it_moves_behind_that_holder() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    a, b, c, d = (heap.allocate() for _ in range(4))  # a and d keep frame roots
+    heap.link(a, b)
+    heap.link(b, c)
+    heap.let_go_frame_root(b)
+    heap.let_go_frame_root(c)
+
+    # c and b look unreachable until a, then b, takes each back in turn.
+    assert collector.collect_cycles([c, b, a, d]) == [a, d, b, c]
+
+
 def test_collecting_a_group_frees_what_the_group_alone_held() -> None:
     collector = Collector()
     heap = Heap(collector)

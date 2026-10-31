@@ -9,7 +9,7 @@ from hypothesis import strategies as st
 
 from pep848_sim.collectors.collector import CollectorSettings, Constants
 from pep848_sim.presets import CREATE_GC_CYCLES, PRESETS
-from pep848_sim.structures import Graph, Hierarchy, Rings, StructureParameters
+from pep848_sim.structures import Amazon0302, Hierarchy, Rings, StructureParameters
 from pep848_sim.widget.controls import Control, controls
 from pep848_sim.widget.request import Request, dump, expand, runs
 from pep848_sim.workload import WorkloadParameters, geometric_thresholds
@@ -359,7 +359,7 @@ def task_tree(s: StructureParameters) -> bool:
 
 
 def graph(s: StructureParameters) -> bool:
-    return isinstance(s.shape, Graph)
+    return isinstance(s.shape, Amazon0302)
 
 
 @pytest.mark.parametrize(

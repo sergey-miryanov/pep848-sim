@@ -85,7 +85,7 @@
           "request": {"preset": "connected_components", "settings": {"threshold0": 1000, "threshold1": 10, "threshold2": 10}, "every": 5},
           "marks": [
             {"part": "legacy.work", "note": "The tall bar at 133 MB holds the gen 2 collection, examining the whole graph."},
-            {"part": "figure.peak_work", "note": "91.4K objects in that one collection, against the incremental collector's 13.5K."}
+            {"part": "figure.peak_work", "note": "91.4K objects in that one collection, against the incremental collector's 10.2K."}
           ]
         },
         {
@@ -99,10 +99,10 @@
         },
         {
           "title": "The incremental collector, for contrast",
-          "text": "The incremental collector takes the old generation an increment at a time. read_adjlist's frame holds the graph while it loads, so sys reaches none of it. One increment, at 36 MB, takes what of the graph is pending, and the young nodes and edges its old nodes hold with it.",
+          "text": "The incremental collector takes the old generation an increment at a time. read_adjlist's frame holds the graph while it loads, so sys reaches none of it. One old collection, at 40 MB, takes _adj, the dict that holds each node's adjacency dict, with most of the young adjacency dicts and edges.",
           "request": {"preset": "connected_components", "settings": {"threshold0": 1000, "threshold1": 10, "threshold2": 10}, "every": 5},
           "marks": [
-            {"part": "incremental.work", "note": "Its tallest bar, at 36 MB, holds 13.5K objects, against the legacy collector's 91.4K."}
+            {"part": "incremental.work", "note": "Its tallest bar, at 40 MB, holds 10.2K objects, against the legacy collector's 91.4K."}
           ]
         }
       ]
@@ -378,46 +378,46 @@
     {
       "id": "a-large-increment",
       "title": "A large increment",
-      "controls": ["workload.structures.7.size"],
+      "controls": ["workload.structures.8.size"],
       "steps": [
         {
           "title": "An increment is a closure",
           "text": "An increment is pending's last object and every object it reaches that carries pending's tag. An old collection examines it whole, however little of the work budget is left. In every other sweep young objects carry pending's tag too. connected_components' module loads its graph inside read_adjlist, whose frame holds it until the call returns, so sys reaches none of the graph while it loads.",
           "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {}},
           "marks": [
-            {"part": "incremental.work", "note": "The bar at 56 MB holds one increment from the graph's root: 18.5K objects, nearly all of them young nodes and edges that the graph's old nodes hold."}
+            {"part": "incremental.work", "note": "Two bars stand out. At 48 MB an old collection takes _node's increment: _node, the dict that holds each node's attribute dict, and those attribute dicts, 5.3K objects in all. At 60 MB it takes _adj's: _adj, the adjacency dicts it holds and their edges, 14.3K objects, 12.1K of them young."}
           ]
         },
         {
           "title": "Peak work",
-          "text": "That increment is the incremental collector's peak work. It takes the young generation whole, 16 MB of the graph's load.",
+          "text": "The collection at 60 MB is the incremental collector's peak work. _adj's increment takes three quarters of the young generation, 12 MB of the graph's load.",
           "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {}},
           "marks": [
-            {"part": "figure.peak_work", "note": "18.5K, the increment at 56 MB, just below the legacy collector's 19.4K, a gen 1 collection."}
+            {"part": "figure.peak_work", "note": "14.3K, the collection at 60 MB, below the legacy collector's 19.4K, a gen 1 collection."}
           ]
         },
         {
           "title": "The budget pays for it",
-          "text": "The increment empties pending, so the sweep ends and the budget goes to zero, whatever the increment cost. The next five young collections find the aging spaces it emptied and move nothing in, so the old collections after it stay idle.",
+          "text": "The collection at 60 MB cost 14.3K objects against a budget of 2,438, and old collections wait while the budget stays below zero. Each young collection credits the budget with the survivors it moves in. The next six find the aging spaces _adj's increment emptied and move in 427 to 1,960 objects each. At 96 MB an old collection takes pending's last 13 objects, read_adjlist's reader among them, and ends the sweep.",
           "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {}},
           "marks": [
-            {"part": "incremental.budget", "note": "From 56 MB the line holds at zero, until the young collection at 78 MB moves 1,613 objects in."}
+            {"part": "incremental.budget", "note": "At 60 MB the line drops to -11,846. It climbs back until the young collection at 94 MB lifts it above zero."}
           ]
         },
         {
           "title": "Half the graph",
-          "text": "Halve the graph, to 45,000 kB. It still loads when the increment comes at 56 MB, so the increment takes as much as before.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.7.size": 45000}},
+          "text": "Halve the graph, to 45,000 kB. It still loads at 48 and 60 MB, so the increments there take as much as before.",
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.8.size": 45000}},
           "marks": [
-            {"part": "figure.peak_work", "note": "18.5K, as with the whole graph."}
+            {"part": "figure.peak_work", "note": "14.3K, as with the whole graph."}
           ]
         },
         {
           "title": "A quarter of the graph",
-          "text": "Shrink the graph to 22,000 kB. It has loaded by 42 MB, and the increment at 52 MB takes what of it is still pending or young.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.7.size": 22000}},
+          "text": "Shrink the graph to 22,000 kB. It has loaded by 42 MB, and _adj's increment at 56 MB takes what of it is still pending or young.",
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.8.size": 22000}},
           "marks": [
-            {"part": "figure.peak_work", "note": "12.9K, less than the whole graph's 18.5K."}
+            {"part": "figure.peak_work", "note": "7.4K, half the whole graph's 14.3K."}
           ]
         }
       ]
@@ -511,10 +511,10 @@
         },
         {
           "title": "Peak work parts ways",
-          "text": "The incremental collector's peak work falls too: its largest collection is the increment that takes the graph, and at 1,000 kB it comes sooner, at 36 MB, while less of the graph has loaded. The legacy collector's leaps.",
+          "text": "The incremental collector's peak work falls too: its largest collection is the one that takes _adj's increment, and at 1,000 kB it comes sooner, at 40 MB, while less of the graph has loaded. The legacy collector's leaps.",
           "request": {"preset": "connected_components", "settings": {"threshold0": 1000, "threshold1": 10, "threshold2": 10}, "every": 5},
           "marks": [
-            {"part": "figure.peak_work", "note": "The incremental collector's falls from 18.5K to 13.5K. The legacy collector's leaps from 19.4K to 91.4K: a gen 2 collection, at 133 MB, takes the whole graph."}
+            {"part": "figure.peak_work", "note": "The incremental collector's falls from 14.3K to 10.2K. The legacy collector's leaps from 19.4K to 91.4K: a gen 2 collection, at 133 MB, takes the whole graph."}
           ]
         },
         {
@@ -530,7 +530,7 @@
           "text": "Lower threshold1 to 2. The legacy collector's gen 1 collections come every fourth collection, and two gen 2 collections fit the run.",
           "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 2, "threshold2": 10}, "every": 5},
           "marks": [
-            {"part": "legacy.work", "note": "Gen 2 collections at 90 and 180 MB examine the whole heap: 63.2K objects as the graph loads, then 91.4K once it has."},
+            {"part": "legacy.work", "note": "Gen 2 collections at 90 and 180 MB examine the whole heap: 63.3K objects as the graph loads, then 91.4K once it has."},
             {"part": "figure.gen2_collections_sweeps", "note": "2 gen 2 collections."}
           ]
         }

@@ -256,21 +256,22 @@ class Collector:
         return 0
 
     def collect_cycles(self, objects: Iterable[int]) -> list[int]:
-        """Free the cyclic garbage among `objects` and return the survivors in their
-        order, as the pseudocode's collect_cycles does, counting both."""
+        """Free the cyclic garbage among `objects` and return the survivors in the
+        order move_unreachable leaves them, as the branch's gc_collect_region does,
+        counting both."""
         heap = self._heap
         examined = list(objects)
-        garbage = find_unreachable(heap, examined)
+        reachable, garbage = move_unreachable(heap, examined)
         # As delete_garbage does: clear each object, and refcounting frees the rest.
         # A clear can free objects later in the list, so skip those.
         for x in garbage:
             if not heap.is_freed(x):
                 heap.clear(x)
-        # Refcounting can free an object find_unreachable left out of the garbage, when
-        # its one reference from outside the examined objects came from an object that
-        # only the garbage held. CPython unlinks an object from its survivors list as
-        # it frees it, so leave those out.
-        survivors = [x for x in examined if not heap.is_freed(x)]
+        # Refcounting can free an object move_unreachable left out of the garbage,
+        # when its one reference from outside the examined objects came from an
+        # object that only the garbage held. CPython unlinks an object from its
+        # survivors list as it frees it, so leave those out.
+        survivors = [x for x in reachable if not heap.is_freed(x)]
         self.survived += len(survivors)
         self.freed += len(examined) - len(survivors)
         return survivors
@@ -290,20 +291,41 @@ class Collector:
 def find_unreachable(heap: Heap, examined: Iterable[int]) -> list[int]:
     """The objects among `examined` that nothing outside them reaches, in their
     order, found as CPython's collector finds them."""
+    return move_unreachable(heap, list(examined))[1]
+
+
+def move_unreachable(heap: Heap, examined: list[int]) -> tuple[list[int], list[int]]:
+    """The objects among `examined` that something outside them reaches, in the
+    order CPython's move_unreachable leaves them, and the rest in theirs."""
     # Each object's references from outside the examined ones: its count less the
     # references from examined objects, as update_refs and subtract_refs leave it.
-    from_outside = {x: heap.reference_count(x) for x in examined}
-    for x in from_outside:
+    gc_refs = {x: heap.reference_count(x) for x in examined}
+    for x in gc_refs:
         for target in heap.references(x):
-            if target in from_outside:
-                from_outside[target] -= 1
-    # What something outside holds survives, with all it reaches among the
-    # examined objects, as in move_unreachable.
-    stack = [x for x, held in from_outside.items() if held]
-    reached = set(stack)
-    while stack:
-        for target in heap.references(stack.pop()):
-            if target in from_outside and target not in reached:
-                reached.add(target)
-                stack.append(target)
-    return [x for x in from_outside if x not in reached]
+            if target in gc_refs:
+                gc_refs[target] -= 1
+    # move_unreachable walks the list. An object something outside holds stays,
+    # and marks what it holds that the walk has not reached as reachable. One it
+    # finds with nothing outside holding it goes to the unreachable list, until an
+    # object the walk reaches later holds it: then it goes back on the end of the
+    # list, which the walk reaches in turn.
+    walk = list(examined)
+    unscanned = set(walk)
+    unreachable: set[int] = set()
+    reachable: list[int] = []
+    for x in walk:
+        if x in unreachable or x not in unscanned:
+            continue
+        if not gc_refs[x]:
+            unreachable.add(x)
+            continue
+        unscanned.discard(x)
+        reachable.append(x)
+        for target in heap.references(x):
+            if target in unreachable:
+                unreachable.discard(target)
+                walk.append(target)
+                gc_refs[target] = 1
+            elif target in unscanned and not gc_refs[target]:
+                gc_refs[target] = 1
+    return reachable, [x for x in examined if x in unreachable]

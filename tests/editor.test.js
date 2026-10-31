@@ -11,10 +11,11 @@ import {
   OWN, SHAPES, churnFrom, churnOf, indentAfter, move, nameOf, newStructure, percentOf, realOnes, shapeNamed, shareOf,
 } from "../site/editor.js";
 
-test("a shape takes its name's default parameter, a tree none, and the reader's own a list's code", () => {
+test("a shape takes its name's default parameter, a tree and amazon0302 none, and the reader's own a list's code", () => {
   assert.deepEqual(shapeNamed("chains"), { chains: 16 });
   assert.deepEqual(shapeNamed("graph"), { graph: 2 });
   assert.equal(shapeNamed("tree"), "tree");
+  assert.equal(shapeNamed("amazon0302"), "amazon0302");
   assert.deepEqual(shapeNamed("own"), { own: OWN });
   assert.deepEqual(Object.keys(SHAPES).map((name) => nameOf(shapeNamed(name))), Object.keys(SHAPES));
 });

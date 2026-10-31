@@ -15,6 +15,7 @@ from typing import get_args
 
 from pep848_sim.collectors.collector import CollectorSettings, Constants
 from pep848_sim.structures import (
+    Amazon0302,
     Chains,
     Graph,
     Hierarchy,
@@ -99,6 +100,7 @@ def _names(text: str, tree: ast.Module) -> dict[str, object]:
         "Tree": Tree,
         "Hierarchy": Hierarchy,
         "Graph": Graph,
+        "Amazon0302": Amazon0302,
         "Rings": Rings,
         "Own": own,
         "Structure": _structure,
@@ -143,7 +145,7 @@ def _structure(
     if not isinstance(shape, get_args(Shape.__value__)):
         raise ValueError(
             f"{shape!r} is no shape: Chains(...), Tree(), Hierarchy(...), Graph(...),"
-            " Rings(...) or Own(...) gives one"
+            " Amazon0302(), Rings(...) or Own(...) gives one"
         )
     return StructureParameters(
         shape,

@@ -43,6 +43,9 @@
       {"shape": {"own": "NAME = \"a\\tb\"\ndef links(i):\n    return [(0, i)] if i else []\n"},
        "size": 50, "root": "frame",
        "lifetime": null, "rebuild_interval": null, "build_churn": 0,
+       "full_collections": false, "built_in_frame": false, "built_in_c": false},
+      {"shape": "amazon0302", "size": 300, "root": "frame",
+       "lifetime": null, "rebuild_interval": null, "build_churn": "6/25",
        "full_collections": false, "built_in_frame": false, "built_in_c": false}
     ],
     "seed": 7,

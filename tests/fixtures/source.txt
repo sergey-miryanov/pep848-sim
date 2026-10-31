@@ -58,6 +58,8 @@ structures = [
     Structure(Own(churn_2), size=50, root="frame"),
     Structure(Own(shape_10), size=50, root="frame"),
     Structure(Own(shape_11), size=50, root="frame"),
+    Structure(Amazon0302(), size=300, root="frame",
+              build_churn="6/25"),
 ]
 
 run_length = 150_000

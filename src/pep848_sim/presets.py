@@ -12,8 +12,9 @@ from fractions import Fraction
 
 from pep848_sim.collectors.collector import CollectorSettings
 from pep848_sim.structures import (
+    AMAZON0302_SIZE,
+    Amazon0302,
     Chains,
-    Graph,
     Hierarchy,
     Rings,
     Root,
@@ -482,37 +483,49 @@ ASYNC_TREE_IO_TG = Preset(
 # other benchmarks' examine 5,855 to 6,352, so start-up allocates more kB to an
 # object past the first.
 _CC_START_UP = replace(_START_UP, late_churn=Fraction(466, 100))
+# Code: read_adjlist opens the file and wraps it in a generator of lines before it
+# makes the graph, and its frame holds them while it reads. Records: once the
+# branch's increment from _adj has taken the graph, at the 30th collection, the
+# sweep waits for its budget until the 48th, which examines the last 153 real
+# objects pending and ends it.
+_READER = StructureParameters(
+    shape=Chains(width=1),
+    size=153 // 16 + 1,
+    root="frame",
+    lifetime=AMAZON0302_SIZE + math.floor(AMAZON0302_SIZE * Fraction(24, 100)),
+    rebuild_interval=None,
+    build_churn=0,
+)
 # Code: networkx's modules, functions and classes, globals of sys.modules until
 # shutdown. Records: the legacy collector's gen 0 collections examine 4,400 to 4,800
 # real objects each between start-up and the load, which starts at about 14,600 kB:
 # 6 kB of churn after each object.
 _NETWORKX = StructureParameters(
     shape=Chains(width=16),
-    size=(14_600 - _CC_START_UP.length) // 7,
+    size=(14_600 - _CC_START_UP.length - _READER.build_length) // 7,
     root="module",
     lifetime=None,
     rebuild_interval=None,
     build_churn=6,
 )
-# Code: read_adjlist's 262,111 nodes with two dicts each and 899,792 edges with one,
-# 1,424,118 tracked objects in all under networkx 3.4.2: 89,007 simulated objects
-# (ADR 0002), with about two edges' dicts to a node's.
-_GRAPH = 1_424_118 // 16
-_GRAPH_SHAPE = Graph(edges=2)
-# Code: the graph, a global of the benchmark's module until shutdown.
+# Code: the graph, a global of the benchmark's module until shutdown, which
+# read_adjlist builds from bm_networkx's own file: 1,424,118 tracked objects under
+# networkx 3.4.2, 89,007 simulated ones (ADR 0002), each standing for one in 16 of
+# the file's in the order read_adjlist makes them (ADR 0025).
 # graph = networkx.read_adjlist(...) stores it once read_adjlist returns, and
 # read_adjlist's frame holds it while it loads, which here is to shutdown. Records:
 # the branch's old collections take it about 50,000 real objects at a time, a
-# budget each, but for one increment of 231,870 at the 30th, in a sweep that takes
-# young objects too (ADR 0024): the graph so far, and the young nodes and edges its
-# old nodes hold. The next five young collections examine 6,600 to 13,600 each.
+# budget each, but for _node's increment of 85,797 at the 24th collection and
+# _adj's of 231,870 at the 30th, in a sweep that takes young objects too (ADR
+# 0024). The next five young collections examine 6,600 to 13,600 each: the
+# attribute dicts _node, visited by then, holds.
 # Records: the legacy collector's gen 0 collections examine 24,700 to 27,600 real
 # objects each while it loads, and the 63rd, at 126,005 kB, half as many. The load
 # ends there, so read_adjlist's lists, tuples and throwaway dicts come to 0.24 kB for
 # each kB of graph (ADR 0023).
 _GRAPH_LOAD = StructureParameters(
-    shape=_GRAPH_SHAPE,
-    size=_GRAPH,
+    shape=Amazon0302(),
+    size=AMAZON0302_SIZE,
     root="frame",
     lifetime=None,
     rebuild_interval=None,
@@ -529,6 +542,7 @@ _WALKS = 4
 _WALK = (
     (2 * _CONNECTED_COMPONENTS_COLLECTIONS + 1) * CollectorSettings().threshold0 // 2
     - _CC_START_UP.length
+    - _READER.build_length
     - _NETWORKX.build_length
     - _GRAPH_LOAD.build_length
 ) // _WALKS
@@ -546,13 +560,14 @@ CONNECTED_COMPONENTS = Preset(
             long_share=Fraction(0),
             long_lifetimes=(1, 1),
         ),
-        structures=(*_CC_START_UP.structures, _NETWORKX, _GRAPH_LOAD),
+        structures=(*_CC_START_UP.structures, _NETWORKX, _READER, _GRAPH_LOAD),
         seed=848,
         shutdown=True,
     ),
     # The worker's own length: start-up, the imports, the load, then its loops.
     run_length=(
         _CC_START_UP.length
+        + _READER.build_length
         + _NETWORKX.build_length
         + _GRAPH_LOAD.build_length
         + _WALKS * _WALK

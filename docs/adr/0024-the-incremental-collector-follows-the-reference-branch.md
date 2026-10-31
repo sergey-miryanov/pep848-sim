@@ -29,7 +29,9 @@ The incremental collector now follows `Python/gc.c` on
   increments freed. If pending and reachable are empty at the end, it swaps
   the spaces and sets the budget to zero.
 - Young collections and increments put their survivors at visited's front, and
-  marking appends at its tail.
+  marking appends at its tail. The survivors come in the order
+  `move_unreachable` leaves them: an object it first finds unreachable, and a
+  later one reaches, moves to the end of that order (ADR 0025).
 - A full collection leaves visited as old[1].
 
 The collector keeps the pseudocode's names, and its docstring maps each to the
@@ -47,7 +49,9 @@ connected_components' young collections examine within 5% of its workers',
 against 10% before, and its budget within 15%, against 17%. Its one increment
 now comes at 56 MB and takes 295,696 real objects. The workers keep about 153
 objects pending after theirs, so their budget sinks to -191,565, where the
-simulator's empties pending, ends the sweep and sets the budget to zero.
+simulator's empties pending, ends the sweep and sets the budget to zero. ADR
+0025 gives the graph networkx's own links and brings its increments to the
+workers' 48 and 60 MB.
 
 async_tree_io_tg's young collections examine within 37% of its workers',
 against 19%. sys reaches its task tree, so in the sweeps where young objects

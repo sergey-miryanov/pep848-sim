@@ -5,7 +5,7 @@ import pytest
 
 from benchmarks import Tally
 from compare_presets import COLLECTORS, benchmark, run_preset, tally
-from pep848_sim.collectors.collector import Collector, CollectorSettings
+from pep848_sim.collectors.collector import Collector, CollectorSettings, Record
 from pep848_sim.collectors.heap import Heap
 from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.collectors.legacy import LegacyCollector
@@ -252,42 +252,47 @@ def test_async_tree_io_tg_runs_leave_no_cyclic_garbage(
     assert freed == start_up_garbage(ASYNC_TREE_IO_TG)
 
 
-def test_connected_components_takes_its_graph_in_one_increment() -> None:
-    """read_adjlist's frame holds the graph, so sys reaches none of it, and one
-    increment takes all of it pending. It comes in a sweep in which young objects
-    carry pending's tag, so it takes the young nodes and edges the graph's old
-    nodes hold, and the five young collections after it find nothing (ADR 0024)."""
+def test_connected_components_takes_node_then_adj_then_its_reader() -> None:
+    """The branch's first young collection of the graph leaves G._node, which
+    G.__dict__ took over from G, behind the nodes and edges it keeps in place, so
+    the sweep reaches _node first. Its increment at 48 MB takes the attribute
+    dicts so far, young ones too (ADR 0024). _adj's at 60 MB takes the adjacency
+    dicts and edges, but not the attribute dicts made since, which the young
+    collections after it find. read_adjlist's reader, older than the graph, waits
+    pending until the budget pays the increment back (ADR 0025)."""
     records = run_preset(CONNECTED_COMPONENTS, IncrementalCollector)
 
-    old = [r for r in records if r.kind == "old"]
-    large = max(old, key=lambda r: r.survived + r.freed)
-    after = records[records.index(large) + 1 :]
-    young = [r for r in after if r.kind == "young"]
+    def work(r: Record) -> int:
+        return r.marked + r.survived + r.freed
 
-    most = max(r.survived for r in records if r.kind == "young")
-    assert large.survived > 4 * most
-    assert [r.survived + r.freed for r in young[:5]] == [0] * 5
-    assert young[5].survived
+    first = [r for r in records if r.kind == "old" and r.sweep == 1]
+    largest = sorted(sorted(first, key=work)[-2:], key=lambda r: r.clock)
+    assert [r.clock for r in largest] == [48_000, 60_000]
+    young = [r for r in records if r.kind == "young" and 60_000 < r.clock < 80_000]
+    full = max(work(r) for r in records if r.kind == "young")
+    assert all(0 < work(r) < full / 3 for r in young)
+    ended = next(r for r in records if r.sweep == 2)
+    # The reader, and G, its __dict__ and the cache, which _adj's increment left.
+    reader = CONNECTED_COMPONENTS.workload.structures[7]
+    assert (ended.clock, work(ended)) == (96_000, reader.size + 3)
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
 def test_connected_components_frees_its_graph_as_its_frames_return(
     collector: type[Collector],
 ) -> None:
-    graph = CONNECTED_COMPONENTS.workload.structures[7]
-
     *automatic, first, second, third = run_preset(CONNECTED_COMPONENTS, collector)
 
     # The walks make no cycles, and read_adjlist's frame holds the graph, so the
     # collections before shutdown free the trees start-up let go of and nothing
-    # more. The worker's frames have returned by shutdown's first full collection,
-    # which frees the graph its root's cycle keeps. The second frees start-up's
-    # trees, which their cycles keep once the modules go, and leaves the third
-    # nothing.
+    # more. Nothing in the graph links back, so refcounting frees it once the
+    # worker's frames have returned, and shutdown's first full collection finds
+    # none of it. The second frees start-up's trees, which their cycles keep once
+    # the modules go, and leaves the third nothing.
     assert [first.kind, second.kind, third.kind] == ["shutdown"] * 3
     freed = sum(record.freed for record in automatic)
     assert freed == start_up_garbage(CONNECTED_COMPONENTS)
-    assert first.freed == graph.size
+    assert first.freed == 0
     assert second.freed == start_up_trees(CONNECTED_COMPONENTS)
     assert third.freed == 0
 

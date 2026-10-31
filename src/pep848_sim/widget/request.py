@@ -20,6 +20,7 @@ from pep848_sim.collectors.legacy import LegacyCollector
 from pep848_sim.presets import PRESETS
 from pep848_sim.run import check_every, run
 from pep848_sim.structures import (
+    Amazon0302,
     Chains,
     Graph,
     Hierarchy,
@@ -264,6 +265,8 @@ def _named(shape: Shape) -> str | dict[str, int] | dict[str, str]:
     """A shape as a request names it."""
     if isinstance(shape, Tree):
         return "tree"
+    if isinstance(shape, Amazon0302):
+        return "amazon0302"
     if isinstance(shape, Chains):
         return {"chains": shape.width}
     if isinstance(shape, Hierarchy):
@@ -276,10 +279,12 @@ def _named(shape: Shape) -> str | dict[str, int] | dict[str, str]:
 
 
 def _shape(shape: Any) -> Shape:
-    """A shape: "tree", {"chains": width}, {"hierarchy": branches},
+    """A shape: "tree", "amazon0302", {"chains": width}, {"hierarchy": branches},
     {"graph": edges}, {"rings": length}, or {"own": code} for the reader's own."""
     if shape == "tree":
         return Tree()
+    if shape == "amazon0302":
+        return Amazon0302()
     if isinstance(shape, dict) and list(shape) == ["chains"]:
         return Chains(shape["chains"])
     if isinstance(shape, dict) and list(shape) == ["hierarchy"]:
