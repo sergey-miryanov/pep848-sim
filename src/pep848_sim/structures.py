@@ -598,6 +598,14 @@ class StructureParameters:
     # automatic collection that falls due during the build waits until it ends,
     # its churn included (ADR 0022).
     built_in_c: bool = False
+    # The kB after the loops start that a repeating structure first falls due, as
+    # what a benchmark does after its inner loop comes that far into each pass of
+    # the outer one (ADR 0027).
+    delay: int = 0
+    # Whether a repeating structure skips a rebuild that falls due while another
+    # structure builds or waits, as an inner loop stops while the rest of the
+    # outer one's pass runs, instead of waiting to build once it ends.
+    skips_while_busy: bool = False
 
     def __post_init__(self) -> None:
         if self.root not in get_args(Root.__value__):
@@ -608,6 +616,10 @@ class StructureParameters:
             raise ValueError("a structure a frame holds is built in one already")
         if self.lifetime is not None and self.lifetime < 0:
             raise ValueError(f"a structure cannot live {self.lifetime} kB")
+        if self.delay < 0:
+            raise ValueError(f"a structure cannot fall due {self.delay} kB early")
+        if self.rebuild_interval is None and (self.delay or self.skips_while_busy):
+            raise ValueError("a structure that builds once neither waits nor skips")
         if self.build_churn < 0:
             raise ValueError(
                 f"a build cannot follow each object with {self.build_churn} churn"

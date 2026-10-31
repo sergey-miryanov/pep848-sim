@@ -218,8 +218,10 @@ class Workload:
 
     Structures without a rebuild interval build first, one after another, in the
     order the parameters list them, as a worker starts up. A repeating structure
-    first falls due once they have built, and again each time its interval comes
-    round from there. It waits for any build under way, so builds never overlap.
+    first falls due its delay after they have built, and again each time its
+    interval comes round from there. It waits for any build under way, so builds
+    never overlap, unless it skips the rebuilds that fall due while another
+    structure builds or waits.
     A structure that asks for full collections gets one before each build
     and one after each drop, after the let-gos of the drop's kB."""
 
@@ -245,7 +247,7 @@ class Workload:
         # The full collections that follow drops, by the clock of their kB.
         self._full_collections: dict[int, int] = {}
         # Each repeating structure's rebuild interval, and when it next falls due,
-        # counted from the clock the others finish building at.
+        # counted from its delay after the clock the others finish building at.
         self._intervals = {
             i: s.rebuild_interval
             for i, s in enumerate(self._structures)
@@ -325,20 +327,25 @@ class Workload:
 
     def _fall_due(self) -> None:
         """Queue each repeating structure that has fallen due. If its last build is
-        still waiting or under way, skip this rebuild."""
+        still waiting or under way, or it skips while another structure builds or
+        waits and one does, skip this rebuild."""
         clock = self._heap.clock
         start = self._start
+        structures = self._structures
         if start is None:
             if self._waiting or self._current is not None:
                 return
             self._start = start = clock
-            self._due = dict.fromkeys(self._intervals, clock)
+            self._due = {i: clock + structures[i].delay for i in self._intervals}
         building = None if self._current is None else self._current[0]
         for i, interval in self._intervals.items():
             if self._due[i] <= clock:
-                if i != building and i not in self._waiting:
+                busy = building not in (None, i) or any(w != i for w in self._waiting)
+                skips = structures[i].skips_while_busy and busy
+                if not skips and i != building and i not in self._waiting:
                     self._waiting.append(i)
-                self._due[i] = start + ((clock - start) // interval + 1) * interval
+                first = start + structures[i].delay
+                self._due[i] = first + ((clock - first) // interval + 1) * interval
 
     def _finish(self, i: int, build: Build, first_kb: int) -> None:
         clock = self._heap.clock

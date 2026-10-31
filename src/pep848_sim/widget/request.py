@@ -220,13 +220,13 @@ def _workload(values: dict[str, Any]) -> WorkloadParameters:
 
 
 def _structure(values: dict[str, Any]) -> StructureParameters:
-    # Links the playground wrote before a frame or C code could build a structure
-    # leave built_in_frame or built_in_c out.
+    # Links the playground wrote before a frame or C code could build a structure,
+    # or before a repeating one could wait or skip, leave those fields out.
     values = _values(
         values,
         _names(StructureParameters),
         "structure",
-        optional=["built_in_frame", "built_in_c"],
+        optional=["built_in_frame", "built_in_c", "delay", "skips_while_busy"],
     )
     return _check(
         StructureParameters(

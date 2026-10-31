@@ -141,6 +141,8 @@ def _structure(
     full_collections: bool = False,
     built_in_frame: bool = False,
     built_in_c: bool = False,
+    delay: int = 0,
+    skips_while_busy: bool = False,
 ) -> StructureParameters:
     """A structure, as `Structure(Tree(), size=1_000, root="frame")` sets one. Its
     build's churn is a whole number, or a fraction as a share is."""
@@ -159,6 +161,8 @@ def _structure(
         full_collections,
         built_in_frame,
         built_in_c,
+        delay,
+        skips_while_busy,
     )
 
 

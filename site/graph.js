@@ -15,7 +15,8 @@
  * @typedef {{
  *   shape: string, size: number, root: "module" | "frame", lifetime: number | null,
  *   rebuild_interval: number | null, full_collections: boolean, built_in_frame: boolean,
- *   built_in_c: boolean, objects: [number, number][], links: [number, number, boolean][],
+ *   built_in_c: boolean, delay: number, skips_while_busy: boolean, objects: [number, number][],
+ *   links: [number, number, boolean][],
  * }} Structure
  */
 /**
@@ -108,7 +109,10 @@ export function describe(structure) {
   if (interval === null) {
     when = lifetime === null ? "built first, kept to the end" : `built first, dropped ${size(lifetime)} later`;
   } else {
-    when = `rebuilt every ${size(interval)}, ${lifetime ? `each dropped ${size(lifetime)} later` : "each dropped as soon as built"}`;
+    when = `rebuilt every ${size(interval)}`;
+    if (structure.delay) when += `, first ${size(structure.delay)} into the loops`;
+    if (structure.skips_while_busy) when += ", skipping each rebuild due while another builds";
+    when += `, ${lifetime ? `each dropped ${size(lifetime)} later` : "each dropped as soon as built"}`;
     if (collects) when += ", gc.collect() before each build and after each drop";
   }
   if (structure.built_in_c) when += ", built in C: a collection due meanwhile waits until the build ends";

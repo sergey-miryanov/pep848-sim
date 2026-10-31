@@ -30,8 +30,9 @@ A preset runs for its worker's own length on the clock: start-up, the
 benchmark's loops as many times as the records show, and shutdown. The loops
 begin once the structures that build once have built: a repeating structure
 counts its interval from there, so its first build starts the first loop,
-whatever start-up's length. A worker that allocates more before its loops, as
-create_gc_cycles' workers do up to their first `gc.collect()` at 5,484 kB,
+whatever start-up's length, or comes its delay into it (ADR 0027). A worker
+that allocates more before its loops, as create_gc_cycles' workers do up to
+their first `gc.collect()` at 5,484 kB,
 gets a structure that builds once after start-up and ends where the records
 start the loops. Refcounting frees it as it ends, or later if the records'
 collections still find it: async_tree_io_tg's fourth finds it, and so does its

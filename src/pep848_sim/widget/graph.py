@@ -91,6 +91,8 @@ def graph(request: str) -> str:
                     "full_collections": structure.full_collections,
                     "built_in_frame": structure.built_in_frame,
                     "built_in_c": structure.built_in_c,
+                    "delay": structure.delay,
+                    "skips_while_busy": structure.skips_while_busy,
                     **sample(structure)._asdict(),
                 }
                 for structure in workload.structures

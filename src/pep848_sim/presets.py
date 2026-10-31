@@ -257,52 +257,57 @@ JSON_LOADS = Preset(
 # 50, and no element links back to its parent.
 _XML_TREE = 322
 _XML_SHAPE = Hierarchy(branches=50)
-# Records: a parse allocates 360 kB, 72 B an element where ADR 0002 counts 64 B a
-# real object. Each parse's slot on the clock holds its tree, then churn for the
-# rest, as a build allocates its objects alone. The workers' collections come six
-# parses apart while they parse, 2,162 kB, as each waits for the parse under way
-# to return (ADR 0022).
-_XML_SLOT = 360
-# Records: building a value's own tree, serialising it and writing it allocate
-# 3,864 kB before its first parse. The workers' collections come threshold0 kB
-# apart there.
-_XML_PYTHON = 3_864
-# Records: the workers' third collection examines 9,199 real objects at 6,000 kB,
-# start-up's last and the whole tree, so the tree builds with 1 kB of churn after
-# each object.
-_XML_TREE_CHURN = 1
-_XML_TREE_BUILD = _XML_TREE * (1 + _XML_TREE_CHURN)
-# Records: a worker's values run 25,468 kB each. A value takes 71 slots, 25,560 kB,
-# so that each value's parses fall in the same slots. pyperf runs a warmup and
-# three values a worker, one loop each.
-_XML_VALUE = 71 * _XML_SLOT
+# Records: on the reference build, build_xml_tree allocates 359 kB, 72 B an element
+# where ADR 0002 counts 64 B a real object: 1 kB of churn after every ninth object.
+_XML_TREE_CHURN = Fraction(1, 9)
+# Records: a parse allocates 360 kB. Each parse's slot on the clock holds its tree,
+# then churn for the rest, as a build allocates its objects alone. The workers'
+# collections come six parses apart while they parse, 2,162 kB, as each waits for
+# the parse under way to return (ADR 0022). Slots of 359 kB keep the run's within
+# 60 kB of the workers' over the run.
+_XML_SLOT = 359
+# Records: on the reference build, a value builds its tree, serialises it and writes
+# it, 2,282 kB, parses 60 times, 21,620 kB, and serialises the last two parsed
+# trees, 1,920 kB: the workers' values run 25,826 kB each. A value takes 72 slots,
+# 25,848 kB, so that each value's parses fall in the same slots. pyperf runs a
+# warmup and three values a worker, one loop each.
+_XML_VALUE = 72 * _XML_SLOT
 _XML_VALUES = 4
-# Code: tostring's and write's lists and tuples, which go as each call returns.
-# Records: the workers' fourth collection examines 1,029 real objects at 8,000 kB,
-# 30 kB of churn after each. They fill the rest of the value's Python.
-_XML_SERIALISING_CHURN = 30
-_XML_SERIALISING = StructureParameters(
-    shape=Chains(width=16),
-    size=(_XML_PYTHON - _XML_TREE_BUILD) // (1 + _XML_SERIALISING_CHURN),
-    root="frame",
-    lifetime=0,
-    rebuild_interval=_XML_VALUE,
-    build_churn=_XML_SERIALISING_CHURN,
-)
+# Code: tostring's and write's lists and generators, which go as each call returns.
+# Records: on the reference build, the collection during them finds 66 real objects
+# besides the tree, 4 simulated ones, with the rest of their kB as churn.
+_XML_SERIALISED = 4
+
+
+def _xml_serialising(length: int, delay: int = 0) -> StructureParameters:
+    """`length` kB of serialising, `delay` kB into each value."""
+    return StructureParameters(
+        shape=Chains(width=16),
+        size=_XML_SERIALISED,
+        root="frame",
+        lifetime=0,
+        rebuild_interval=_XML_VALUE,
+        build_churn=Fraction(length - _XML_SERIALISED, _XML_SERIALISED),
+        delay=delay,
+    )
+
+
+# Records: serialising and writing the value's own tree, after it has built.
+_XML_SERIALISING = _xml_serialising(2_282 - 359)
+# Records: the parses start as write returns, 2,282 kB into each value. Their
+# slots start at 2,410 kB, which puts each value's tree where the workers' falls
+# against the young collection 2,000 kB past the last parse: 65 kB before it in
+# the second value, and 294 and 655 kB after it in the third and the fourth.
+_XML_PARSES = 2_410
 # Code: each parsed tree goes as the next parse but one returns, two slots on, and
-# the collection that waits for that parse still finds it. A value's first parse
-# starts as soon as the value has built and serialised its own tree, 123 kB ahead
-# of its slot, so its tree lives that much longer to see the third parse return,
-# and the rest as long. Records: the workers' gen 0 collections examine three
-# parsed trees while they parse, 15,480 real objects.
-_XML_PARSED_LIFETIME = (
-    2 * _XML_SLOT + -(_XML_TREE_BUILD + _XML_SERIALISING.build_length) % _XML_SLOT + 1
-)
+# the collection that waits for that parse still finds it. Records: the workers'
+# gen 0 collections examine three parsed trees while they parse, 15,480 real
+# objects.
+_XML_PARSED_LIFETIME = 2 * _XML_SLOT + 1
+# Code: bench_parse serialises the last two parsed trees as the 60th parse returns.
+_XML_TAIL = _xml_serialising(1_920, delay=_XML_PARSES + 59 * _XML_SLOT + _XML_TREE)
 # Records: the workers' third collection frees 36 real objects, where the other
-# benchmarks' free 3: xml.etree's imports let go of cycles of their own. Their
-# first late collection starts at 10,215 to 10,229 kB and examines three parsed
-# trees, so it follows their third parse, and their parses start at about 9,150
-# kB. Their first value starts at 5,284 kB, as soon as these have built.
+# benchmarks' free 3: xml.etree's imports let go of cycles of their own.
 _XML_GARBAGE = StructureParameters(
     shape=Tree(),
     size=2,
@@ -311,9 +316,13 @@ _XML_GARBAGE = StructureParameters(
     rebuild_interval=None,
     build_churn=_START_UP.late_churn,
 )
+# Records: the workers' fourth collection, at 8,002 kB, examines 1,029 real objects,
+# the first value's tree's last 60 simulated ones and the serialising's. The tree
+# ends 67 kB past their third, at 6,001 kB, so it starts at 5,709 kB, after what
+# pyperf allocates to start the benchmark.
+_XML_SET_UP = _START_UP.set_up(5_709 - _START_UP.length - _XML_GARBAGE.build_length)
 # Records: the workers start shutdown at 109,612 kB, past their last value. pyperf
-# and the last value's serialising allocate the rest, which the run takes as the
-# start of a fifth value.
+# allocates the rest, which the run takes as the start of a fifth value.
 _XML_SHUTDOWN = 109_612
 
 XML_ETREE_PARSE = Preset(
@@ -347,10 +356,9 @@ XML_ETREE_PARSE = Preset(
                 build_churn=_XML_TREE_CHURN,
             ),
             _XML_SERIALISING,
-            # Code: the parsed trees, from the file and from the bytes in turn. A
-            # value's first parse waits for its own tree and runs into the next
-            # slot, which it takes, so a value parses 60. The C accelerator's
-            # parser builds each tree in C.
+            # Code: the parsed trees, from the file and from the bytes in turn, 60 a
+            # value. The C accelerator's parser builds each tree in C. A slot that
+            # comes while the value serialises parses nothing (ADR 0027).
             StructureParameters(
                 shape=_XML_SHAPE,
                 size=_XML_TREE,
@@ -359,8 +367,12 @@ XML_ETREE_PARSE = Preset(
                 rebuild_interval=_XML_SLOT,
                 build_churn=0,
                 built_in_c=True,
+                delay=_XML_PARSES,
+                skips_while_busy=True,
             ),
+            _XML_TAIL,
             _XML_GARBAGE,
+            _XML_SET_UP,
         ),
         seed=848,
         shutdown=True,

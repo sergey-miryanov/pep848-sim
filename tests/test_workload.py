@@ -73,7 +73,8 @@ ROOTS: tuple[Root, ...] = ("module", "frame")
 def structure_parameters(draw: st.DrawFn, own: bool = True) -> StructureParameters:
     """A small structure of any shape, a reader's own too unless `own` is false,
     and either root, sys's built in a frame or not: long-lived, built once and
-    dropped, or repeating."""
+    dropped, or repeating, after a delay or not and skipping while another builds
+    or not."""
     size = draw(st.integers(min_value=1, max_value=6))
     build_churn = Fraction(draw(st.integers(min_value=0, max_value=8)), 4)
     build = size + size * build_churn.numerator // build_churn.denominator
@@ -88,18 +89,19 @@ def structure_parameters(draw: st.DrawFn, own: bool = True) -> StructureParamete
         st.builds(Rings, st.integers(1, 4)),
     ]
     root = draw(st.sampled_from(ROOTS))
+    repeats = kind == "repeating"
     return StructureParameters(
         shape=draw(st.one_of(*shapes, *([own_shapes()] if own else []))),
         size=size,
         root=root,
         lifetime=None if kind == "long-lived" else draw(st.integers(1, 60)),
-        rebuild_interval=(
-            draw(st.integers(build, build + 40)) if kind == "repeating" else None
-        ),
+        rebuild_interval=draw(st.integers(build, build + 40)) if repeats else None,
         build_churn=build_churn,
         full_collections=draw(st.booleans()),
         built_in_frame=root == "module" and draw(st.booleans()),
         built_in_c=draw(st.booleans()),
+        delay=draw(st.integers(0, 40)) if repeats else 0,
+        skips_while_busy=repeats and draw(st.booleans()),
     )
 
 
@@ -473,8 +475,9 @@ def test_a_workload_runs_to_any_point_and_its_builds_never_overlap(
         assert last - first + 1 == structure.build_length
     interval = structures[0].rebuild_interval
     if len(structures) == 1 and interval is not None:
+        delay = structures[0].delay
         starts = [first for _, first, _ in builds]
-        assert starts == [k * interval + 1 for k in range(len(builds))]
+        assert starts == [delay + k * interval + 1 for k in range(len(builds))]
 
 
 def test_a_structure_that_falls_due_again_while_waiting_skips_that_rebuild() -> None:
@@ -498,6 +501,47 @@ def test_a_structure_that_falls_due_again_while_waiting_skips_that_rebuild() -> 
     # The short one falls due at 10, 20, 30, 40 and 50 while the long one builds,
     # and builds once after it.
     assert workload.builds == [(0, 1, 2), (1, 3, 52), (0, 53, 54), (0, 61, 62)]
+
+
+def repeating(
+    size: int, interval: int, *, delay: int = 0, skips_while_busy: bool = False
+) -> StructureParameters:
+    return StructureParameters(
+        shape=Chains(width=1),
+        size=size,
+        root="frame",
+        lifetime=1,
+        rebuild_interval=interval,
+        build_churn=0,
+        delay=delay,
+        skips_while_busy=skips_while_busy,
+    )
+
+
+def test_a_structure_first_falls_due_its_delay_into_the_loops() -> None:
+    heap = Heap(Collector(CollectorSettings(threshold0=1_000)))
+    structures = (repeating(2, 10, delay=25),)
+    parameters = WorkloadParameters(churn=QUIET, structures=structures, seed=848)
+    workload = Workload(heap, parameters)
+
+    workload.run_to(50)
+
+    assert workload.builds == [(0, 26, 27), (0, 36, 37), (0, 46, 47)]
+
+
+def test_a_structure_that_skips_while_busy_waits_for_its_next_rebuild() -> None:
+    heap = Heap(Collector(CollectorSettings(threshold0=1_000)))
+    short = repeating(2, 10, skips_while_busy=True)
+    structures = (repeating(50, 100), short)
+    parameters = WorkloadParameters(churn=QUIET, structures=structures, seed=848)
+    workload = Workload(heap, parameters)
+
+    workload.run_to(70)
+
+    # The short one skips the rebuild that falls due at 0 while the long one
+    # waits, and those at 10 to 40 while it builds. The long one ends as the one
+    # at 50 falls due.
+    assert workload.builds == [(0, 1, 50), (1, 51, 52), (1, 61, 62)]
 
 
 def test_a_collection_follows_the_let_gos_of_the_kb_before_it() -> None:

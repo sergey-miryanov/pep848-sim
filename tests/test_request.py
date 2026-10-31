@@ -121,13 +121,23 @@ def test_a_request_runs_a_threshold1_below_1_under_both_collectors(
     assert records(incremental) == records(one)
 
 
-@pytest.mark.parametrize("flag", ["built_in_frame", "built_in_c"])
-def test_a_request_from_before_a_flag_opens_and_is_written_with_it(flag: str) -> None:
+@pytest.mark.parametrize(
+    ("field", "default"),
+    [
+        ("built_in_frame", False),
+        ("built_in_c", False),
+        ("delay", 0),
+        ("skips_while_busy", False),
+    ],
+)
+def test_a_request_from_before_a_field_opens_and_is_written_with_it(
+    field: str, default: int | bool
+) -> None:
     request = parse(FIXED)
 
-    assert [getattr(s, flag) for s in request.workload.structures] == [False, False]
+    assert [getattr(s, field) for s in request.workload.structures] == [default] * 2
     written = json.loads(dump(request))["workload"]["structures"]
-    assert [s[flag] for s in written] == [False, False]
+    assert [s[field] for s in written] == [default] * 2
 
 
 def test_a_request_carries_its_constants_to_both_runs() -> None:
