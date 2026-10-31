@@ -6,6 +6,7 @@ reference branch triggers its `-X gc=legacy` collector on gross kB allocated,
 as it does the incremental collector. The simulator models the branch's
 legacy collector, so both collectors share one trigger and one `threshold0`
 in kB, and a comparison shows the two collection strategies with their
-triggers held equal. The simulator takes the branch over the PEP in this one
-place (see ADR 0003). Its legacy collector differs from the one CPython 3.15
-ships: by default its gen 0 is about 16 times larger.
+triggers held equal. The simulator takes the branch over the PEP here, as it
+does for the incremental collector (ADR 0024). Its legacy collector differs
+from the one CPython 3.15 ships: by default its gen 0 is about 16 times
+larger.

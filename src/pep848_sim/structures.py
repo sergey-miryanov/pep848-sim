@@ -126,9 +126,10 @@ class Graph:
     """A networkx graph in a module's globals, as connected_components loads it. The
     root, the globals, lies on a cycle with a function that reads them, as each
     function's __globals__ makes one. The root holds each node, and each node holds
-    the data of its edges to the `edges` nodes read before it, which it shares
-    with them. Nothing in the graph links back, so only the root's cycle keeps it:
-    once its module goes, all of it stays as cyclic garbage."""
+    the data of its `edges` edges, each of which it shares with a node read
+    anywhere before it, as a file of edges names its nodes in no order. Nothing in
+    the graph links back, so only the root's cycle keeps it: once its module goes,
+    all of it stays as cyclic garbage."""
 
     edges: int
 
@@ -153,9 +154,17 @@ class Graph:
             return [(0, i)]
         holder = 2 + node * span
         links = [(holder, i)]
-        if edge <= node:
-            links.append((holder - edge * span, i))
+        if node:
+            links.append((2 + _scramble(i) % node * span, i))
         return links
+
+
+def _scramble(i: int) -> int:
+    """i's bits mixed, the same on every run: splitmix64's finaliser."""
+    z = (i + 0x9E3779B97F4A7C15) % 2**64
+    z = (z ^ z >> 30) * 0xBF58476D1CE4E5B9 % 2**64
+    z = (z ^ z >> 27) * 0x94D049BB133111EB % 2**64
+    return z ^ z >> 31
 
 
 @dataclass(frozen=True)

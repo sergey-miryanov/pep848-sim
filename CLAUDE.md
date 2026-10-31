@@ -11,6 +11,6 @@
   amend it, or ask.
 - Run all prose through the `/stop-slop` skill before it lands, as
   _Prose_ in [`CONTRIBUTING.md`](CONTRIBUTING.md) says.
-- The incremental collector follows the PEP's pseudocode (ADR 0003) and the
-  legacy collector follows the reference branch (ADR 0004). Do not "fix"
-  either one toward the other.
+- Both collectors follow the reference branch: the incremental one (ADR
+  0024) and the legacy one (ADR 0004). Do not "fix" either one toward the
+  PEP's pseudocode.

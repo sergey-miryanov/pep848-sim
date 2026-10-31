@@ -42,7 +42,7 @@ class CollectorSettings:
 class Constants:
     """The collector constants, which no Python API changes, and the size the
     simulator assumes for a real object. The defaults are the PEP's and the
-    reference branch's (ADR 0003, ADR 0004), and ADR 0002's 64 B."""
+    reference branch's (ADR 0024, ADR 0004), and ADR 0002's 64 B."""
 
     # The incremental collector's work budget before its first collection, in
     # real objects, as the pseudocode gives it.

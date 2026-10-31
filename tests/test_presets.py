@@ -252,35 +252,43 @@ def test_async_tree_io_tg_runs_leave_no_cyclic_garbage(
     assert freed == start_up_garbage(ASYNC_TREE_IO_TG)
 
 
-def test_connected_components_marks_its_graph_a_budget_at_a_time() -> None:
-    """The module holds the graph from the start, so sys reaches it, and each old
-    collection marks no more than the young collection before it moved in."""
+def test_connected_components_takes_its_graph_in_one_increment() -> None:
+    """read_adjlist's frame holds the graph, so sys reaches none of it, and one
+    increment takes all of it pending. It comes in a sweep in which young objects
+    carry pending's tag, so it takes the young nodes and edges the graph's old
+    nodes hold, and the five young collections after it find nothing (ADR 0024)."""
     records = run_preset(CONNECTED_COMPONENTS, IncrementalCollector)
 
     old = [r for r in records if r.kind == "old"]
-    young = [r for r in records if r.kind == "young"]
+    large = max(old, key=lambda r: r.survived + r.freed)
+    after = records[records.index(large) + 1 :]
+    young = [r for r in after if r.kind == "young"]
 
-    assert max(r.marked for r in old) == max(r.survived for r in young)
-    assert max(r.survived + r.freed for r in old) < CollectorSettings().threshold0
+    most = max(r.survived for r in records if r.kind == "young")
+    assert large.survived > 4 * most
+    assert [r.survived + r.freed for r in young[:5]] == [0] * 5
+    assert young[5].survived
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
-def test_connected_components_frees_its_graph_with_its_module_at_shutdown(
+def test_connected_components_frees_its_graph_as_its_frames_return(
     collector: type[Collector],
 ) -> None:
     graph = CONNECTED_COMPONENTS.workload.structures[7]
 
     *automatic, first, second, third = run_preset(CONNECTED_COMPONENTS, collector)
 
-    # The walks make no cycles, and the graph stays in its module's globals, so
-    # the collections before shutdown and shutdown's first free the trees start-up
-    # let go of and nothing more. Shutdown's first full collection comes while the
-    # modules still hold the graph and the start-up trees. The second frees them,
-    # which their cycles keep once the modules go, and leaves the third nothing.
+    # The walks make no cycles, and read_adjlist's frame holds the graph, so the
+    # collections before shutdown free the trees start-up let go of and nothing
+    # more. The worker's frames have returned by shutdown's first full collection,
+    # which frees the graph its root's cycle keeps. The second frees start-up's
+    # trees, which their cycles keep once the modules go, and leaves the third
+    # nothing.
     assert [first.kind, second.kind, third.kind] == ["shutdown"] * 3
-    freed = sum(record.freed for record in automatic) + first.freed
+    freed = sum(record.freed for record in automatic)
     assert freed == start_up_garbage(CONNECTED_COMPONENTS)
-    assert second.freed == graph.size + start_up_trees(CONNECTED_COMPONENTS)
+    assert first.freed == graph.size
+    assert second.freed == start_up_trees(CONNECTED_COMPONENTS)
     assert third.freed == 0
 
 

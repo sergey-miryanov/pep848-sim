@@ -501,11 +501,11 @@ _GRAPH = 1_424_118 // 16
 _GRAPH_SHAPE = Graph(edges=2)
 # Code: the graph, a global of the benchmark's module until shutdown.
 # graph = networkx.read_adjlist(...) stores it once read_adjlist returns, and
-# read_adjlist's frame holds it while it loads. Records: the branch's old collections
-# take it about 50,000 real objects at a time, a budget each, but for one increment
-# of 231,870 at the 30th. The module holds it from the start here, so the old
-# collections mark it a budget at a time. A frame would let one increment take all
-# of it pending at 96 MB, 446,256 real objects.
+# read_adjlist's frame holds it while it loads, which here is to shutdown. Records:
+# the branch's old collections take it about 50,000 real objects at a time, a
+# budget each, but for one increment of 231,870 at the 30th, in a sweep that takes
+# young objects too (ADR 0024): the graph so far, and the young nodes and edges its
+# old nodes hold. The next five young collections examine 6,600 to 13,600 each.
 # Records: the legacy collector's gen 0 collections examine 24,700 to 27,600 real
 # objects each while it loads, and the 63rd, at 126,005 kB, half as many. The load
 # ends there, so read_adjlist's lists, tuples and throwaway dicts come to 0.24 kB for
@@ -513,7 +513,7 @@ _GRAPH_SHAPE = Graph(edges=2)
 _GRAPH_LOAD = StructureParameters(
     shape=_GRAPH_SHAPE,
     size=_GRAPH,
-    root="module",
+    root="frame",
     lifetime=None,
     rebuild_interval=None,
     build_churn=Fraction(24, 100),

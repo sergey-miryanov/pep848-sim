@@ -213,22 +213,38 @@ def test_a_hierarchy_without_branches_is_refused() -> None:
         Hierarchy(branches=0)
 
 
-def test_a_graph_shares_each_edge_with_a_node_read_before() -> None:
+def test_a_graph_shares_each_edge_with_a_node_read_anywhere_before() -> None:
     collector = Collector()
     heap = Heap(collector)
 
     built(heap, long_lived(Graph(edges=2), 11, "module"))
 
+    # Three nodes are too few to spread over: b's and c's edges both fall to a.
     root, f, a, a1, a2, b, b1, b2, c, c1, c2 = list(collector.nursery)[1:]
     assert [heap.references(x) for x in (root, f, a, b, c)] == [
         (f, a, b, c),
         (root,),
-        (a1, a2, b1, c2),
-        (b1, b2, c1),
+        (a1, a2, b1, b2, c1, c2),
+        (b1, b2),
         (c1, c2),
     ]
     assert all(heap.references(x) == () for x in (a1, a2, b1, b2, c1, c2))
     assert heap.references(heap.module_root) == (root,)
+
+
+def test_a_late_nodes_edges_reach_back_across_the_whole_graph() -> None:
+    graph = Graph(edges=2)
+    # Nodes 9,000 to 9,999: the nodes their edges share, by number.
+    span = 3
+    shared = [
+        (source - 2) // span
+        for i in range(2 + 9_000 * span, 2 + 10_000 * span)
+        for source, _ in graph.links(i)[1:]
+    ]
+    assert len(shared) == 2_000
+    assert min(shared) < 500
+    assert max(shared) > 8_500
+    assert sum(node < 4_500 for node in shared) > 800
 
 
 @pytest.mark.parametrize("root", ["module", "frame"])

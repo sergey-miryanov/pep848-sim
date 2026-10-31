@@ -79,7 +79,7 @@ The objects a worker's first collection examines under the legacy collector
 set start-up's size, where the heap that collection reads would count more. A
 collection untracks a tuple that holds only objects it never sees, without
 examining it, and by start-up's end a third of its heap has gone that way. The
-simulator has no untracking, and the PEP's pseudocode has none (ADR 0003), so
+simulator has no untracking, and the PEP's pseudocode has none, so
 start-up's build churns take in those tuples: they move the allocation clock,
 and leave the heap before a collection sees them. The branch's incremental
 collector examines nothing at start-up, and keeps them tracked until a
@@ -124,7 +124,7 @@ comment says neither fixes it yet.
   would find 3.4% cyclic garbage where its benchmark's find 5.4%.
 - Untracking in the simulator: a share of each structure that a collection
   untracks without examining it. It needs a workload parameter, and a step the
-  PEP's pseudocode does not have (ADR 0003).
+  PEP's pseudocode does not have.
 - A start-up for each preset: the five agree within 5% through their first
   collection, and through their second but for connected_components'. Past
   the second the records cannot tell start-up from the benchmark's own work.

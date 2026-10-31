@@ -170,8 +170,8 @@ const draw = () => {
       Object.assign(document.createElement("h2"), { textContent: "work budget at each collection's start" }),
       Object.assign(document.createElement("p"), {
         className: "note",
-        textContent: "The branch's old_work and the simulator's budget differ by design (ADR 0003): the branch"
-          + " settles the budget once per old collection, the PEP's pseudocode after each increment.",
+        textContent: "The branch's old_work. The simulator settles its budget as the branch does, once per"
+          + " old collection (ADR 0024).",
       }),
       row,
     );
