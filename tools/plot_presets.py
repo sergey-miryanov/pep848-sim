@@ -135,7 +135,8 @@ def _compact(value: int | float | str | None) -> int | float | None:
 
 def plot() -> dict[str, object]:
     """Each preset under each collector, its benchmark's workers and its run, as
-    plot.json holds them."""
+    plot.json holds them, with the real objects one simulated object stands for,
+    the least a run's count can move by (ADR 0002)."""
     constants = Constants()
     data = workers_data()
     plots: list[dict[str, object]] = []
@@ -153,7 +154,7 @@ def plot() -> dict[str, object]:
                     "run": columns(points(run, collector)),
                 }
             )
-    return {"panels": PANELS, "plots": plots}
+    return {"panels": PANELS, "object": constants.real(1), "plots": plots}
 
 
 def write(path: Path) -> None:

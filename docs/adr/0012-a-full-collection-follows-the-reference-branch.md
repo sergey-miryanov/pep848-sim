@@ -1,10 +1,10 @@
 # A full collection follows the reference branch
 
 PEP 848 says `gc.collect()`, with no argument or with 2, collects the whole
-heap, and gives no pseudocode for it. The incremental collector follows the
-PEP's pseudocode (ADR 0003), so where the pseudocode stops, the simulator
-follows the reference branch's `gc_collect_incremental_full` in
-`Python/gc.c`. Every object joins the pending space. The collector moves what
+heap, and gives no pseudocode for it. The incremental collector followed the
+PEP's pseudocode then (ADR 0003, since superseded by ADR 0024), so where the
+pseudocode stopped, the simulator followed the reference branch's
+`gc_collect_incremental_full` in `Python/gc.c`. Every object joins the pending space. The collector moves what
 `sys` reaches to the visited space without examining it, as an old collection
 marks, then examines the rest and moves the survivors to visited too. The work
 budget starts again from 0, and with pending empty, the next old collection

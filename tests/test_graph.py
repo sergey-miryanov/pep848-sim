@@ -6,7 +6,16 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from pep848_sim.collectors.collector import CollectorSettings
-from pep848_sim.structures import Chains, Graph, Hierarchy, Own, Rings, Shape, Tree
+from pep848_sim.structures import (
+    Amazon0302,
+    Chains,
+    Graph,
+    Hierarchy,
+    Own,
+    Rings,
+    Shape,
+    Tree,
+)
 from pep848_sim.widget.graph import graph, sample
 from pep848_sim.widget.request import Request, dump
 from pep848_sim.workload import WorkloadParameters
@@ -74,6 +83,7 @@ def test_a_sample_of_an_own_shape_keeps_its_first_forty_objects() -> None:
         st.just(Tree()),
         st.builds(Hierarchy, branches=st.integers(1, 8)),
         st.builds(Graph, edges=st.integers(0, 4)),
+        st.just(Amazon0302()),
         st.builds(Rings, length=st.integers(1, 8)),
     ),
     st.integers(min_value=1, max_value=200),
@@ -117,12 +127,14 @@ def test_a_requests_graph_holds_each_structure_and_the_churn() -> None:
     assert [tuple(s[field] for field in fields) for s in drawn["structures"]] == [
         ("a tree with parent pointers", 8, "frame", 0, None, False, False),
         ("16 chains", 121, "module", None, None, False, False),
-        ("a tree with parent pointers", 790, "module", None, None, False, False),
+        ("a tree with parent pointers", 401, "module", None, None, False, False),
         ("a tree with parent pointers", 5, "frame", 0, None, False, False),
+        ("a tree with parent pointers", 389, "module", None, None, False, False),
         ("16 chains", 232, "frame", None, None, False, False),
-        ("a hierarchy of 50 branches", 322, "frame", 21_696, 25_560, False, False),
-        ("a hierarchy of 50 branches", 322, "frame", 817, 360, False, True),
-        ("16 chains", 165, "frame", 0, None, False, False),
+        ("a hierarchy of 50 branches", 322, "frame", 25_560, 25_560, False, False),
+        ("16 chains", 103, "frame", 0, 25_560, False, False),
+        ("a hierarchy of 50 branches", 322, "frame", 844, 360, False, True),
+        ("a tree with parent pointers", 2, "frame", 0, None, False, False),
     ]
     assert all(s["objects"] and s["links"] for s in drawn["structures"])
     assert drawn["churn"] == {
@@ -141,6 +153,7 @@ def test_a_requests_graph_holds_each_structure_and_the_churn() -> None:
         (Tree(), "a tree with parent pointers"),
         (Hierarchy(branches=6), "a hierarchy of 6 branches"),
         (Graph(edges=2), "a graph of 2 edges a node"),
+        (Amazon0302(), "networkx's amazon0302 graph"),
         (Rings(length=1), "rings of 1 object"),
         (Rings(length=21), "rings of 21 objects"),
         (Own(DOUBLY_LINKED), "a shape of your own"),

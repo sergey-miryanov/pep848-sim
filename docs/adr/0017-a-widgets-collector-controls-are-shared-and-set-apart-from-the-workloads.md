@@ -14,7 +14,7 @@ Under threshold0 and threshold1 the widget says what they make of the
 incremental collector's young generation: a nursery of two half-spaces of
 threshold0 kB, and threshold1 half-spaces of aging, as threshold1 / 2 aging
 spaces rounded up. The sizes follow from the thresholds, as the PEP has them
-(ADR 0003), so nothing new reaches the simulator. Only the legacy collector
+(ADR 0024), so nothing new reaches the simulator. Only the legacy collector
 reads threshold2, and its label says so; a reader who moves it sees the
 incremental column stay as it was.
 
@@ -42,7 +42,7 @@ objects by the thousand; the multiplier from 0 to 10; the ratio from 0% to
 
 - The nursery's and the aging generation's sizes as controls of their own: a
   reader could size them apart from the thresholds, but the collector would no
-  longer be the PEP's (ADR 0003).
+  longer be the PEP's (ADR 0024).
 - Each entry listing the collector's controls: six copies of one list, and an
   entry that left one out would lose it.
 - The constants on the playground alone: the home page would show what Python

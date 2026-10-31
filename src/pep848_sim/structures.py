@@ -7,10 +7,13 @@ objects; the root is object 0.
 
 import math
 import traceback
+import zlib
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from fractions import Fraction
+from functools import cache
+from pathlib import Path
 from types import FunctionType
 from typing import Any, Literal, get_args
 
@@ -126,9 +129,10 @@ class Graph:
     """A networkx graph in a module's globals, as connected_components loads it. The
     root, the globals, lies on a cycle with a function that reads them, as each
     function's __globals__ makes one. The root holds each node, and each node holds
-    the data of its edges to the `edges` nodes read before it, which it shares
-    with them. Nothing in the graph links back, so only the root's cycle keeps it:
-    once its module goes, all of it stays as cyclic garbage."""
+    the data of its `edges` edges, each of which it shares with a node read
+    anywhere before it, as a file of edges names its nodes in no order. Nothing in
+    the graph links back, so only the root's cycle keeps it: once its module goes,
+    all of it stays as cyclic garbage."""
 
     edges: int
 
@@ -153,9 +157,90 @@ class Graph:
             return [(0, i)]
         holder = 2 + node * span
         links = [(holder, i)]
-        if edge <= node:
-            links.append((holder - edge * span, i))
+        if node:
+            links.append((2 + _scramble(i) % node * span, i))
         return links
+
+
+# Amazon0302's objects before the file's own: G, G.graph, G._node, G.__dict__,
+# G.__networkx_cache__ and G._adj, in the order networkx makes them.
+AMAZON0302_HEAD = 6
+# The graph's simulated objects: read_adjlist's 1,424,118 real ones (ADR 0002).
+AMAZON0302_SIZE = 1_424_118 // 16
+# What holds each object past the head, as tools/amazon0302.py writes it.
+AMAZON0302_LINKS = Path(__file__).with_name("amazon0302.links")
+
+
+@dataclass(frozen=True)
+class Amazon0302:
+    """The Amazon co-purchasing graph as networkx 3.4.2's read_adjlist builds it
+    from bm_networkx's amazon0302.txt.gz. G holds G.graph and G._node until setting
+    G._node makes G.__dict__, which takes both over and then holds the cache and
+    G._adj. Past those six, each object stands for one real object in 16 of the
+    file's, in the order read_adjlist makes them: an adjacency dict, which _adj
+    holds; an attribute dict, which _node holds; or an edge's data dict, which its
+    endpoints' adjacency dicts hold. Nothing links back, so a dropped graph leaves
+    no cyclic garbage. A larger structure repeats the file's pattern."""
+
+    def cyclic_garbage(self, size: int) -> int:
+        return 0
+
+    def links(self, i: int) -> list[tuple[int, int]]:
+        if not i:
+            return []
+        if i < 3:
+            return [(0, i)]
+        if i == 3:
+            return [(0, 3), (3, 1), (3, 2)]
+        if i < AMAZON0302_HEAD:
+            return [(3, i)]
+        table = _amazon0302()
+        held = table[(i - AMAZON0302_HEAD) % len(table)]
+        if held == ():
+            return [(AMAZON0302_HEAD - 1, i)]
+        if held == (0,):
+            return [(2, i)]
+        return [(i - back, i) for back in held]
+
+    def unlinks(self, i: int) -> list[tuple[int, int]]:
+        """The links object i takes over: G.__dict__ takes G.graph and G._node from
+        G."""
+        return [(0, 1), (0, 2)] if i == 3 else []
+
+
+@cache
+def _amazon0302() -> list[tuple[int, ...]]:
+    """What holds each of Amazon0302's objects past the head: () for _adj, (0,)
+    for _node, or how many objects back an edge's one or two holders are."""
+    data = zlib.decompress(AMAZON0302_LINKS.read_bytes())
+    numbers: list[int] = []
+    n = shift = 0
+    for byte in data:
+        n |= (byte & 0x7F) << shift
+        shift += 7
+        if byte < 0x80:
+            numbers.append(n)
+            n = shift = 0
+    held: list[tuple[int, ...]] = []
+    k = 0
+    while k < len(numbers):
+        kind = numbers[k]
+        k += 1
+        if kind < 2:
+            held.append(() if kind == 0 else (0,))
+            continue
+        near, farther = kind - 1, numbers[k]
+        k += 1
+        held.append((near, near + farther) if farther else (near,))
+    return held
+
+
+def _scramble(i: int) -> int:
+    """i's bits mixed, the same on every run: splitmix64's finaliser."""
+    z = (i + 0x9E3779B97F4A7C15) % 2**64
+    z = (z ^ z >> 30) * 0xBF58476D1CE4E5B9 % 2**64
+    z = (z ^ z >> 27) * 0x94D049BB133111EB % 2**64
+    return z ^ z >> 31
 
 
 @dataclass(frozen=True)
@@ -282,7 +367,13 @@ def _raised(error: Exception, call: str = "") -> str:
     return f"{call} raised {name}{where}: {error}"
 
 
-type Shape = Chains | Tree | Hierarchy | Graph | Rings | Own
+type Shape = Chains | Tree | Hierarchy | Graph | Amazon0302 | Rings | Own
+
+
+def unlinks(shape: Shape, i: int) -> list[tuple[int, int]]:
+    """The links object i takes over from earlier objects, which they let go once
+    it holds what they held."""
+    return shape.unlinks(i) if isinstance(shape, Amazon0302) else []
 
 
 @dataclass(frozen=True)
@@ -372,8 +463,11 @@ class Build:
         x = heap.allocate()
         objects.append(x)
         i = len(objects) - 1
-        for source, target in self._parameters.shape.links(i):
+        shape = self._parameters.shape
+        for source, target in shape.links(i):
             heap.link(objects[source], objects[target])
+        for source, target in unlinks(shape, i):
+            heap.unlink(objects[source], objects[target])
         if i:
             heap.let_go_frame_root(x)
         elif self._parameters.root == "module" and not self._parameters.built_in_frame:

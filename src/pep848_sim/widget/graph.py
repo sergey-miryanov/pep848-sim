@@ -9,6 +9,7 @@ from collections import defaultdict
 from typing import NamedTuple
 
 from pep848_sim.structures import (
+    Amazon0302,
     Chains,
     Graph,
     Hierarchy,
@@ -16,6 +17,7 @@ from pep848_sim.structures import (
     Shape,
     StructureParameters,
     Tree,
+    unlinks,
 )
 from pep848_sim.widget.request import parse
 
@@ -40,9 +42,11 @@ def sample(structure: StructureParameters) -> Sample:
     """The structure's first object, then the first children of each object the
     sample keeps, a level at a time, as far as its shape's extent allows."""
     shape = structure.shape
-    links = [
-        link for i in range(min(structure.size, _REACH)) for link in shape.links(i)
-    ]
+    links: list[tuple[int, int]] = []
+    for i in range(min(structure.size, _REACH)):
+        links += shape.links(i)
+        for taken in unlinks(shape, i):
+            links.remove(taken)
     children: dict[int, list[int]] = defaultdict(list)
     for source, target in links:
         children[source].append(target)
@@ -111,6 +115,9 @@ def _extent(shape: Shape) -> tuple[int, int, int]:
         return 2, 3, _REACH
     if isinstance(shape, Hierarchy | Graph):
         return 6, 2, _REACH
+    # Past G and its __dict__, as far as the nodes and edges _node and _adj hold.
+    if isinstance(shape, Amazon0302):
+        return 6, 4, _REACH
     if isinstance(shape, Own):
         return 4, _OWN_MOST, _OWN_MOST
     # Each ring as far as six objects round it.
@@ -127,6 +134,8 @@ def _label(shape: Shape) -> str:
         return f"a hierarchy of {shape.branches} branches"
     if isinstance(shape, Graph):
         return f"a graph of {shape.edges} edges a node"
+    if isinstance(shape, Amazon0302):
+        return "networkx's amazon0302 graph"
     if isinstance(shape, Own):
         return "a shape of your own"
     return f"rings of {shape.length} object{'' if shape.length == 1 else 's'}"

@@ -10,6 +10,7 @@ from pep848_sim.collectors.heap import Heap
 from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.collectors.legacy import LegacyCollector
 from pep848_sim.structures import (
+    Amazon0302,
     Chains,
     Graph,
     Hierarchy,
@@ -81,6 +82,7 @@ def structure_parameters(draw: st.DrawFn, own: bool = True) -> StructureParamete
         st.just(Tree()),
         st.builds(Hierarchy, st.integers(1, 4)),
         st.builds(Graph, st.integers(0, 3)),
+        st.just(Amazon0302()),
         st.builds(Rings, st.integers(1, 4)),
     ]
     root = draw(st.sampled_from(ROOTS))

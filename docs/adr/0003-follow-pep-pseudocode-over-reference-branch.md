@@ -1,5 +1,7 @@
 # The incremental collector follows the PEP's pseudocode where the reference branch differs
 
+Superseded by ADR 0024: the incremental collector now follows the branch.
+
 The legacy collector is the exception: see ADR 0004.
 
 The reference implementation (`Python/gc.c` on `incremental-gc-update-2`)

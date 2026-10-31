@@ -5,7 +5,7 @@ import pytest
 
 from benchmarks import Tally
 from compare_presets import COLLECTORS, benchmark, run_preset, tally
-from pep848_sim.collectors.collector import Collector, CollectorSettings
+from pep848_sim.collectors.collector import Collector, CollectorSettings, Record
 from pep848_sim.collectors.heap import Heap
 from pep848_sim.collectors.incremental import IncrementalCollector
 from pep848_sim.collectors.legacy import LegacyCollector
@@ -35,6 +35,14 @@ def start_up_garbage(preset: Preset) -> int:
     structure and its fourth."""
     structures = preset.workload.structures
     return sum(s.shape.cyclic_garbage(s.size) for s in (structures[0], structures[3]))
+
+
+def start_up_trees(preset: Preset) -> int:
+    """The cyclic garbage of the two trees under the module root, which start-up
+    builds before its first collection and after it: its third structure and its
+    fifth."""
+    structures = preset.workload.structures
+    return sum(s.shape.cyclic_garbage(s.size) for s in (structures[2], structures[4]))
 
 
 def test_each_preset_is_named_for_its_benchmark() -> None:
@@ -86,7 +94,7 @@ def test_create_gc_cycles_runs_its_loops_between_start_up_and_shutdown(
     collector: type[Collector],
 ) -> None:
     preset = CREATE_GC_CYCLES
-    _, _, start_up_tree, _, _, rings, _ = preset.workload.structures
+    rings = preset.workload.structures[6]
 
     whole = run_preset(preset, collector)
 
@@ -95,7 +103,7 @@ def test_create_gc_cycles_runs_its_loops_between_start_up_and_shutdown(
     loops, shutdown = whole[first_loop:-3], whole[-3:]
     # The loops begin once the structures that build once have built.
     once = [s for s in preset.workload.structures if s.rebuild_interval is None]
-    assert loops[0].clock == sum(s.size * (1 + s.build_churn) for s in once)
+    assert loops[0].clock == sum(s.build_length for s in once)
     # gc.collect() comes too often for the runtime to start a collection once the
     # loops begin, and the last loop's second call ends the run.
     assert {record.kind for record in loops} == {"full"}
@@ -105,12 +113,12 @@ def test_create_gc_cycles_runs_its_loops_between_start_up_and_shutdown(
     rings_garbage = rings.shape.cyclic_garbage(rings.size)
     assert all(record.freed >= rings_garbage for record in loops[1::2])
     # The last loop freed its rings, so shutdown's first full collection finds no
-    # cyclic garbage the frames left. The second frees the start-up tree once the
+    # cyclic garbage the frames left. The second frees the start-up trees once the
     # modules go, and leaves the third none.
     assert [record.kind for record in shutdown] == ["shutdown"] * 3
     first, second, third = shutdown
     assert first.freed == 0
-    assert second.freed == start_up_tree.shape.cyclic_garbage(start_up_tree.size)
+    assert second.freed == start_up_trees(preset)
     assert sum(second.spaces_after) == second.reachable_after
     assert third.freed == 0
 
@@ -120,7 +128,6 @@ def test_json_loads_loops_leave_no_cyclic_garbage(
     collector: type[Collector],
 ) -> None:
     preset = JSON_LOADS
-    tree = preset.workload.structures[2]
 
     *automatic, first, second, third = run_preset(preset, collector)
 
@@ -133,9 +140,9 @@ def test_json_loads_loops_leave_no_cyclic_garbage(
     assert [first.kind, second.kind, third.kind] == ["shutdown"] * 3
     freed = sum(record.freed for record in automatic) + first.freed
     assert freed == start_up_garbage(preset)
-    # The second frees the start-up tree under sys once the modules go, and leaves
-    # the third nothing.
-    assert second.freed == tree.shape.cyclic_garbage(tree.size)
+    # The second frees the start-up trees under sys once the modules go, and
+    # leaves the third nothing.
+    assert second.freed == start_up_trees(preset)
     assert third.freed == 0
 
 
@@ -145,19 +152,20 @@ def test_xml_etree_parse_builds_a_tree_then_parses_60_in_each_value() -> None:
 
     workload.run_to(preset.run_length)
 
-    # Start-up's five structures and what comes before the values, the eighth,
-    # then each of the four values: its own tree, the sixth structure, and 60
-    # parses of it, the seventh.
+    # Start-up's six structures and the cycles xml.etree lets go of, the tenth,
+    # then each of the four values: its own tree, the seventh structure, its
+    # serialising, the eighth, and 60 parses of the tree, the ninth. A fifth
+    # value's tree builds as the run ends.
     built = [i for i, _, _ in workload.builds]
-    assert built == [0, 1, 2, 3, 4, 7, *[5, *[6] * 60] * 4]
-    # Each value ends as the next begins, and the run ends as a fifth one's tree
-    # builds.
-    tree = preset.workload.structures[5]
+    assert built == [0, 1, 2, 3, 4, 5, 9, *[6, 7, *[8] * 60] * 4, 6]
+    # Each value ends as the next begins, and the run ends while the fifth one
+    # serialises its tree.
+    tree, serialising = preset.workload.structures[6:8]
     assert tree.rebuild_interval is not None
-    starts = [first for i, first, _ in workload.builds if i == 5]
-    assert [b - a for a, b in pairwise(starts)] == [tree.rebuild_interval] * 3
-    fifth = starts[-1] + tree.rebuild_interval
-    assert fifth <= preset.run_length < fifth + tree.size * (1 + tree.build_churn)
+    starts = [first for i, first, _ in workload.builds if i == 6]
+    assert [b - a for a, b in pairwise(starts)] == [tree.rebuild_interval] * 4
+    python = tree.build_length + serialising.build_length
+    assert starts[-1] + tree.build_length <= preset.run_length < starts[-1] + python
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
@@ -169,7 +177,7 @@ def test_xml_etree_parse_collects_as_a_parse_ends_if_one_is_under_way(
     collecting = collector(CollectorSettings())
     workload = Workload(Heap(collecting), preset.workload)
     workload.run_to(preset.run_length)
-    parses = {last for i, _, last in workload.builds if i == 6}
+    parses = {last for i, _, last in workload.builds if i == 8}
     clocks = [0, *(r.clock for r in collecting.records)]
 
     gaps = [(b - a, b in parses) for a, b in pairwise(clocks)]
@@ -186,9 +194,9 @@ def test_xml_etree_parse_gen_0_collections_find_three_parsed_trees_as_it_parses(
 ):
     """Under the legacy collector, a gen 0 collection a parse holds back finds the
     tree it parsed and the two before it young, and one in a value's Python finds
-    less than a tree."""
+    the value's own tree at most, with start-up's last at the first."""
     preset = XML_ETREE_PARSE
-    parsed = preset.workload.structures[6].size
+    parsed = preset.workload.structures[8].size
     records = run_preset(preset, LegacyCollector)
     starts = [0, *(r.clock for r in records)]
     threshold0 = CollectorSettings().threshold0
@@ -203,29 +211,29 @@ def test_xml_etree_parse_gen_0_collections_find_three_parsed_trees_as_it_parses(
     on_time = [examined for examined, held in gen_0[2:] if not held]
     assert len(late) == 36
     assert all(3 * parsed <= examined < 4 * parsed for examined in late)
-    assert all(examined < parsed for examined in on_time)
+    assert all(examined < 2 * parsed for examined in on_time)
 
 
 def test_async_tree_io_tg_drops_each_runs_tree_before_the_next_run_starts() -> None:
     preset = ASYNC_TREE_IO_TG
-    tree, finished = preset.workload.structures[5:7]
+    tree, finished = preset.workload.structures[6:8]
     assert tree.lifetime is not None
     assert finished.lifetime is not None
     workload = Workload(Heap(LegacyCollector()), preset.workload)
 
     workload.run_to(preset.run_length)
 
-    # Start-up's five structures and the set-up, then the tree and what its tasks
+    # Start-up's six structures and the set-up, then the tree and what its tasks
     # keep as they finish, once a run, four times.
-    assert [i for i, _, _ in workload.builds] == [0, 1, 2, 3, 4, 7, *[5, 6] * 4]
-    trees = [(first, last) for i, first, last in workload.builds if i == 5]
-    finishes = [(first, last) for i, first, last in workload.builds if i == 6]
-    # Each run's tree goes while its tasks finish, and what they keep goes as the
-    # next run starts, the last as the worker ends.
+    assert [i for i, _, _ in workload.builds] == [0, 1, 2, 3, 4, 5, 8, *[6, 7] * 4]
+    trees = [(first, last) for i, first, last in workload.builds if i == 6]
+    finishes = [(first, last) for i, first, last in workload.builds if i == 7]
+    # Each run's tree goes while its tasks finish, and what they keep goes 2 MB
+    # before the next run starts, the last 2 MB before the worker ends.
     for (_, built), (first, last) in zip(trees, finishes, strict=True):
         assert built + 1 == first
         assert first < built + tree.lifetime < last
-    ends = [last + finished.lifetime for _, last in finishes]
+    ends = [last + finished.lifetime + 2_000 for _, last in finishes]
     assert ends == [*(first - 1 for first, _ in trees[1:]), preset.run_length]
 
 
@@ -244,35 +252,66 @@ def test_async_tree_io_tg_runs_leave_no_cyclic_garbage(
     assert freed == start_up_garbage(ASYNC_TREE_IO_TG)
 
 
-def test_connected_components_marks_its_graph_a_budget_at_a_time() -> None:
-    """The module holds the graph from the start, so sys reaches it, and each old
-    collection marks no more than the young collection before it moved in."""
+def test_connected_components_takes_node_then_adj_then_its_reader() -> None:
+    """The branch's first young collection of the graph leaves G._node, which
+    G.__dict__ took over from G, behind the nodes and edges it keeps in place, so
+    the sweep reaches _node first. Its increment at 48 MB takes the attribute
+    dicts so far, young ones too (ADR 0024). _adj's at 60 MB takes the adjacency
+    dicts and edges, but not the attribute dicts made since, which the young
+    collections after it find. read_adjlist's reader, older than the graph, waits
+    pending until the budget pays the increment back (ADR 0025)."""
     records = run_preset(CONNECTED_COMPONENTS, IncrementalCollector)
 
-    old = [r for r in records if r.kind == "old"]
-    young = [r for r in records if r.kind == "young"]
+    def work(r: Record) -> int:
+        return r.marked + r.survived + r.freed
 
-    assert max(r.marked for r in old) == max(r.survived for r in young)
-    assert max(r.survived + r.freed for r in old) < CollectorSettings().threshold0
+    first = [r for r in records if r.kind == "old" and r.sweep == 1]
+    largest = sorted(sorted(first, key=work)[-2:], key=lambda r: r.clock)
+    assert [r.clock for r in largest] == [48_000, 60_000]
+    young = [r for r in records if r.kind == "young" and 60_000 < r.clock < 80_000]
+    full = max(work(r) for r in records if r.kind == "young")
+    assert all(0 < work(r) < full / 3 for r in young)
+    ended = next(r for r in records if r.sweep == 2)
+    # The reader, and G, its __dict__ and the cache, which _adj's increment left.
+    reader = CONNECTED_COMPONENTS.workload.structures[8]
+    assert (ended.clock, work(ended)) == (96_000, reader.size + 3)
+
+
+def wrappers() -> list[int]:
+    """The cyclic garbage networkx's wrappers leave as the load starts and as the
+    walks start, connected_components' eighth structure and its eleventh."""
+    structures = CONNECTED_COMPONENTS.workload.structures
+    return [s.shape.cyclic_garbage(s.size) for s in (structures[7], structures[10])]
+
+
+def test_connected_components_young_collections_free_the_wrappers_cycles() -> None:
+    """As its workers' do: start-up's trees at 22 and 26 MB, read_adjlist's and
+    empty_graph's wrappers at 38 MB and connected_components' at 146 MB."""
+    records = run_preset(CONNECTED_COMPONENTS, IncrementalCollector)
+    freed = [(r.clock, r.freed) for r in records if r.kind == "young" and r.freed]
+    load, walk = wrappers()
+    assert freed[2:] == [(38_000, load), (146_000, walk)]
+    assert sum(f for _, f in freed[:2]) == start_up_garbage(CONNECTED_COMPONENTS)
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
-def test_connected_components_frees_its_graph_with_its_module_at_shutdown(
+def test_connected_components_frees_its_graph_as_its_frames_return(
     collector: type[Collector],
 ) -> None:
-    _, _, start_up_tree, _, _, _, graph = CONNECTED_COMPONENTS.workload.structures
-
     *automatic, first, second, third = run_preset(CONNECTED_COMPONENTS, collector)
 
-    # The walks make no cycles, and the graph stays in its module's globals, so
-    # the collections before shutdown and shutdown's first free the trees start-up
-    # let go of and nothing more. Shutdown's first full collection comes while the
-    # modules still hold the graph and the start-up tree. The second frees both,
-    # which their cycles keep once the modules go, and leaves the third nothing.
+    # The walks make no cycles, and read_adjlist's frame holds the graph, so the
+    # collections before shutdown free the trees start-up let go of and the cycles
+    # networkx's wrappers leave, and nothing more. Nothing in the graph links
+    # back, so refcounting frees it once the worker's frames have returned, and
+    # shutdown's first full collection finds none of it. The second frees
+    # start-up's trees, which their cycles keep once the modules go, and leaves
+    # the third nothing.
     assert [first.kind, second.kind, third.kind] == ["shutdown"] * 3
-    freed = sum(record.freed for record in automatic) + first.freed
-    assert freed == start_up_garbage(CONNECTED_COMPONENTS)
-    assert second.freed == graph.size + start_up_tree.size
+    freed = sum(record.freed for record in automatic)
+    assert freed == start_up_garbage(CONNECTED_COMPONENTS) + sum(wrappers())
+    assert first.freed == 0
+    assert second.freed == start_up_trees(CONNECTED_COMPONENTS)
     assert third.freed == 0
 
 

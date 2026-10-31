@@ -111,7 +111,7 @@ keep them small.
 `src/pep848_sim` has three parts. A module imports from its own part and the
 parts listed before it, never from one after:
 
-1. `pep848_sim.collectors`: the heap and the two collectors, which ADRs 0003
+1. `pep848_sim.collectors`: the heap and the two collectors, which ADRs 0024
    and 0004 govern.
 2. `pep848_sim` itself: the workload, its structures and a run.
 3. `pep848_sim.widget`: what the page's worker calls, the request and the

@@ -1,4 +1,6 @@
 import json
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -6,7 +8,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from pep848_sim.collectors.collector import CollectorSettings, Constants
-from pep848_sim.presets import CREATE_GC_CYCLES
+from pep848_sim.presets import CREATE_GC_CYCLES, PRESETS
+from pep848_sim.structures import Amazon0302, Hierarchy, Rings, StructureParameters
 from pep848_sim.widget.controls import Control, controls
 from pep848_sim.widget.request import Request, dump, expand, runs
 from pep848_sim.workload import WorkloadParameters, geometric_thresholds
@@ -317,14 +320,14 @@ def test_a_control_reads_the_preset_a_request_names() -> None:
             "every": 20,
         }
     )
-    rings = CREATE_GC_CYCLES.workload.structures[5]
+    rings = CREATE_GC_CYCLES.workload.structures[6]
     assert rings.rebuild_interval is not None
 
-    [control] = controls(request, ["workload.structures.5.size"])
+    [control] = controls(request, ["workload.structures.6.size"])
 
     # A build without churn fits in the rebuild interval.
     assert control == Control(
-        "workload.structures.5.size",
+        "workload.structures.6.size",
         "Rings size",
         "kB",
         rings.size,
@@ -332,3 +335,52 @@ def test_a_control_reads_the_preset_a_request_names() -> None:
         rings.rebuild_interval,
         1,
     )
+
+
+def home_entries() -> list[dict[str, Any]]:
+    """The presets the home page's widget offers, as its config lists them."""
+    page = Path("site/index.html").read_text(encoding="utf-8")
+    widget = page.split('<gc-widget id="home-widget">')[1]
+    config = widget.split('<script type="application/json">')[1].split("</script>")[0]
+    entries: list[dict[str, Any]] = json.loads(config)["entries"]
+    return entries
+
+
+def parsed(s: StructureParameters) -> bool:
+    return s.built_in_c
+
+
+def rings(s: StructureParameters) -> bool:
+    return isinstance(s.shape, Rings)
+
+
+def task_tree(s: StructureParameters) -> bool:
+    return isinstance(s.shape, Hierarchy) and s.rebuild_interval is not None
+
+
+def graph(s: StructureParameters) -> bool:
+    return isinstance(s.shape, Amazon0302)
+
+
+@pytest.mark.parametrize(
+    ("name", "sized"),
+    [
+        ("xml_etree_parse", parsed),
+        ("create_gc_cycles", rings),
+        ("async_tree_io_tg", task_tree),
+        ("connected_components", graph),
+    ],
+)
+def test_each_home_page_slider_sizes_the_structure_its_benchmark_repeats_or_loads(
+    name: str, sized: Callable[[StructureParameters], bool]
+) -> None:
+    """The parsed trees, the rings, the task tree and the graph, past the
+    start-up structures every preset shares (ADR 0011)."""
+    [entry] = [e for e in home_entries() if e["name"] == name]
+    [path] = entry["controls"]
+    index = int(path.split(".")[2])
+
+    [control] = controls(json.dumps(entry["request"]), [path])
+
+    assert sized(PRESETS[name].workload.structures[index])
+    assert control.value == PRESETS[name].workload.structures[index].size

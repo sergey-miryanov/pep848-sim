@@ -10,9 +10,8 @@ Everything below is vocabulary.
 ### The thing we build
 
 **Simulator**:
-A Python model of both cycle collectors, the incremental one after the PEP's
-pseudocode and the legacy one after the reference branch, running over
-synthetic objects.
+A Python model of both cycle collectors, each after the reference branch,
+running over synthetic objects.
 _Avoid_: emulator, GC (bare), runtime
 
 **Workload**:
@@ -350,14 +349,15 @@ _Avoid_: gen0 collection, minor GC (in the incremental collector `gc.collect(0)`
 is a young collection, not a collection of generation 0)
 
 **Increment**:
-The transitive closure of pending objects reachable from the least recently
-scanned pending object, which an old collection collects as one unit. It
-contains each cycle it touches in full.
+The transitive closure of pending objects reachable from the pending space's
+last object, which an old collection collects as one unit. It contains each
+cycle it touches in full. In every other sweep, young objects carry the
+pending space's tag, and an increment takes those it reaches too.
 _Avoid_: chunk, slice, batch, step
 
 **Old collection**:
-One turn of the incremental collector on the old generation: zero or more
-increments, which it collects while the work budget stays positive.
+One turn of the incremental collector on the old generation: it marks and
+collects increments until it has done the work budget's worth of work.
 _Avoid_: gen1, generation 1 (the stats slot the C implementation files it
 under, which reads as the aging generation), major GC, full collection (that
 takes the whole heap)
@@ -391,8 +391,9 @@ _Avoid_: pause, duration, time, cost (all promise a clock the simulator does
 not have)
 
 **Marked**:
-Objects an old collection moved from pending to visited because they are
-reachable, without examining them for cycles.
+Objects an old collection moved to visited because the module root reaches
+them, without examining them for cycles: pending objects, and in every other
+sweep young ones too.
 _Avoid_: scanned (every kind of work scans), visited (that is the space)
 
 **Survived**:
@@ -430,11 +431,9 @@ wasted)
 ### The work budget
 
 **Work budget**:
-The old-generation scanning the incremental collector owes, as the PEP's
-pseudocode keeps it. Young collections credit it with their survivors, and
-old collections debit it with what they mark. Each increment debits it with
-what it examined and credits it with twice what it freed, straight away, so
-a garbage-rich increment lengthens the old collection it is part of. Quoting
-the PEP, spell it `work_to_do`.
-_Avoid_: old_work (the C implementation's counterpart, which is settled once
-per old collection and so traces a different curve), debt, credit
+The old-generation scanning the incremental collector owes. Young collections
+credit it with their survivors. An old collection settles it once it ends: it
+debits what it marked and examined, and credits twice what its increments
+freed, so a garbage-rich old collection lengthens the next one. Quoting the
+PEP, spell it `work_to_do`; quoting the reference branch, `old_work`.
+_Avoid_: debt, credit
