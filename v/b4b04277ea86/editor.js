@@ -13,16 +13,17 @@ import { describe, describeChurn, describeConstants, describeRun } from "./graph
 
 /** @typedef {import("./graph.js").Graph} Graph */
 /**
- * A shape as a request names it: "tree" or "amazon0302", its name with its one
- * parameter, such as { chains: 16 }, or { own: code } for the reader's own.
- * @typedef {"tree" | "amazon0302" | { [name: string]: number | string }} Shape
+ * A shape as a request names it: "tree", "amazon0302" or "task_groups", its name
+ * with its one parameter, such as { chains: 16 }, or { own: code } for the
+ * reader's own.
+ * @typedef {"tree" | "amazon0302" | "task_groups" | { [name: string]: number | string }} Shape
  */
 /**
  * One structure as a request holds it.
  * @typedef {{
  *   shape: Shape, size: number, root: "module" | "frame", lifetime: number | null,
  *   rebuild_interval: number | null, build_churn: number | string, full_collections: boolean,
- *   built_in_frame: boolean, built_in_c: boolean,
+ *   built_in_frame: boolean, built_in_c: boolean, delay?: number, skips_while_busy?: boolean,
  * }} Structure
  */
 /**
@@ -39,9 +40,12 @@ import { describe, describeChurn, describeConstants, describeRun } from "./graph
  */
 
 /**
- * The shapes a structure can take: each one's title, and the label, default and
- * least value of its parameter, as pep848_sim.structures refuses less.
- * @type {{ [name: string]: { title: string, parameter?: { label: string, value: number, min: number } } }}
+ * The shapes a structure can take: each one's title, the label, default and
+ * least value of its parameter, as pep848_sim.structures refuses less, and the
+ * Python that makes it where its name, capitalised, does not.
+ * @type {{ [name: string]: {
+ *   title: string, parameter?: { label: string, value: number, min: number }, python?: string,
+ * } }}
  */
 export const SHAPES = {
   chains: { title: "Chains", parameter: { label: "Chains", value: 16, min: 1 } },
@@ -49,6 +53,7 @@ export const SHAPES = {
   hierarchy: { title: "Hierarchy", parameter: { label: "Branches", value: 6, min: 1 } },
   graph: { title: "Graph", parameter: { label: "Edges a node", value: 2, min: 0 } },
   amazon0302: { title: "networkx's amazon0302 graph" },
+  task_groups: { title: "asyncio's tasks in TaskGroups", python: "TaskGroups" },
   rings: { title: "Rings", parameter: { label: "Objects a ring", value: 21, min: 1 } },
   own: { title: "Your own, in Python" },
 };
@@ -132,7 +137,7 @@ const holderOf = (structure) => (structure.root === "module" && structure.built_
  */
 export const newStructure = () => ({
   shape: "tree", size: 1000, root: "frame", lifetime: 2000, rebuild_interval: 4000, build_churn: 0, full_collections: false,
-  built_in_frame: false, built_in_c: false,
+  built_in_frame: false, built_in_c: false, delay: 0, skips_while_busy: false,
 });
 
 /**
@@ -404,6 +409,9 @@ export class Editor {
       this.#label("Rebuilt every (kB)", this.#number(`${i}:rebuild_interval`, structure.rebuild_interval, (value) => {
         structure.rebuild_interval = value;
       }, { min: 1, nullable: "never" })),
+      this.#label("First due into the loops (kB)", this.#number(`${i}:delay`, structure.delay ?? 0, (value) => {
+        structure.delay = /** @type {number} */ (value);
+      }, { min: 0 })),
       this.#label("Churn after each object (kB)", this.#number(`${i}:build_churn`, churnOf(structure.build_churn), (value) => {
         structure.build_churn = churnFrom(/** @type {number} */ (value));
       }, { step: 0.01 })),
@@ -411,6 +419,8 @@ export class Editor {
         (checked) => { structure.full_collections = checked; }),
       this.#check(`${i}:built_in_c`, "Built in C: a collection due meanwhile waits until the build ends", structure.built_in_c,
         (checked) => { structure.built_in_c = checked; }),
+      this.#check(`${i}:skips_while_busy`, "Skips a rebuild due while another structure builds", structure.skips_while_busy ?? false,
+        (checked) => { structure.skips_while_busy = checked; }),
     );
     const buttons = document.createElement("div");
     buttons.className = "wide";

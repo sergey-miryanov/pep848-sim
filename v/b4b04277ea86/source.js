@@ -15,7 +15,8 @@ import { nameOf, SHAPES, typeCode } from "./editor.js";
 // The names a workload source sees and sets, which a shape's function keeps
 // clear of.
 const TAKEN = [
-  "Chains", "Tree", "Hierarchy", "Graph", "Rings", "Own", "Structure", "Churn", "Settings", "Constants",
+  "Chains", "Tree", "Hierarchy", "Graph", "Amazon0302", "TaskGroups", "Rings", "Own", "Structure",
+  "Churn", "Settings", "Constants",
   "churn", "structures", "run_length", "settings", "seed", "shutdown", "constants",
 ];
 // The widest line a call's arguments fill before the next line takes them, so
@@ -148,7 +149,9 @@ export function toSource(request) {
   const shapeOf = (/** @type {Shape} */ shape) => {
     const name = nameOf(shape);
     if (!Object.hasOwn(SHAPES, name)) throw new TypeError(`no shape ${JSON.stringify(name)}`);
-    if (typeof shape === "string") return `${name[0].toUpperCase()}${name.slice(1)}()`;
+    if (typeof shape === "string") {
+      return `${SHAPES[name].python ?? `${name[0].toUpperCase()}${name.slice(1)}`}()`;
+    }
     const value = /** @type {{ [name: string]: number | string }} */ (shape)[name];
     if (name === "own") return `Own(${names.get(String(value))})`;
     return `${name[0].toUpperCase()}${name.slice(1)}(${py(Number(value))})`;
@@ -177,6 +180,8 @@ export function toSource(request) {
       if (structure.full_collections) args.push("full_collections=True");
       if (structure.built_in_frame) args.push("built_in_frame=True");
       if (structure.built_in_c) args.push("built_in_c=True");
+      if (structure.delay) args.push(`delay=${py(structure.delay)}`);
+      if (structure.skips_while_busy) args.push("skips_while_busy=True");
       return `${call("    Structure(", args)},`;
     }),
     ...(structures.length ? ["]"] : []),
