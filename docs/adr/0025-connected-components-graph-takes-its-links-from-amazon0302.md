@@ -41,12 +41,20 @@ gives after it adds an object's links. Amazon0302 alone has them, for
 gains a structure for read_adjlist's reader: 10 objects in a chain, which the
 frame holds for as long as the graph takes to load.
 
+Two trees stand for the cycles networkx's `argmap` decorators leave when they
+compile a function's wrapper on its first call: closures that reach themselves
+through their cells, with a Signature and its Parameters. One, of 8 objects,
+builds as the load starts, for read_adjlist's and `empty_graph`'s wrappers. The
+other, of 2, builds as the walks start, for `connected_components`' own. The
+workers' young collections free 133 and 32 real objects there, at 38 and 146
+MB, and an instrumented worker with `gc.DEBUG_SAVEALL` names them.
+
 The Graph shape stays, for the playground and the links that name it.
 
 ## Consequences
 
 connected_components' incremental columns on the presets page now fit its
-workers' to within 1%:
+workers' budget, examined and work to within 1%:
 
 | Series | Before | After |
 |---|---|---|
@@ -56,13 +64,17 @@ workers' to within 1%:
 | gen 1 work | 8% | 0% |
 | gen 0 examined | 5% | 1% |
 
-Its increments come at 48 MB, 85,584 real objects, and at 60 MB, 228,544,
-with the budget at -189,536. The sweep ends at 96 MB on 208. Its legacy
-columns keep their errors, and the other presets keep their records.
+Its increments come at 48 MB, 85,568 real objects, and at 60 MB, 228,528,
+with the budget at -189,504. The sweep ends at 96 MB on 208. The wrappers'
+cycles take gen 0's freed and yield from 4% to 2% under the incremental
+collector, and under the legacy one freed from 2% to 1% and yield from 4% to
+2%. Its legacy columns keep their other errors, and the other presets keep
+their records.
 
-The reader takes structure 7, and the graph moves to 8. A link that resizes
-`workload.structures.7` now resizes the reader. The guide's large-increment
-chapter points at 8, and its steps on connected_components give the new
+The reader takes structure 8, and the graph moves from 7 to 9, behind the
+cycles networkx's wrappers leave as the load starts. A link that resizes
+`workload.structures.7` now resizes those cycles. The guide's large-increment
+chapter points at 9, and its steps on connected_components give the new
 increments.
 
 ## Considered Options

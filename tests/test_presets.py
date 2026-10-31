@@ -273,8 +273,25 @@ def test_connected_components_takes_node_then_adj_then_its_reader() -> None:
     assert all(0 < work(r) < full / 3 for r in young)
     ended = next(r for r in records if r.sweep == 2)
     # The reader, and G, its __dict__ and the cache, which _adj's increment left.
-    reader = CONNECTED_COMPONENTS.workload.structures[7]
+    reader = CONNECTED_COMPONENTS.workload.structures[8]
     assert (ended.clock, work(ended)) == (96_000, reader.size + 3)
+
+
+def wrappers() -> list[int]:
+    """The cyclic garbage networkx's wrappers leave as the load starts and as the
+    walks start, connected_components' eighth structure and its eleventh."""
+    structures = CONNECTED_COMPONENTS.workload.structures
+    return [s.shape.cyclic_garbage(s.size) for s in (structures[7], structures[10])]
+
+
+def test_connected_components_young_collections_free_the_wrappers_cycles() -> None:
+    """As its workers' do: start-up's trees at 22 and 26 MB, read_adjlist's and
+    empty_graph's wrappers at 38 MB and connected_components' at 146 MB."""
+    records = run_preset(CONNECTED_COMPONENTS, IncrementalCollector)
+    freed = [(r.clock, r.freed) for r in records if r.kind == "young" and r.freed]
+    load, walk = wrappers()
+    assert freed[2:] == [(38_000, load), (146_000, walk)]
+    assert sum(f for _, f in freed[:2]) == start_up_garbage(CONNECTED_COMPONENTS)
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])
@@ -284,14 +301,15 @@ def test_connected_components_frees_its_graph_as_its_frames_return(
     *automatic, first, second, third = run_preset(CONNECTED_COMPONENTS, collector)
 
     # The walks make no cycles, and read_adjlist's frame holds the graph, so the
-    # collections before shutdown free the trees start-up let go of and nothing
-    # more. Nothing in the graph links back, so refcounting frees it once the
-    # worker's frames have returned, and shutdown's first full collection finds
-    # none of it. The second frees start-up's trees, which their cycles keep once
-    # the modules go, and leaves the third nothing.
+    # collections before shutdown free the trees start-up let go of and the cycles
+    # networkx's wrappers leave, and nothing more. Nothing in the graph links
+    # back, so refcounting frees it once the worker's frames have returned, and
+    # shutdown's first full collection finds none of it. The second frees
+    # start-up's trees, which their cycles keep once the modules go, and leaves
+    # the third nothing.
     assert [first.kind, second.kind, third.kind] == ["shutdown"] * 3
     freed = sum(record.freed for record in automatic)
-    assert freed == start_up_garbage(CONNECTED_COMPONENTS)
+    assert freed == start_up_garbage(CONNECTED_COMPONENTS) + sum(wrappers())
     assert first.freed == 0
     assert second.freed == start_up_trees(CONNECTED_COMPONENTS)
     assert third.freed == 0

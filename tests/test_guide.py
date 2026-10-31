@@ -178,7 +178,7 @@ def test_gen_0_and_gen_1_collections_examine_the_graph_as_it_loads() -> None:
 def test_the_gen_2_collection_takes_the_whole_graph_at_133_mb() -> None:
     legacy, incremental = run("the-legacy-collector-3")
     [gen2] = [r for r in legacy if r.kind == "gen 2"]
-    assert (gen2.clock, work(gen2)) == (133_000, 91_444)
+    assert (gen2.clock, work(gen2)) == (133_000, 91_443)
     assert legacy.index(gen2) == 132
     assert thousands(figures(legacy).peak_work) == 91.4
     assert thousands(figures(incremental).peak_work) == 10.2
@@ -447,7 +447,7 @@ def young_taken(record: Record) -> int:
 
 def test_nodes_increment_then_adjs_take_most_of_the_young_generation() -> None:
     _, incremental = run("a-large-increment-1")
-    assert increments(incremental) == [(48_000, 5_349), (60_000, 14_284)]
+    assert increments(incremental) == [(48_000, 5_348), (60_000, 14_283)]
     [record] = [r for r in incremental if r.clock == 60_000]
     assert thousands(young_taken(record)) == 12.1
     assert young_taken(record) > 3 / 4 * sum(record.spaces_before[:2])
@@ -462,7 +462,7 @@ def test_the_increment_falls_below_the_legacy_collectors_peak() -> None:
 def test_the_young_collections_pay_the_increment_back_before_the_sweep_ends() -> None:
     _, incremental = run("a-large-increment-3")
     [cost] = [r for r in incremental if r.clock == 60_000]
-    assert (cost.work_to_do + work(cost), cost.work_to_do) == (2_438, -11_846)
+    assert (cost.work_to_do + work(cost), cost.work_to_do) == (2_439, -11_844)
     owing = [r for r in incremental if 60_000 <= r.clock < 94_000]
     assert all(r.work_to_do < 0 for r in owing)
     assert sum(work(r) for r in owing[1:] if r.kind == "old") == 0
@@ -474,13 +474,13 @@ def test_the_young_collections_pay_the_increment_back_before_the_sweep_ends() ->
 
 def test_half_the_graph_still_loads_when_the_increments_come() -> None:
     _, incremental = run("a-large-increment-4")
-    assert increments(incremental) == [(48_000, 5_349), (60_000, 14_284)]
+    assert increments(incremental) == [(48_000, 5_348), (60_000, 14_283)]
     assert thousands(figures(incremental).peak_work) == 14.3
 
 
 def test_a_quarter_of_the_graph_forms_a_smaller_increment() -> None:
     _, incremental = run("a-large-increment-5")
-    assert increments(incremental) == [(56_000, 7_366)]
+    assert increments(incremental) == [(56_000, 7_365)]
     assert thousands(figures(incremental).peak_work) == 7.4
 
 
@@ -574,5 +574,5 @@ def test_at_threshold1_2_two_gen_2_collections_fit_the_run() -> None:
     kinds = [r.kind for r in legacy[:12]]
     assert kinds == ["gen 0", "gen 0", "gen 0", "gen 1"] * 3
     gen2 = [r for r in legacy if r.kind == "gen 2"]
-    assert [(r.clock, work(r)) for r in gen2] == [(90_000, 63_255), (180_000, 91_444)]
+    assert [(r.clock, work(r)) for r in gen2] == [(90_000, 63_253), (180_000, 91_443)]
     assert figures(legacy).gen2_collections == 2

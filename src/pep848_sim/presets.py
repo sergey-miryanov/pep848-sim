@@ -483,6 +483,19 @@ ASYNC_TREE_IO_TG = Preset(
 # other benchmarks' examine 5,855 to 6,352, so start-up allocates more kB to an
 # object past the first.
 _CC_START_UP = replace(_START_UP, late_churn=Fraction(466, 100))
+# Code: networkx's argmap decorators compile a wrapper on a function's first call,
+# and the compiling leaves cycles: closures that reach themselves through their
+# cells, a Signature and its Parameters. read_adjlist's and empty_graph's come as
+# the load starts. Records: the workers' young collection at 38,004 kB frees 133
+# real objects, where it examines what was allocated about 14,000 kB.
+_LOAD_WRAPPERS = StructureParameters(
+    shape=Tree(),
+    size=133 // 16,
+    root="frame",
+    lifetime=0,
+    rebuild_interval=None,
+    build_churn=0,
+)
 # Code: read_adjlist opens the file and wraps it in a generator of lines before it
 # makes the graph, and its frame holds them while it reads. Records: once the
 # branch's increment from _adj has taken the graph, at the 30th collection, the
@@ -502,7 +515,13 @@ _READER = StructureParameters(
 # 6 kB of churn after each object.
 _NETWORKX = StructureParameters(
     shape=Chains(width=16),
-    size=(14_600 - _CC_START_UP.length - _READER.build_length) // 7,
+    size=(
+        14_600
+        - _CC_START_UP.length
+        - _LOAD_WRAPPERS.build_length
+        - _READER.build_length
+    )
+    // 7,
     root="module",
     lifetime=None,
     rebuild_interval=None,
@@ -531,6 +550,10 @@ _GRAPH_LOAD = StructureParameters(
     rebuild_interval=None,
     build_churn=Fraction(24, 100),
 )
+# Code: connected_components' own wrapper, compiled at the first loop's call.
+# Records: the workers' young collection at 146,006 kB frees 32 real objects, of
+# what was allocated as the load ended.
+_WALK_WRAPPER = replace(_LOAD_WRAPPERS, size=32 // 16)
 # Records: the automatic collections per worker. Each marks threshold0 kB of
 # allocation (ADR 0011), and the records cannot tell where before the next one the
 # worker ends, so the run ends about halfway, as json_loads' does.
@@ -542,9 +565,11 @@ _WALKS = 4
 _WALK = (
     (2 * _CONNECTED_COMPONENTS_COLLECTIONS + 1) * CollectorSettings().threshold0 // 2
     - _CC_START_UP.length
-    - _READER.build_length
     - _NETWORKX.build_length
+    - _LOAD_WRAPPERS.build_length
+    - _READER.build_length
     - _GRAPH_LOAD.build_length
+    - _WALK_WRAPPER.build_length
 ) // _WALKS
 
 CONNECTED_COMPONENTS = Preset(
@@ -560,16 +585,25 @@ CONNECTED_COMPONENTS = Preset(
             long_share=Fraction(0),
             long_lifetimes=(1, 1),
         ),
-        structures=(*_CC_START_UP.structures, _NETWORKX, _READER, _GRAPH_LOAD),
+        structures=(
+            *_CC_START_UP.structures,
+            _NETWORKX,
+            _LOAD_WRAPPERS,
+            _READER,
+            _GRAPH_LOAD,
+            _WALK_WRAPPER,
+        ),
         seed=848,
         shutdown=True,
     ),
     # The worker's own length: start-up, the imports, the load, then its loops.
     run_length=(
         _CC_START_UP.length
-        + _READER.build_length
         + _NETWORKX.build_length
+        + _LOAD_WRAPPERS.build_length
+        + _READER.build_length
         + _GRAPH_LOAD.build_length
+        + _WALK_WRAPPER.build_length
         + _WALKS * _WALK
     ),
 )

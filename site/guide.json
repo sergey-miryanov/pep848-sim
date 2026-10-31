@@ -378,7 +378,7 @@
     {
       "id": "a-large-increment",
       "title": "A large increment",
-      "controls": ["workload.structures.8.size"],
+      "controls": ["workload.structures.9.size"],
       "steps": [
         {
           "title": "An increment is a closure",
@@ -398,16 +398,16 @@
         },
         {
           "title": "The budget pays for it",
-          "text": "The collection at 60 MB cost 14.3K objects against a budget of 2,438, and old collections wait while the budget stays below zero. Each young collection credits the budget with the survivors it moves in. The next six find the aging spaces _adj's increment emptied and move in 427 to 1,960 objects each. At 96 MB an old collection takes pending's last 13 objects, read_adjlist's reader among them, and ends the sweep.",
+          "text": "The collection at 60 MB cost 14.3K objects against a budget of 2,439, and old collections wait while the budget stays below zero. Each young collection credits the budget with the survivors it moves in. The next six find the aging spaces _adj's increment emptied and move in 427 to 1,960 objects each. At 96 MB an old collection takes pending's last 13 objects, read_adjlist's reader among them, and ends the sweep.",
           "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {}},
           "marks": [
-            {"part": "incremental.budget", "note": "At 60 MB the line drops to -11,846. It climbs back until the young collection at 94 MB lifts it above zero."}
+            {"part": "incremental.budget", "note": "At 60 MB the line drops to -11,844. It climbs back until the young collection at 94 MB lifts it above zero."}
           ]
         },
         {
           "title": "Half the graph",
           "text": "Halve the graph, to 45,000 kB. It still loads at 48 and 60 MB, so the increments there take as much as before.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.8.size": 45000}},
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.9.size": 45000}},
           "marks": [
             {"part": "figure.peak_work", "note": "14.3K, as with the whole graph."}
           ]
@@ -415,7 +415,7 @@
         {
           "title": "A quarter of the graph",
           "text": "Shrink the graph to 22,000 kB. It has loaded by 42 MB, and _adj's increment at 56 MB takes what of it is still pending or young.",
-          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.8.size": 22000}},
+          "request": {"preset": "connected_components", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 5, "changes": {"workload.structures.9.size": 22000}},
           "marks": [
             {"part": "figure.peak_work", "note": "7.4K, half the whole graph's 14.3K."}
           ]
