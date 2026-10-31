@@ -17,6 +17,7 @@ from pep848_sim.structures import (
     Rings,
     Root,
     StructureParameters,
+    TaskGroups,
     Tree,
 )
 from pep848_sim.workload import (
@@ -83,6 +84,7 @@ def structure_parameters(draw: st.DrawFn, own: bool = True) -> StructureParamete
         st.builds(Hierarchy, st.integers(1, 4)),
         st.builds(Graph, st.integers(0, 3)),
         st.just(Amazon0302()),
+        st.just(TaskGroups()),
         st.builds(Rings, st.integers(1, 4)),
     ]
     root = draw(st.sampled_from(ROOTS))

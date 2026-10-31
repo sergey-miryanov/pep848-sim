@@ -9,6 +9,7 @@ from collections import defaultdict
 from typing import NamedTuple
 
 from pep848_sim.structures import (
+    TASK_GROUPS_PATH,
     Amazon0302,
     Chains,
     Graph,
@@ -16,6 +17,7 @@ from pep848_sim.structures import (
     Own,
     Shape,
     StructureParameters,
+    TaskGroups,
     Tree,
     unlinks,
 )
@@ -118,6 +120,9 @@ def _extent(shape: Shape) -> tuple[int, int, int]:
     # Past G and its __dict__, as far as the nodes and edges _node and _adj hold.
     if isinstance(shape, Amazon0302):
         return 6, 4, _REACH
+    # Down the path to the loop, then as far as the first tasks' children.
+    if isinstance(shape, TaskGroups):
+        return 2, TASK_GROUPS_PATH + 6, _REACH
     if isinstance(shape, Own):
         return 4, _OWN_MOST, _OWN_MOST
     # Each ring as far as six objects round it.
@@ -136,6 +141,8 @@ def _label(shape: Shape) -> str:
         return f"a graph of {shape.edges} edges a node"
     if isinstance(shape, Amazon0302):
         return "networkx's amazon0302 graph"
+    if isinstance(shape, TaskGroups):
+        return "asyncio's tasks in TaskGroups"
     if isinstance(shape, Own):
         return "a shape of your own"
     return f"rings of {shape.length} object{'' if shape.length == 1 else 's'}"

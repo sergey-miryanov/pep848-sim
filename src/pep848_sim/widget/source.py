@@ -24,6 +24,7 @@ from pep848_sim.structures import (
     Root,
     Shape,
     StructureParameters,
+    TaskGroups,
     Tree,
 )
 from pep848_sim.workload import ChurnParameters, WorkloadParameters
@@ -101,6 +102,7 @@ def _names(text: str, tree: ast.Module) -> dict[str, object]:
         "Hierarchy": Hierarchy,
         "Graph": Graph,
         "Amazon0302": Amazon0302,
+        "TaskGroups": TaskGroups,
         "Rings": Rings,
         "Own": own,
         "Structure": _structure,
@@ -145,7 +147,7 @@ def _structure(
     if not isinstance(shape, get_args(Shape.__value__)):
         raise ValueError(
             f"{shape!r} is no shape: Chains(...), Tree(), Hierarchy(...), Graph(...),"
-            " Amazon0302(), Rings(...) or Own(...) gives one"
+            " Amazon0302(), TaskGroups(), Rings(...) or Own(...) gives one"
         )
     return StructureParameters(
         shape,

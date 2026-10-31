@@ -10,6 +10,9 @@ from pep848_sim.collectors.heap import Heap
 from pep848_sim.structures import (
     AMAZON0302_HEAD,
     AMAZON0302_SIZE,
+    TASK_GROUPS_HEAD,
+    TASK_GROUPS_PATH,
+    TASK_GROUPS_SIZE,
     Amazon0302,
     Build,
     Chains,
@@ -20,6 +23,7 @@ from pep848_sim.structures import (
     Root,
     Shape,
     StructureParameters,
+    TaskGroups,
     Tree,
 )
 from test_heap import reachable
@@ -294,6 +298,79 @@ def test_a_larger_amazon0302_repeats_the_files_pattern() -> None:
             assert again == [(s + body, t + body) for s, t in once]
 
 
+def test_task_groups_loop_holds_its_ready_queue_and_timers_down_a_path() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    built(heap, long_lived(TaskGroups(), TASK_GROUPS_HEAD, "frame"))
+
+    objects = list(collector.nursery)[1:]
+    *path, loop, ready, timers = objects
+
+    assert [heap.references(x) for x in path] == [(x,) for x in [*path[1:], loop]]
+    assert heap.references(loop) == (ready, timers)
+    assert len(path) == TASK_GROUPS_PATH
+
+
+def test_a_tasks_handle_leaves_the_ready_queue_as_the_task_runs() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    build = Build(heap, long_lived(TaskGroups(), TASK_GROUPS_HEAD + 8, "frame"))
+    # The root task's 7 objects, its handle the fifth.
+    for _ in range(TASK_GROUPS_HEAD + 7):
+        build.add()
+    ready = list(collector.nursery)[TASK_GROUPS_HEAD - 1]
+    handle = list(collector.nursery)[TASK_GROUPS_HEAD + 5]
+
+    assert heap.references(ready) == (handle,)
+
+    # Its TaskGroup, the first object the task makes as it runs.
+    build.add()
+
+    assert heap.references(ready) == ()
+
+
+def test_a_task_tree_keeps_13_objects_a_task_and_14_a_leaf_and_drops_clean() -> None:
+    collector = Collector()
+    heap = Heap(collector)
+    build = built(heap, long_lived(TaskGroups(), TASK_GROUPS_SIZE, "frame"))
+    *_, ready, timers = list(collector.nursery)[1 : TASK_GROUPS_HEAD + 1]
+
+    # 55,987 tasks, 16 to a group: 584 groups of tasks that start TaskGroups and
+    # 2,916 of leaves. Each task's handle and its TaskStepMethWrapper went with
+    # the ready queue's hold on them.
+    assert heap.references(ready) == ()
+    assert len(heap.references(timers)) == 2_916
+    assert len(reachable(heap)) - 1 == TASK_GROUPS_HEAD + 13 * 584 + 14 * 2_916
+
+    build.drop()
+
+    assert heap.uncollected_garbage == 0
+    assert set(collector.nursery) <= reachable(heap)
+
+
+def test_a_larger_task_tree_starts_again_under_the_same_loop() -> None:
+    shape = TaskGroups()
+    tree = TASK_GROUPS_SIZE - TASK_GROUPS_HEAD
+
+    def moved(pairs: list[tuple[int, int]]) -> list[tuple[int, int]]:
+        return [(s + tree if s >= TASK_GROUPS_HEAD else s, t + tree) for s, t in pairs]
+
+    for i in range(TASK_GROUPS_HEAD, TASK_GROUPS_HEAD + 1_000):
+        assert shape.links(i + tree) == moved(shape.links(i))
+        assert shape.unlinks(i + tree) == moved(shape.unlinks(i))
+    loop = TASK_GROUPS_PATH
+    assert shape.links(TASK_GROUPS_HEAD + tree) == [(loop, TASK_GROUPS_SIZE)]
+
+
+@pytest.mark.parametrize("size", [500, TASK_GROUPS_SIZE + 500])
+def test_a_task_trees_teardown_cuts_only_links_among_its_objects(size: int) -> None:
+    cuts = TaskGroups().teardown(size)
+
+    assert cuts
+    assert all(max(pair) < size for pair in cuts)
+    assert TaskGroups().teardown(TASK_GROUPS_HEAD) == []
+
+
 @pytest.mark.parametrize("root", ["module", "frame"])
 def test_a_dropped_graph_stays_as_cyclic_garbage_with_its_roots_cycle(
     root: Root,
@@ -410,6 +487,7 @@ def test_a_whole_fraction_of_churn_reads_as_an_int() -> None:
         st.builds(Hierarchy, branches=st.integers(1, 8)),
         st.builds(Graph, edges=st.integers(0, 4)),
         st.just(Amazon0302()),
+        st.just(TaskGroups()),
         st.builds(Rings, length=st.integers(1, 8)),
         own_shapes(),
     ),

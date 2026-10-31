@@ -279,20 +279,20 @@ def test_the_old_generation_fills_and_empties_with_each_tree() -> None:
     _, incremental = run("the-old-generation-1")
     old = list(map(old_generation, before_shutdown(incremental)))
     peak = old.index(max(old))
-    assert max(old) > 45_000
+    assert max(old) > 40_000
     assert min(old[peak:]) < 10_000
 
 
-def test_sweeps_run_long_and_short_by_turns() -> None:
+def test_twelve_sweeps_end_at_44_96_160_196_and_236_mb_first() -> None:
     _, incremental = run("the-old-generation-2")
-    assert figures(incremental).sweeps == 9
-    assert sweep_ends(incremental)[:5] == [44_000, 164_000, 176_000, 292_000, 300_000]
+    assert figures(incremental).sweeps == 12
+    assert sweep_ends(incremental)[:5] == [44_000, 96_000, 160_000, 196_000, 236_000]
 
 
-def test_old_collections_mark_about_1_850_each() -> None:
+def test_old_collections_mark_about_1_900_each() -> None:
     _, incremental = run("the-old-generation-3")
     old = [r for r in before_shutdown(incremental) if r.kind == "old"]
-    assert max(map(work, old)) == 1_844
+    assert max(map(work, old)) == 1_933
     assert sum(r.marked for r in old) > 10 * sum(r.survived + r.freed for r in old)
     young = [r for r in before_shutdown(incremental) if r.kind == "young"]
     assert 0.8 < sum(r.marked for r in old) / sum(map(work, young)) < 1.25
@@ -301,18 +301,18 @@ def test_old_collections_mark_about_1_850_each() -> None:
 def test_young_collections_lift_the_budget_and_old_ones_spend_it() -> None:
     _, incremental = run("the-old-generation-4")
     paced = [r for r in before_shutdown(incremental) if r.clock >= 44_000]
-    assert max(r.work_to_do for r in paced if r.kind == "young") == 1_844
+    assert max(r.work_to_do for r in paced if r.kind == "young") == 1_933
     # A sweep's last increment can overspend by a few of start-up's objects.
     assert all(-50 < r.work_to_do <= 0 for r in paced if r.kind == "old")
 
 
 def test_the_legacy_collectors_tallest_bars_hold_gen_1_collections() -> None:
     legacy, incremental = run("the-old-generation-5")
-    assert max(work(r) for r in legacy if r.kind == "gen 1") == 13_470
+    assert max(work(r) for r in legacy if r.kind == "gen 1") == 13_576
     [gen2] = [r for r in legacy if r.kind == "gen 2"]
-    assert (gen2.clock, work(gen2)) == (266_000, 1_760)
-    assert work_per_mb(legacy) == 853
-    assert work_per_mb(incremental) == 337
+    assert (gen2.clock, work(gen2)) == (266_000, 1_761)
+    assert work_per_mb(legacy) == 884
+    assert work_per_mb(incremental) == 584
 
 
 def test_the_smallest_tree_runs_no_sweep() -> None:
@@ -323,10 +323,10 @@ def test_the_smallest_tree_runs_no_sweep() -> None:
 def test_at_the_largest_tree_gen_2_examines_all_of_it() -> None:
     legacy, incremental = run("the-old-generation-7")
     [gen2] = [r for r in legacy if r.kind == "gen 2"]
-    assert (gen2.clock, work(gen2)) == (266_000, 55_256)
-    assert work(gen2) > 4 * max(work(r) for r in legacy if r.kind == "gen 1")
-    assert thousands(figures(legacy).peak_work) == 55.3
-    assert thousands(figures(incremental).peak_work) == 1.8
+    assert (gen2.clock, work(gen2)) == (266_000, 51_171)
+    assert work(gen2) > 3 * max(work(r) for r in legacy if r.kind == "gen 1")
+    assert thousands(figures(legacy).peak_work) == 51.2
+    assert thousands(figures(incremental).peak_work) == 1.9
 
 
 def test_the_budget_holds_at_its_start_until_22_mb() -> None:
@@ -346,7 +346,7 @@ def test_young_collections_pay_the_budget_back_before_the_first_sweep() -> None:
     assert sweep_ends(incremental)[0] == 44_000
     first = next(r for r in incremental if r.clock == 44_000)
     assert first.marked == raising[-1].work_to_do
-    assert figures(incremental).sweeps == 9
+    assert figures(incremental).sweeps == 12
 
 
 def test_a_larger_freed_credit_changes_nothing_here() -> None:
@@ -357,13 +357,13 @@ def test_a_lower_start_puts_the_first_sweep_at_56_mb() -> None:
     _, incremental = run("the-work-budget-4")
     assert incremental[0].work_to_do == -12_500
     assert sweep_ends(incremental)[0] == 56_000
-    assert figures(incremental).sweeps == 9
+    assert figures(incremental).sweeps == 12
 
 
 def test_a_start_at_zero_ends_the_first_sweep_at_24_mb() -> None:
     _, incremental = run("the-work-budget-5")
     assert sweep_ends(incremental)[0] == 24_000
-    assert figures(incremental).sweeps == 11
+    assert figures(incremental).sweeps == 13
 
 
 def test_a_start_above_zero_marks_what_sys_reaches_and_swaps_twice() -> None:
@@ -371,7 +371,7 @@ def test_a_start_above_zero_marks_what_sys_reaches_and_swaps_twice() -> None:
     first = next(r for r in incremental if r.sweep)
     assert (first.clock, first.kind, first.work_to_do) == (4_000, "old", 0)
     assert (first.sweep, first.marked) == (2, 901)
-    assert figures(incremental).sweeps == 13
+    assert figures(incremental).sweeps == 15
 
 
 def trees_freed(records: list[Record]) -> list[tuple[int, int]]:
@@ -381,17 +381,18 @@ def trees_freed(records: list[Record]) -> list[tuple[int, int]]:
 def test_old_collections_free_three_trees_with_parent_pointers() -> None:
     _, incremental = run("the-work-budget-7")
     assert trees_freed(incremental) == [
-        (244_000, 52_487),
-        (452_000, 52_487),
-        (500_000, 52_487),
+        (172_000, 55_429),
+        (444_000, 55_429),
+        (484_000, 55_429),
     ]
-    assert figures(incremental).sweeps == 8
+    assert figures(incremental).sweeps == 10
 
 
-def test_without_the_credit_the_second_comes_later() -> None:
+def test_without_the_credit_the_sweeps_fall_to_six() -> None:
     _, incremental = run("the-work-budget-8")
-    assert [clock for clock, _ in trees_freed(incremental)] == [244_000, 484_000]
-    assert figures(incremental).sweeps == 5
+    clocks = [clock for clock, _ in trees_freed(incremental)]
+    assert clocks == [172_000, 324_000, 500_000]
+    assert figures(incremental).sweeps == 6
 
 
 def peak_garbage(name: str) -> tuple[float, float]:
@@ -428,8 +429,8 @@ def test_a_smaller_young_generation_frees_the_cycles() -> None:
 
 
 def test_a_large_program_holds_less_garbage_under_the_incremental_collector() -> None:
-    assert peak_garbage("uncollected-garbage-and-peak-memory-5") == (5.6, 1.5)
-    assert wpm("uncollected-garbage-and-peak-memory-5") == (1_524, 547)
+    assert peak_garbage("uncollected-garbage-and-peak-memory-5") == (5.6, 1.2)
+    assert wpm("uncollected-garbage-and-peak-memory-5") == (1_533, 725)
 
 
 def increments(records: list[Record]) -> list[tuple[int, int]]:

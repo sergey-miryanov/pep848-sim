@@ -14,6 +14,7 @@ from pep848_sim.structures import (
     Own,
     Rings,
     Shape,
+    TaskGroups,
     Tree,
 )
 from pep848_sim.widget.graph import graph, sample
@@ -84,6 +85,7 @@ def test_a_sample_of_an_own_shape_keeps_its_first_forty_objects() -> None:
         st.builds(Hierarchy, branches=st.integers(1, 8)),
         st.builds(Graph, edges=st.integers(0, 4)),
         st.just(Amazon0302()),
+        st.just(TaskGroups()),
         st.builds(Rings, length=st.integers(1, 8)),
     ),
     st.integers(min_value=1, max_value=200),
@@ -154,6 +156,7 @@ def test_a_requests_graph_holds_each_structure_and_the_churn() -> None:
         (Hierarchy(branches=6), "a hierarchy of 6 branches"),
         (Graph(edges=2), "a graph of 2 edges a node"),
         (Amazon0302(), "networkx's amazon0302 graph"),
+        (TaskGroups(), "asyncio's tasks in TaskGroups"),
         (Rings(length=1), "rings of 1 object"),
         (Rings(length=21), "rings of 21 objects"),
         (Own(DOUBLY_LINKED), "a shape of your own"),

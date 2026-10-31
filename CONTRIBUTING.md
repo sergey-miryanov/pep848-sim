@@ -86,8 +86,8 @@ requires one more job, `check`, which passes once they all pass.
   budget moves by exactly what the counters say, and cyclic garbage wholly in
   the old generation when a sweep starts is freed by its end, unless newer
   garbage holds it.
-- Coverage below 99% fails the run. CI uploads the report to Codecov, which
-  holds the project to the same 99% and the lines a pull request changes to
+- Coverage below 100% fails the run. CI uploads the report to Codecov, which
+  holds the project to the same 100% and the lines a pull request changes to
   90%.
 - pre-commit runs ruff, `typos` and `codespell`; `check-jsonschema`,
   `actionlint` and `zizmor` over the workflows; the whitespace hooks; and

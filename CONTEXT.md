@@ -123,8 +123,8 @@ _Avoid_: heap graph, reference graph
 Objects a workload builds in one shape, hangs off one root, and drops together
 when its lifetime ends. The workload rebuilds a repeating structure at a
 fixed interval, the way a benchmark rebuilds its data each iteration.
-Dropped, a structure whose shape has cycles becomes cyclic garbage, and
-refcounting frees one without on the spot.
+Dropped, a structure whose shape keeps cycles to its end becomes cyclic
+garbage, and refcounting frees one without on the spot.
 _Avoid_: data structure (fine in prose), object graph (that is the whole
 heap), cluster
 
