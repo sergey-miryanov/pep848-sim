@@ -217,25 +217,32 @@ def test_xml_etree_parse_gen_0_collections_find_three_parsed_trees_as_it_parses(
 
 def test_async_tree_io_tg_drops_each_runs_tree_before_the_next_run_starts() -> None:
     preset = ASYNC_TREE_IO_TG
-    tree, finished = preset.workload.structures[6:8]
-    assert tree.lifetime is not None
-    assert finished.lifetime is not None
+    structures = preset.workload.structures[6:10]
     workload = Workload(Heap(LegacyCollector()), preset.workload)
 
     workload.run_to(preset.run_length)
 
     # Start-up's six structures and the set-up, then the tree and what its tasks
-    # keep as they finish, once a run, four times.
-    assert [i for i, _, _ in workload.builds] == [0, 1, 2, 3, 4, 5, 8, *[6, 7] * 4]
-    trees = [(first, last) for i, first, last in workload.builds if i == 6]
-    finishes = [(first, last) for i, first, last in workload.builds if i == 7]
-    # Each run's tree goes while its tasks finish, and what they keep goes 2 MB
-    # before the next run starts, the last 2 MB before the worker ends.
-    for (_, built), (first, last) in zip(trees, finishes, strict=True):
-        assert built + 1 == first
-        assert first < built + tree.lifetime < last
-    ends = [last + finished.lifetime + 2_000 for _, last in finishes]
-    assert ends == [*(first - 1 for first, _ in trees[1:]), preset.run_length]
+    # allocate as they finish, once a run, four times.
+    builds = workload.builds
+    assert [i for i, _, _ in builds] == [0, 1, 2, 3, 4, 5, 10, *[6, 7, 8, 9] * 4]
+    runs = [builds[i : i + 4] for i in range(7, len(builds), 4)]
+    ends = [*(run[0][1] - 1 for run in runs[1:]), preset.run_length]
+    for run, end in zip(runs, ends, strict=True):
+        # Each builds as the one before ends.
+        firsts = [first for _, first, _ in run[1:]]
+        assert firsts == [last + 1 for _, _, last in run[:3]]
+        drops = []
+        for (_, _, last), structure in zip(run, structures, strict=True):
+            assert structure.lifetime is not None
+            drops.append(last + structure.lifetime)
+        tree, kept, finished, after = drops
+        # The tree goes while its tasks finish, and most of what they allocate
+        # goes 2 MB before the run ends. A sixth of it, and what the run
+        # allocates next, goes 300 kB before.
+        assert run[2][1] < tree < run[2][2]
+        assert finished == end - 2_000
+        assert kept == after == end - 300
 
 
 @pytest.mark.parametrize("collector", [IncrementalCollector, LegacyCollector])

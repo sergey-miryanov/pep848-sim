@@ -403,8 +403,9 @@ _ASYNC_FINISH_CHURN = Fraction(23, 100)
 # built at 122,241 kB. The legacy workers' third tree stands at their 193rd
 # collection, 6.4 MB after it has built.
 _ASYNC_TREE_LIFETIME = 10_000
-# Records: the gen 0 collections fall back to 15,600 or below about 2 MB before
-# each run ends: 954 real objects at the 197th.
+# Records: a probe on the reference build finds the second run's tree and most of
+# what its finishing tasks keep gone between 262 and 264 MB, 1.1 to 3.1 MB before
+# the run ends at 265,119 kB.
 _ASYNC_FINISHED_EARLY = 2_000
 # Records: the workers' first tree starts at 7,524 kB. Their third collection
 # examines 5,294 real objects at 6,000 kB, 7.26 kB of churn after each object, and
@@ -416,7 +417,9 @@ _ASYNC_SET_UP = _START_UP.set_up(
 )
 # Records: the automatic collections per worker. Each marks threshold0 kB of
 # allocation (ADR 0011), and the records cannot tell where before the next one the
-# worker ends, so the run ends about halfway, as json_loads' does.
+# worker ends, so the run ends about halfway, as json_loads' does. The probe ends
+# the incremental workers' runs at 136,569, 265,352, 394,134 and 522,916 kB, within
+# 180 kB of the preset's.
 _ASYNC_COLLECTIONS = 261
 # Code: pyperf runs a warmup and three values a worker, one loop each.
 _ASYNC_RUNS = 4
@@ -441,20 +444,57 @@ _ASYNC_TASK_TREE = StructureParameters(
     rebuild_interval=_ASYNC_RUN,
     build_churn=_ASYNC_BUILD_CHURN,
 )
-# Records: what the tasks allocate as they finish and keep until the last one has,
-# reached through the event loop as the tree is. It fills the run up to the last
-# 2 MB, and goes as it ends.
+# Records: the probe tracks what each of the legacy collector's gen 0 collections
+# finds. Those at 254, 256 and 258 MB find 25,605 real objects each, and 4,268 of
+# each, a sixth, are still alive at 264 MB, after the tree has gone.
+_ASYNC_KEPT_SHARE = Fraction(1, 6)
+# Records: the probe's gen 0 collection at 392 MB, as the third tree goes, finds
+# 39,390 real objects, all that the 2 MB since the one before allocated. What the
+# run allocates as its tree goes stays to its end. The workers' gen 1 collection
+# at 264 MB examines 37,693 real objects, and 600 kB of it puts the run's at
+# 35,936.
+_ASYNC_LAST = 600
+# Records: the probe's legacy runs end at 136,571, 265,119, 393,905 and 522,450
+# kB, the third 225 kB before the preset's, and the workers' 197th collection
+# finds 954 real objects 125 kB after it. What stays to a run's end goes 300 kB
+# before it.
+_ASYNC_KEPT_TO = 300
+# What the tasks allocate as they finish, reached through the event loop as the
+# tree is. A sixth of it builds first and stays to the run's end. The rest fills
+# the run up to the last 2 MB, and goes as it ends.
 _ASYNC_FINISH_ROOM = _ASYNC_RUN - _ASYNC_TASK_TREE.build_length - _ASYNC_FINISHED_EARLY
-_ASYNC_FINISH = _ASYNC_FINISH_ROOM // (1 + _ASYNC_FINISH_CHURN)
-_ASYNC_FINISHED = StructureParameters(
+_ASYNC_KEEP = int(_ASYNC_FINISH_ROOM * _ASYNC_KEPT_SHARE / (1 + _ASYNC_FINISH_CHURN))
+_ASYNC_KEPT = StructureParameters(
     shape=Chains(width=16),
-    size=_ASYNC_FINISH,
+    size=_ASYNC_KEEP,
     root="module",
-    lifetime=_ASYNC_FINISH_ROOM
-    - _ASYNC_FINISH
-    - int(_ASYNC_FINISH * _ASYNC_FINISH_CHURN),
+    lifetime=_ASYNC_RUN
+    - _ASYNC_TASK_TREE.build_length
+    - _ASYNC_KEPT_TO
+    - _ASYNC_KEEP
+    - int(_ASYNC_KEEP * _ASYNC_FINISH_CHURN),
     rebuild_interval=_ASYNC_RUN,
     build_churn=_ASYNC_FINISH_CHURN,
+)
+_ASYNC_GOING_ROOM = _ASYNC_FINISH_ROOM - _ASYNC_KEPT.build_length
+_ASYNC_GOING = int(_ASYNC_GOING_ROOM / (1 + _ASYNC_FINISH_CHURN))
+_ASYNC_FINISHED = StructureParameters(
+    shape=Chains(width=16),
+    size=_ASYNC_GOING,
+    root="module",
+    lifetime=_ASYNC_GOING_ROOM - _ASYNC_GOING - int(_ASYNC_GOING * _ASYNC_FINISH_CHURN),
+    rebuild_interval=_ASYNC_RUN,
+    build_churn=_ASYNC_FINISH_CHURN,
+)
+# What the run allocates from the kB the rest goes at. A lifetime runs from a
+# build's last kB, _ASYNC_LAST - 1 after its first.
+_ASYNC_LAST_KEPT = StructureParameters(
+    shape=Chains(width=16),
+    size=_ASYNC_LAST,
+    root="module",
+    lifetime=_ASYNC_FINISHED_EARLY - _ASYNC_KEPT_TO - (_ASYNC_LAST - 1),
+    rebuild_interval=_ASYNC_RUN,
+    build_churn=0,
 )
 
 ASYNC_TREE_IO_TG = Preset(
@@ -472,7 +512,9 @@ ASYNC_TREE_IO_TG = Preset(
         structures=(
             *_START_UP.structures,
             _ASYNC_TASK_TREE,
+            _ASYNC_KEPT,
             _ASYNC_FINISHED,
+            _ASYNC_LAST_KEPT,
             _ASYNC_SET_UP,
         ),
         seed=848,

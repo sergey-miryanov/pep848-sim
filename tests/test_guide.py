@@ -310,8 +310,8 @@ def test_the_legacy_collectors_tallest_bars_hold_gen_1_collections() -> None:
     legacy, incremental = run("the-old-generation-5")
     assert max(work(r) for r in legacy if r.kind == "gen 1") == 13_576
     [gen2] = [r for r in legacy if r.kind == "gen 2"]
-    assert (gen2.clock, work(gen2)) == (266_000, 1_761)
-    assert work_per_mb(legacy) == 884
+    assert (gen2.clock, work(gen2)) == (266_000, 1_763)
+    assert work_per_mb(legacy) == 891
     assert work_per_mb(incremental) == 584
 
 
@@ -323,9 +323,9 @@ def test_the_smallest_tree_runs_no_sweep() -> None:
 def test_at_the_largest_tree_gen_2_examines_all_of_it() -> None:
     legacy, incremental = run("the-old-generation-7")
     [gen2] = [r for r in legacy if r.kind == "gen 2"]
-    assert (gen2.clock, work(gen2)) == (266_000, 51_171)
+    assert (gen2.clock, work(gen2)) == (266_000, 50_894)
     assert work(gen2) > 3 * max(work(r) for r in legacy if r.kind == "gen 1")
-    assert thousands(figures(legacy).peak_work) == 51.2
+    assert thousands(figures(legacy).peak_work) == 50.9
     assert thousands(figures(incremental).peak_work) == 1.9
 
 
@@ -429,8 +429,8 @@ def test_a_smaller_young_generation_frees_the_cycles() -> None:
 
 
 def test_a_large_program_holds_less_garbage_under_the_incremental_collector() -> None:
-    assert peak_garbage("uncollected-garbage-and-peak-memory-5") == (5.6, 1.2)
-    assert wpm("uncollected-garbage-and-peak-memory-5") == (1_533, 725)
+    assert peak_garbage("uncollected-garbage-and-peak-memory-5") == (5.5, 1.2)
+    assert wpm("uncollected-garbage-and-peak-memory-5") == (1_534, 742)
 
 
 def increments(records: list[Record]) -> list[tuple[int, int]]:
