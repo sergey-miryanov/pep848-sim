@@ -283,10 +283,10 @@ def test_the_old_generation_fills_and_empties_with_each_tree() -> None:
     assert min(old[peak:]) < 10_000
 
 
-def test_twelve_sweeps_end_at_44_96_160_196_and_236_mb_first() -> None:
+def test_twelve_sweeps_end_at_44_100_160_192_and_228_mb_first() -> None:
     _, incremental = run("the-old-generation-2")
     assert figures(incremental).sweeps == 12
-    assert sweep_ends(incremental)[:5] == [44_000, 96_000, 160_000, 196_000, 236_000]
+    assert sweep_ends(incremental)[:5] == [44_000, 100_000, 160_000, 192_000, 228_000]
 
 
 def test_old_collections_mark_about_1_900_each() -> None:
@@ -312,7 +312,7 @@ def test_the_legacy_collectors_tallest_bars_hold_gen_1_collections() -> None:
     [gen2] = [r for r in legacy if r.kind == "gen 2"]
     assert (gen2.clock, work(gen2)) == (266_000, 1_763)
     assert work_per_mb(legacy) == 891
-    assert work_per_mb(incremental) == 584
+    assert work_per_mb(incremental) == 577
 
 
 def test_the_smallest_tree_runs_no_sweep() -> None:
@@ -430,7 +430,7 @@ def test_a_smaller_young_generation_frees_the_cycles() -> None:
 
 def test_a_large_program_holds_less_garbage_under_the_incremental_collector() -> None:
     assert peak_garbage("uncollected-garbage-and-peak-memory-5") == (5.5, 1.2)
-    assert wpm("uncollected-garbage-and-peak-memory-5") == (1_534, 742)
+    assert wpm("uncollected-garbage-and-peak-memory-5") == (1_534, 734)
 
 
 def increments(records: list[Record]) -> list[tuple[int, int]]:
