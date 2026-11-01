@@ -23,7 +23,7 @@ import { describe, describeChurn, describeConstants, describeRun } from "./graph
  * @typedef {{
  *   shape: Shape, size: number, root: "module" | "frame", lifetime: number | null,
  *   rebuild_interval: number | null, build_churn: number | string, full_collections: boolean,
- *   built_in_frame: boolean, built_in_c: boolean,
+ *   built_in_frame: boolean, built_in_c: boolean, delay?: number, skips_while_busy?: boolean,
  * }} Structure
  */
 /**
@@ -137,7 +137,7 @@ const holderOf = (structure) => (structure.root === "module" && structure.built_
  */
 export const newStructure = () => ({
   shape: "tree", size: 1000, root: "frame", lifetime: 2000, rebuild_interval: 4000, build_churn: 0, full_collections: false,
-  built_in_frame: false, built_in_c: false,
+  built_in_frame: false, built_in_c: false, delay: 0, skips_while_busy: false,
 });
 
 /**
@@ -409,6 +409,9 @@ export class Editor {
       this.#label("Rebuilt every (kB)", this.#number(`${i}:rebuild_interval`, structure.rebuild_interval, (value) => {
         structure.rebuild_interval = value;
       }, { min: 1, nullable: "never" })),
+      this.#label("First due into the loops (kB)", this.#number(`${i}:delay`, structure.delay ?? 0, (value) => {
+        structure.delay = /** @type {number} */ (value);
+      }, { min: 0 })),
       this.#label("Churn after each object (kB)", this.#number(`${i}:build_churn`, churnOf(structure.build_churn), (value) => {
         structure.build_churn = churnFrom(/** @type {number} */ (value));
       }, { step: 0.01 })),
@@ -416,6 +419,8 @@ export class Editor {
         (checked) => { structure.full_collections = checked; }),
       this.#check(`${i}:built_in_c`, "Built in C: a collection due meanwhile waits until the build ends", structure.built_in_c,
         (checked) => { structure.built_in_c = checked; }),
+      this.#check(`${i}:skips_while_busy`, "Skips a rebuild due while another structure builds", structure.skips_while_busy ?? false,
+        (checked) => { structure.skips_while_busy = checked; }),
     );
     const buttons = document.createElement("div");
     buttons.className = "wide";
