@@ -153,12 +153,16 @@ def test_xml_etree_parse_builds_a_tree_then_parses_60_in_each_value() -> None:
     workload.run_to(preset.run_length)
 
     # Start-up's six structures, the cycles xml.etree lets go of and what pyperf
-    # allocates, the eleventh and the twelfth, then each of the four values: its
-    # own tree, the seventh structure, its serialising, the eighth, 60 parses of
-    # the tree, the ninth, and the serialising of the last two parsed trees, the
-    # tenth. A fifth value's tree builds as the run ends.
+    # allocates, the thirteenth and the fourteenth, then each of the four values:
+    # its own tree, the seventh structure, its serialising, the eighth, 58 parses
+    # of the tree, the eleventh, the last two, the ninth and the tenth, and their
+    # serialising, the twelfth. A fifth value's tree builds as the run ends.
     built = [i for i, _, _ in workload.builds]
-    assert built == [0, 1, 2, 3, 4, 5, 10, 11, *[6, 7, *[8] * 60, 9] * 4, 6]
+    assert built == [0, 1, 2, 3, 4, 5, 12, 13, *[6, 7, *[10] * 58, 8, 9, 11] * 4, 6]
+    # The last two parsed trees go as their serialising ends.
+    lifetimes = {i: preset.workload.structures[i].lifetime or 0 for i in (8, 9, 11)}
+    drops = {last + lifetimes[i] for i, _, last in workload.builds if i in lifetimes}
+    assert len(drops) == 4
     # Each value ends as the next begins, and the run ends while the fifth one
     # serialises its tree.
     tree, serialising = preset.workload.structures[6:8]
@@ -178,7 +182,7 @@ def test_xml_etree_parse_collects_as_a_parse_ends_if_one_is_under_way(
     collecting = collector(CollectorSettings())
     workload = Workload(Heap(collecting), preset.workload)
     workload.run_to(preset.run_length)
-    parses = {last for i, _, last in workload.builds if i == 8}
+    parses = {last for i, _, last in workload.builds if i in (8, 9, 10)}
     clocks = [0, *(r.clock for r in collecting.records)]
 
     gaps = [(b - a, b in parses) for a, b in pairwise(clocks)]
@@ -194,10 +198,11 @@ def test_xml_etree_parse_gen_0_collections_find_three_parsed_trees_as_it_parses(
     None
 ):
     """Under the legacy collector, a gen 0 collection a parse holds back finds the
-    tree it parsed and the two before it young, and one in a value's Python finds
-    the value's own tree at most, with start-up's last at the first."""
+    tree it parsed and the two before it young. One in a value's Python finds the
+    value's own tree at most, with start-up's last at the first, or the last two
+    parsed trees as they serialise, both in the third value and the fourth."""
     preset = XML_ETREE_PARSE
-    parsed = preset.workload.structures[8].size
+    parsed = preset.workload.structures[10].size
     records = run_preset(preset, LegacyCollector)
     starts = [0, *(r.clock for r in records)]
     threshold0 = CollectorSettings().threshold0
@@ -212,7 +217,8 @@ def test_xml_etree_parse_gen_0_collections_find_three_parsed_trees_as_it_parses(
     on_time = [examined for examined, held in gen_0[2:] if not held]
     assert len(late) == 36
     assert all(3 * parsed <= examined < 4 * parsed for examined in late)
-    assert all(examined < 2 * parsed for examined in on_time)
+    assert all(examined < 3 * parsed for examined in on_time)
+    assert sum(examined >= 2 * parsed for examined in on_time) == 2
 
 
 def test_async_tree_io_tg_drops_each_runs_tree_before_the_next_run_starts() -> None:
