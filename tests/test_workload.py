@@ -3,6 +3,7 @@ from itertools import pairwise
 from random import Random
 
 from hypothesis import given
+from hypothesis import settings as hypothesis_settings
 from hypothesis import strategies as st
 
 from pep848_sim.collectors.collector import Collector, CollectorSettings
@@ -124,6 +125,8 @@ def exact_thresholds(mean: int) -> list[int]:
     return thresholds
 
 
+# exact_thresholds runs past Hypothesis's 200 ms deadline from a mean of about 200.
+@hypothesis_settings(deadline=None)
 @given(st.integers(min_value=1, max_value=300))
 def test_thresholds_match_the_exact_build(mean: int) -> None:
     assert geometric_thresholds(mean) == exact_thresholds(mean)
