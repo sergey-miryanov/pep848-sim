@@ -225,8 +225,8 @@
           "text": "The legacy collector's gen 1 collections take the nursery and the aging generation together, and its one gen 2 collection takes the whole heap.",
           "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10},
           "marks": [
-            {"part": "legacy.work", "note": "The tallest bars hold gen 1 collections, up to 13,576 objects each. The gen 2 collection, at 266 MB, comes between two trees and examines 1,761."},
-            {"part": "figure.work_per_mb", "note": "884 against 584. As each run ends, the legacy collector's gen 0 collections examine what the finishing tasks allocate."}
+            {"part": "legacy.work", "note": "The tallest bars hold gen 1 collections, up to 13,576 objects each. The gen 2 collection, at 266 MB, comes between two trees and examines 1,763."},
+            {"part": "figure.work_per_mb", "note": "891 against 584. As each run ends, the legacy collector's gen 0 collections examine what the finishing tasks allocate."}
           ]
         },
         {
@@ -243,7 +243,7 @@
           "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.structures.6.size": 62200}},
           "marks": [
             {"part": "legacy.work", "note": "The gen 2 collection's bar at 266 MB stands more than three times as tall as the tallest gen 1 bar."},
-            {"part": "figure.peak_work", "note": "51.2K for that gen 2 collection, against 1.9K for the incremental collector."}
+            {"part": "figure.peak_work", "note": "50.9K for that gen 2 collection, against 1.9K for the incremental collector."}
           ]
         }
       ]
@@ -369,8 +369,8 @@
           "text": "The PEP expects peak memory to come out about the same, and bounds the extra a small program pays at 24 MB. A large program can come out ahead: here async_tree_io_tg, with a tenth of its churn starting cycles that live 10 MB on average.",
           "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.churn.cycle_share": "1/10", "workload.churn.lifetime_mean": 10000}},
           "marks": [
-            {"part": "figure.peak_uncollected_garbage", "note": "5.6 MB for the legacy collector, which leaves old cycles to its next gen 2 collection, against 1.2."},
-            {"part": "figure.work_per_mb", "note": "1,533 against 725."}
+            {"part": "figure.peak_uncollected_garbage", "note": "5.5 MB for the legacy collector, which leaves old cycles to its next gen 2 collection, against 1.2."},
+            {"part": "figure.work_per_mb", "note": "1,534 against 742."}
           ]
         }
       ]
