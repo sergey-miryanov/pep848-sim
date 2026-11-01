@@ -271,12 +271,13 @@ class TaskGroups:
     loop holds a queue of handles ready to run and a heap of timers. asyncio runs
     the tasks in the order it makes them, a level at a time. A task's parent makes
     it with its coroutine, two Contexts, a done-callback into the parent's
-    TaskGroup, and a handle in the ready queue. When the task runs, the queue lets
-    go of its handle. A task with children then starts a TaskGroup, whose set
-    holds them, and waits on a Future; a leaf sleeps on a Future that a timer
-    holds. Each task links back to its parent, and to itself through the Future it
-    waits on, and the program cuts those links as the tasks finish. A larger
-    structure starts the tree again under the same loop."""
+    TaskGroup, and a handle in the ready queue, which holds the task's first
+    Context. When the task runs, the queue lets go of its handle. A task with
+    children then starts a TaskGroup, whose set holds them, and waits on a
+    Future; a leaf sleeps on a Future that a timer holds. Each task links back to
+    its parent, and to itself through the Future it waits on, and the program
+    cuts those links as the tasks finish. A larger structure starts the tree
+    again under the same loop."""
 
     def cyclic_garbage(self, size: int) -> int:
         return 0
@@ -380,7 +381,8 @@ def _task_groups() -> _TaskTable:
         coroutine[group] = table.add(task[group])
         context[group] = table.add(task[group])
         table.add(task[group])
-        handle[group] = table.add(_READY)
+        # call_soon's handle runs the task's step in the task's own Context.
+        handle[group] = table.add(_READY, holds=(context[group],))
         # The handle's TaskStepMethWrapper.
         table.add(handle[group], holds=(task[group],))
         # The done-callback, a method of the parent's TaskGroup.

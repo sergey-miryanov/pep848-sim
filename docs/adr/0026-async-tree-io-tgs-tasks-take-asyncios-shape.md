@@ -83,6 +83,23 @@ from 10 to 6.
 The playground and the request name the shape "task_groups", and a workload
 source names it `TaskGroups()`.
 
+## Amended: the Handle holds the task's Context
+
+A walk from sys on the reference build, first in, first out, finds each young
+Handle's Context one reference down, beside its TaskStepMethWrapper: the
+workers' marking takes 20,582 Handles at the 22nd collection, then 16,836
+Contexts and as many TaskStepMethWrappers at the 24th. `call_soon` runs the
+task's step in the task's own Context, so the Handle holds it. The shape had
+only the Task hold it, so marking reached the Contexts three references
+later, with the coroutines and the done-callbacks, and took 37,000 young
+objects at the 28th collection where the workers' took 7,000 (#290).
+
+Each Handle now holds its task's first Context. The incremental collector's
+sweeps end where the workers' end, at 100, 160, 192 and 228 MB, against 96,
+160, 196 and 236 before. Summed over the run, the young collections examine
+within 6% of the workers', against 14% before, and the old collections' work
+comes within 10%, against 25%. The legacy collector's records stay the same.
+
 ## Considered Options
 
 - Keep the Hierarchy and fit its lifetime and churn. Each object would still
