@@ -61,6 +61,9 @@ Under the legacy collector, the gen 0 collections during each value's
 serialising still differ: the workers' last two parsed trees stay alive until
 `bench_parse` returns, and the run's go two slots after they build. The
 workers' 39th collection examines 10,343 real objects there, the run's 64.
+Since #285, the 59th and 60th parses build as structures of their own, which
+fall due in those slots ahead of the other parses and go as the serialising
+ends. The run's 39th collection examines 10,368.
 
 The playground's editor shows both fields for each structure, the legend says
 when a structure first falls due and that it skips, and a workload source

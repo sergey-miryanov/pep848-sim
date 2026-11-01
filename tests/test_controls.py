@@ -347,7 +347,7 @@ def home_entries() -> list[dict[str, Any]]:
 
 
 def parsed(s: StructureParameters) -> bool:
-    return s.built_in_c
+    return s.built_in_c and s.skips_while_busy
 
 
 def rings(s: StructureParameters) -> bool:

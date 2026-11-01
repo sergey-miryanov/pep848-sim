@@ -306,6 +306,29 @@ _XML_PARSES = 2_410
 _XML_PARSED_LIFETIME = 2 * _XML_SLOT + 1
 # Code: bench_parse serialises the last two parsed trees as the 60th parse returns.
 _XML_TAIL = _xml_serialising(1_920, delay=_XML_PARSES + 59 * _XML_SLOT + _XML_TREE)
+
+
+def _xml_last_parse(parse: int) -> StructureParameters:
+    """The value's `parse`th parsed tree, one of the last two, which bench_parse's
+    root1 and root2 hold until it returns."""
+    return StructureParameters(
+        shape=_XML_SHAPE,
+        size=_XML_TREE,
+        root="frame",
+        lifetime=(60 - parse) * _XML_SLOT + _XML_TAIL.build_length,
+        rebuild_interval=_XML_VALUE,
+        build_churn=0,
+        built_in_c=True,
+        delay=_XML_PARSES + (parse - 1) * _XML_SLOT,
+    )
+
+
+# Code: the last two parsed trees go as bench_parse returns, after their
+# serialising. Records: the workers' gen 0 collections during it examine 10,343
+# real objects, both trees, or 5,187 when the one before came during the 60th parse.
+# The preset lists them ahead of the other parses, so they fall due first in their
+# slots and the other parses skip those slots.
+_XML_LAST_PARSES = (_xml_last_parse(59), _xml_last_parse(60))
 # Records: the workers' third collection frees 36 real objects, where the other
 # benchmarks' free 3: xml.etree's imports let go of cycles of their own.
 _XML_GARBAGE = StructureParameters(
@@ -356,9 +379,11 @@ XML_ETREE_PARSE = Preset(
                 build_churn=_XML_TREE_CHURN,
             ),
             _XML_SERIALISING,
-            # Code: the parsed trees, from the file and from the bytes in turn, 60 a
-            # value. The C accelerator's parser builds each tree in C. A slot that
-            # comes while the value serialises parses nothing (ADR 0027).
+            *_XML_LAST_PARSES,
+            # Code: the parsed trees, from the file and from the bytes in turn, 58 a
+            # value besides the last two. The C accelerator's parser builds each tree
+            # in C. A slot that comes while the value serialises parses nothing (ADR
+            # 0027).
             StructureParameters(
                 shape=_XML_SHAPE,
                 size=_XML_TREE,

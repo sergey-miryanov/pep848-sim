@@ -117,6 +117,7 @@ def test_a_requests_graph_holds_each_structure_and_the_churn() -> None:
 
     drawn = json.loads(graph(request))
 
+    hierarchy = "a hierarchy of 50 branches"
     fields = (
         "shape",
         "size",
@@ -136,6 +137,11 @@ def test_a_requests_graph_holds_each_structure_and_the_churn() -> None:
         ("16 chains", 232, "frame", None, None, False, 0, False),
         ("a hierarchy of 50 branches", 322, "frame", 25_848, 25_848, False, 0, False),
         ("16 chains", 4, "frame", 0, 25_848, False, 0, False),
+        # The 59th parse and the 60th, which stay until their serialising ends.
+        *(
+            (hierarchy, 322, "frame", lifetime, 25_848, True, delay, False)
+            for lifetime, delay in ((2_279, 23_232), (1_920, 23_591))
+        ),
         ("a hierarchy of 50 branches", 322, "frame", 719, 359, True, 2_410, True),
         ("16 chains", 4, "frame", 0, 25_848, False, 23_913, False),
         ("a tree with parent pointers", 2, "frame", 0, None, False, 0, False),
