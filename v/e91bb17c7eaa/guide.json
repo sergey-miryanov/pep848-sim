@@ -201,7 +201,7 @@
           "text": "Each old collection, between two young ones, moves objects from pending to visited. Once pending runs empty, the two swap: visited, holding the whole old generation, becomes the new pending, and a new sweep starts.",
           "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10},
           "marks": [
-            {"part": "figure.gen2_collections_sweeps", "note": "12 sweeps: the first five end at 44, 96, 160, 196 and 236 MB. In every other one, young objects carry pending's tag, so marking chases the young tasks each tree adds."}
+            {"part": "figure.gen2_collections_sweeps", "note": "12 sweeps: the first five end at 44, 100, 160, 192 and 228 MB. In every other one, young objects carry pending's tag, so marking chases the young tasks each tree adds."}
           ]
         },
         {
@@ -226,7 +226,7 @@
           "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10},
           "marks": [
             {"part": "legacy.work", "note": "The tallest bars hold gen 1 collections, up to 13,576 objects each. The gen 2 collection, at 266 MB, comes between two trees and examines 1,763."},
-            {"part": "figure.work_per_mb", "note": "891 against 584. As each run ends, the legacy collector's gen 0 collections examine what the finishing tasks allocate."}
+            {"part": "figure.work_per_mb", "note": "891 against 577. As each run ends, the legacy collector's gen 0 collections examine what the finishing tasks allocate."}
           ]
         },
         {
@@ -370,7 +370,7 @@
           "request": {"preset": "async_tree_io_tg", "settings": {"threshold0": 2000, "threshold1": 10, "threshold2": 10}, "every": 10, "changes": {"workload.churn.cycle_share": "1/10", "workload.churn.lifetime_mean": 10000}},
           "marks": [
             {"part": "figure.peak_uncollected_garbage", "note": "5.5 MB for the legacy collector, which leaves old cycles to its next gen 2 collection, against 1.2."},
-            {"part": "figure.work_per_mb", "note": "1,534 against 742."}
+            {"part": "figure.work_per_mb", "note": "1,534 against 734."}
           ]
         }
       ]
